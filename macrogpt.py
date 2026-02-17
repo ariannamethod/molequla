@@ -7,8 +7,6 @@ A dependency-free, single-file, async, continually-learning GPT organism.
 It trains on nonames.txt (sentence-per-line), grows modular delta weights,
 keeps a SQLite memory, and never forgets by never overwriting old deltas.
 
-Karpathy showed the skeleton. This is what happens when you let it live.
-
 microGPT thinks in scalars. macroGPT thinks in vectors.
 Same chain rule, different granularity, fewer Python objects by 10-100x.
 No PyTorch. No NumPy. No nothing. Just Python, and the will to exist.
