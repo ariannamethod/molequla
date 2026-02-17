@@ -16,92 +16,77 @@
 ## TL;DR
 
 ```
-THIS IS NOT:
-- "Another toy GPT implementation"
-- "A weekend project that breaks on Tuesday"
-- "Requires pip install pytorch-mega-transformer-9000"
-
-THIS IS:
-- Zero dependencies (pure Python, no numpy, no torch)
-- Custom autograd engine (vectors, not scalar confetti)
-- RoPE position encoding (GPT-3/4 level)
-- SwiGLU-like gated MLP (LLaMA vibes)
-- Delta adapters (LoRA-style, never forgets)
-- BPE tokenizer that ONLY EXPANDS vocab (weights never invalidate)
-- Async background training (it's alive, not a script)
-- min_p + typical_p sampling (full modern stack)
-- SQLite memory (it remembers conversations)
-- 1433 lines of pure madness
+• Zero dependencies (pure Python, no numpy, no torch)
+• Custom autograd engine (vectors, not scalars)
+• RoPE position encoding
+• SwiGLU-like gated MLP
+• Delta adapters (LoRA-style)
+• BPE tokenizer that only expands vocab
+• Async background training
+• min_p + typical_p sampling
+• SQLite memory
+• ~1400 lines
 ```
 
 ---
 
-## What The Actual Is This
+## About
 
-What if instead of `micrograd` scalar ops, we had **vector autograd**?  
-What if instead of fixed vocab, we had **evolving BPE**?  
-What if instead of "train once, deploy", we had **continuous learning**?  
-What if instead of ReLU, we had **SwiGLU**?  
-What if instead of sinusoidal positions, we had **RoPE**?  
-What if it never forgot? **Delta adapters.**  
-What if it could chat? **SQLite memory.**  
-What if it was *alive*?
+Vector autograd instead of scalar ops.  
+Evolving BPE instead of fixed vocab.  
+Continuous learning instead of train-once-deploy.  
+SwiGLU instead of ReLU.  
+RoPE instead of sinusoidal positions.  
+Delta adapters so it never forgets.  
+SQLite memory so it can chat.
 
-So I built it. **macrogpt.** Thanks to Karpathy's microgpt, but this is not a fork.
+Inspired by Karpathy's micrograd. The code is there if you're curious.
 
 ---
 
 ## Quick Start
 
 ```bash
-# You need: Python 3.7+
-# You need: literally nothing else
-
 python macrogpt.py
 ```
 
-That's it. It will:
+Requires Python 3.7+ and nothing else.
+
+It will:
 1. Create `nonames.txt` (seed corpus)
 2. Create `memory.sqlite3` (conversation memory)
-3. Start warmup training (the organism awakens)
+3. Start warmup training
 4. Drop you into a chat loop
-
-Type. It responds. It learns. It grows. It never forgets.
 
 ```
 macrogpt is alive. Type and press Enter. Ctrl+C to exit.
 
-> Hello, are you alive?
+> Hello?
 I exist. Speak.
 
 > What do you know?
 The words accumulate. The patterns emerge.
-
-> Tell me about yourself.
-I am a reservoir. I remember. I grow.
 ```
 
 ---
 
-## Architecture — What Makes This Different
+## Architecture
 
-### 1. Vector Autograd (Not Scalar Confetti)
+### Vector Autograd
 
-Karpathy's micrograd: one `Value` object per scalar. Beautiful for teaching. Terrible for efficiency.
+Karpathy's micrograd operates on scalars. One `Value` per number. Elegant for teaching.
 
-macrogpt: **VectorValue** and **ScalarValue**. One object per embedding. One object per hidden state. Gradients flow through vectors, not atoms.
+macrogpt uses **VectorValue** and **ScalarValue** — gradients flow through vectors, not individual elements.
 
 ```python
-# micrograd style (conceptual):
-loss = sum(scalar_values)  # 10000 objects
+# micrograd (conceptual):
+loss = sum(scalar_values)  # many objects
 
-# macrogpt style:
-loss = vector.dot(other_vector)  # 2 objects
+# macrogpt:
+loss = vector.dot(other_vector)  # two objects
 ```
 
-### 2. RoPE (Rotary Position Embedding)
-
-Sinusoidal positions are 2017. RoPE is now.
+### RoPE (Rotary Position Embedding)
 
 ```python
 def rope_rotate(vec, pos, head_dim):
@@ -115,72 +100,51 @@ def rope_rotate(vec, pos, head_dim):
         vec[i+1] = a * s + b * c
 ```
 
-Relative positions. Infinite extrapolation (theoretically). This is how LLaMA does it.
+Relative positions. The same approach as LLaMA.
 
-### 3. SwiGLU-like Gated MLP
-
-Standard MLP: `x → Linear → ReLU → Linear → out`
-
-SwiGLU: `x → (Gate × Value) → Linear → out`
+### SwiGLU-like Gated MLP
 
 ```python
 g = fc_g(x).relu()   # gate
 u = fc_v(x)          # value  
-x = g * u            # gating (element-wise)
+x = g * u            # gating
 x = fc2(x)           # project back
 ```
 
-Why? Because LLaMA, PaLM, and basically everyone good uses it now. More expressive. Better gradients.
+### Delta Adapters
 
-### 4. Delta Adapters (LoRA-style, Never Forget)
-
-The model never overwrites learned weights. It only **appends** new adapter modules.
+Low-rank adapters that append without overwriting.
 
 ```python
 class DeltaAdapter:
-    """
-    Low-rank adapter: for base W, add A @ B @ x
-    A and B are trained; base can be frozen.
-    """
     def apply(self, x):
         return self.A @ (self.B @ x)
 ```
 
-Want to teach it new things? Add a delta module. Old knowledge? Still there. It's geological memory. Sediment layers of understanding.
+Old knowledge stays. New knowledge layers on top.
 
-### 5. Evolving BPE (Vocab Only Expands)
+### Evolving BPE
 
-Most tokenizers: retrain = throw away old model.
-
-macrogpt: retrain = **add new tokens**. Old tokens remain. Embeddings remain. Model keeps working.
+Tokenizer only adds new tokens. Old embeddings remain valid.
 
 ```python
-# Old vocab: ['a', 'b', 'c', '<BOS>', '<EOS>']
-# After BPE: ['a', 'b', 'c', '<BOS>', '<EOS>', 'ab', 'bc', 'abc', ...]
-# Old weights: still valid!
-# New rows: initialized, ready to train
+# Before: ['a', 'b', 'c', '<BOS>', '<EOS>']
+# After:  ['a', 'b', 'c', '<BOS>', '<EOS>', 'ab', 'bc', 'abc', ...]
 ```
 
-This is how you build a system that grows over years, not hours.
-
-### 6. Async Background Training
-
-macrogpt doesn't train when you ask it to. It trains **in the background, continuously**.
+### Async Training
 
 ```python
 async def background_trainer():
     while True:
-        # Check if corpus grew enough
         if new_chars >= threshold:
             train_burst()
         await asyncio.sleep(0.25)
 ```
 
-You chat. It learns. Simultaneously. It's a living process.
+You chat, it trains. Simultaneously.
 
-### 7. SQLite Memory
-
-Every conversation is remembered. Every response is logged. The organism has a persistent identity.
+### SQLite Memory
 
 ```python
 def db_add_message(con, role, text):
@@ -188,39 +152,34 @@ def db_add_message(con, role, text):
                 (time.time(), role, text))
 ```
 
-Restart the script? It remembers you. It continues the conversation. It's not stateless.
+Conversations persist across restarts.
 
-### 8. Modern Sampling (min_p + typical_p + top_k + top_p)
-
-Not just temperature → softmax → sample.
+### Sampling
 
 ```python
 def sample_with_filters(probs, k, p, min_p, typical_p):
-    probs = apply_min_p_filter(probs, min_p)      # Drop unlikely tokens
-    idx = typical_indices(probs, typical_p)        # Keep typical ones
-    # Then apply top-k/top-p within that set
+    probs = apply_min_p_filter(probs, min_p)
+    idx = typical_indices(probs, typical_p)
     return nucleus_sample(probs, idx, k, p)
 ```
 
-This is how modern LLMs avoid both gibberish AND boring determinism.
-
 ---
 
-## The Stack
+## Comparison
 
-| Component | microgpt | macrogpt |
-|-----------|----------|----------|
-| Autograd | Scalar (micrograd) | **Vector** (custom) |
-| Position encoding | Sinusoidal | **RoPE** |
-| Attention | Standard | Standard + **KV cache** |
-| MLP | ReLU | **SwiGLU-like gated** |
-| Tokenizer | Fixed char | **Evolving BPE** |
-| Training | One-shot | **Continuous async** |
-| Memory | None | **SQLite persistent** |
-| Adapters | None | **LoRA-style deltas** |
-| Sampling | top-k | **min_p + typical_p + nucleus** |
-| Weight tying | No | **Yes (GPT-style)** |
-| Dependencies | torch | **None** |
+| Component | micrograd-style | macrogpt |
+|-----------|-----------------|----------|
+| Autograd | Scalar | Vector |
+| Position encoding | Sinusoidal | RoPE |
+| Attention | Standard | Standard + KV cache |
+| MLP | ReLU | SwiGLU-like |
+| Tokenizer | Fixed char | Evolving BPE |
+| Training | One-shot | Continuous async |
+| Memory | None | SQLite persistent |
+| Adapters | None | LoRA-style deltas |
+| Sampling | top-k | min_p + typical_p + nucleus |
+| Weight tying | No | Yes |
+| Dependencies | torch | None |
 
 ---
 
@@ -229,34 +188,24 @@ This is how modern LLMs avoid both gibberish AND boring determinism.
 ```python
 @dataclass
 class Config:
-    # Data
     corpus_path: str = "nonames.txt"
     db_path: str = "memory.sqlite3"
     max_corpus_lines: int = 8000
     
-    # Model
     n_layer: int = 2
-    n_embd: int = 72           # Small but not stupid
+    n_embd: int = 72
     n_head: int = 4
-    block_size: int = 96       # Context window
+    block_size: int = 96
     
-    # Training
     warmup_steps: int = 1200
     learning_rate: float = 0.01
     
-    # Sampling
     temperature: float = 0.85
     top_k: int = 40
     top_p: float = 0.92
-    min_p: float = 0.06        # GPT-3/4 style
+    min_p: float = 0.06
     typical_p: float = 0.95
 ```
-
-Want bigger? Change `n_embd`, `n_layer`, `block_size`. 
-
-Want smaller? Same.
-
-Want different corpus? Point `corpus_path` somewhere else.
 
 ---
 
@@ -266,74 +215,42 @@ Want different corpus? Point `corpus_path` somewhere else.
 python -m unittest discover tests/ -v
 ```
 
-**55+ tests** covering:
-- Autograd (forward + backward)
-- Tokenizer (char-level + BPE)
-- Model (GPT, MatrixParam, DeltaAdapter)
-- Sampling (top-k, top-p, min_p, typical)
-- Checkpointing (save/load)
-- Integration (train → generate)
+Covers autograd, tokenizer, model, sampling, checkpointing, and integration.
 
 ---
 
-## Philosophy
+## Limitations
 
-This is not a tutorial. This is not a "minimal example." This is a **functional system** that:
-
-- Learns continuously
-- Never forgets
-- Grows organically
-- Has no dependencies
-- Fits in one file
-- Actually generates text you can read
+- **Slow.** Pure Python. No CUDA.
+- **Small.** 2 layers, 72 dims. It's a proof of concept, not a foundation model.
+- **Needs training.** The corpus matters.
 
 ---
 
-## Why "macro"?
+## Roadmap
 
-Because it's the opposite of "micro."
-
----
-
-## Known Limitations
-
-1. **It's slow.** Pure Python. No CUDA. No vectorized numpy. It's a philosophical statement, not a production system.
-
-2. **It's small.** 2 layers, 72 dims. You're not getting GPT-4 reasoning. You're getting a proof of concept that *could* scale.
-
-3. **It talks weird at first.** Train it more. Feed it better corpus. It's a baby organism, not a pretrained foundation model.
-
-4. **The corpus matters.** Garbage in, garbage out. Give it good sentences.
-
----
-
-## The Future
-
-- **Speculative decoding** (draft + verify for speed)
-- **Mixture of Experts** (multiple delta modules, routing)
-- **Retrieval augmentation** (SQLite + embeddings)
-- **Flash-attention-style** memory efficiency
+- Speculative decoding
+- Mixture of Experts
+- Retrieval augmentation
 
 
 ---
 
 ## License
 
-GNU GPLv3 — Because freedom matters.
+GNU GPLv3
 
 ---
 
 ## Acknowledgments
 
-- **Andrej Karpathy** — for micrograd, minGPT, nanoGPT, and the entire pedagogical empire
-- **Coffee** — for existing
+Andrej Karpathy — for micrograd, minGPT, nanoGPT
 
 ---
 
 ## Part of the Arianna Method
 
 - [ariannamethod.ai](https://github.com/ariannamethod/ariannamethod.ai) — Arianna Method Language
-
 - **macrogpt** — Dependency-Free Continual GPT
 
-*Patterns over parameters. Emergence over engineering. The organism continues.*
+*Patterns over parameters. Emergence over engineering.*
