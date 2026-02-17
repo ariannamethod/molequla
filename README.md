@@ -9,7 +9,7 @@
 
 # molecule | by Arianna Method
 
-> *A dependency-free, single-file, async, continually-learning GPT organism with hybrid attention and native personality.*
+> *A dependency-free, async, continually-learning GPT organism with hybrid attention and native personality.*
 >
 ---
 
@@ -18,9 +18,9 @@
 ```
 THIS IS:
 - Three implementations: Python, Go, C — same architecture
-- Zero dependencies in Python (no numpy, no torch)
+- Zero dependencies in Python 
 - Custom autograd engine (vectors, not scalar confetti)
-- RoPE position encoding (GPT-3/4 level)
+- RoPE position encoding (GPT-3/4 inspired)
 - SwiGLU-like gated MLP (LLaMA vibes)
 - Hybrid attention: Content + RRPRAM + learnable blend
 - Delta adapters (LoRA-style, never forgets)
