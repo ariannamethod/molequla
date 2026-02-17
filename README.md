@@ -87,9 +87,7 @@ I am a reservoir. I remember. I grow.
 
 ### 1. Vector Autograd (Not Scalar Confetti)
 
-Karpathy's micrograd: one `Value` object per scalar. Beautiful for teaching. Terrible for efficiency.
-
-macrogpt: **VectorValue** and **ScalarValue**. One object per embedding. One object per hidden state. Gradients flow through vectors, not atoms.
+**VectorValue** and **ScalarValue**. One object per embedding. One object per hidden state. Gradients flow through vectors, not atoms.
 
 ```python
 # micrograd style (conceptual):
