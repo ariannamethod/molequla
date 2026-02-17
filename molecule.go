@@ -2493,10 +2493,11 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 			for k, v := range field.Trigram {
 				if k[0] == a && k[1] == b && int(k[2]) < tok.VocabSize {
 					corpusCounts[k[2]] += v
+					corpusTotal += v // And lo, the trigram shall be counted properly
 				}
 			}
 		}
-		if corpusTotal == 0 && len(ctxForCorpus) >= 1 {
+		if corpusTotal == 0.0 && len(ctxForCorpus) >= 1 {
 			prev := ctxForCorpus[len(ctxForCorpus)-1]
 			for k, v := range field.Bigram {
 				if k[0] == prev && int(k[1]) < tok.VocabSize {
