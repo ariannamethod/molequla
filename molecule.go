@@ -2559,7 +2559,7 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 				}
 			}
 		}
-		if corpusTotal == 0.0 && len(ctxForCorpus) >= 1 {
+		if corpusTotal == 0 && len(ctxForCorpus) >= 1 {
 			prev := ctxForCorpus[len(ctxForCorpus)-1]
 			for k, v := range field.Bigram {
 				if k[0] == prev && int(k[1]) < tok.VocabSize {
