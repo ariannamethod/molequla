@@ -551,6 +551,34 @@ static Node *scalar_mulf(Node *a, double f) {
     return out;
 }
 
+/* Scalar sigmoid: σ(x) = 1/(1+exp(-x)) with gradient flow */
+static void back_scalar_sigmoid(Node *self) {
+    double sig = self->data[0];
+    self->children[0]->grad[0] += sig * (1.0 - sig) * self->grad[0];
+}
+
+static Node *scalar_sigmoid(Node *a) {
+    Node *out = node_new(1);
+    out->data[0] = 1.0 / (1.0 + exp(-a->data[0]));
+    out->backward = back_scalar_sigmoid;
+    Node *kids[] = {a};
+    node_set_children(out, kids, 1);
+    return out;
+}
+
+/* Scalar add float: a + f (constant, gradient only to a) */
+static Node *scalar_addf(Node *a, double f) {
+    Node *out = node_new(1);
+    out->data[0] = a->data[0] + f;
+    ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
+    c->a = a; c->s = 1.0;
+    out->ctx = c;
+    out->backward = back_scalar_mulf; /* same: grad flows 1:1 to a */
+    Node *kids[] = {a};
+    node_set_children(out, kids, 1);
+    return out;
+}
+
 /* --- Backward (topological sort) --- */
 /* And lo, the graph shall be walked backwards, like a salmon with regrets. */
 
@@ -1454,16 +1482,18 @@ static Node *gpt_forward_step(GPT *g, int token_id, int pos_id, KVCache *kv) {
                 scalar_softmax(content_logits, T, attn_w);
             } else if (strcmp(htype, "rrpram") == 0) {
                 scalar_softmax(rrpram_logits, T, attn_w);
-            } else { /* hybrid */
+            } else { /* hybrid: alpha in autograd graph */
                 char aname[64];
                 snprintf(aname, sizeof(aname), "l%d.h%d.alpha", li, h);
                 MatrixParam *am = gpt_base(g, aname);
-                double alpha_raw = am->row_data[0][0];
-                double a = 1.0 / (1.0 + exp(-alpha_raw)); /* sigmoid */
+                Node *alpha_vec = node_wrap(am->row_data[0], am->row_grad[0], 1);
+                Node *alpha_scalar = vec_element(alpha_vec, 0);
+                Node *a = scalar_sigmoid(alpha_scalar);
+                Node *one_minus_a = scalar_addf(scalar_mulf(a, -1.0), 1.0);
                 Node **blended = arena_alloc(&G_arena, sizeof(Node*) * T);
                 for (int t = 0; t < T; t++) {
-                    Node *cl = scalar_mulf(content_logits[t], 1.0 - a);
-                    Node *rl = scalar_mulf(rrpram_logits[t], a);
+                    Node *cl = scalar_mul(content_logits[t], one_minus_a);
+                    Node *rl = scalar_mul(rrpram_logits[t], a);
                     blended[t] = scalar_add(cl, rl);
                 }
                 scalar_softmax(blended, T, attn_w);
@@ -1772,6 +1802,7 @@ static void db_log_growth(sqlite3 *db, GPT *g, EvolvingTokenizer *tok,
 
 /* And lo, the buffer shall measure not just bytes but novelty. */
 typedef struct {
+    pthread_mutex_t mu;
     int accumulated_bytes;
     int unique_tokens[8192]; /* simple hash set */
     int unique_count;
@@ -1780,12 +1811,16 @@ typedef struct {
 } QuantumBuffer;
 
 static void qb_init(QuantumBuffer *qb) {
+    pthread_mutex_t mu = qb->mu; /* preserve if already inited */
     memset(qb, 0, sizeof(QuantumBuffer));
+    pthread_mutex_init(&qb->mu, NULL);
+    (void)mu;
 }
 
 static void qb_feed(QuantumBuffer *qb, const char *text, EvolvingTokenizer *tok) {
-    qb->accumulated_bytes += strlen(text);
     IntArr ids = tok_encode(tok, text);
+    pthread_mutex_lock(&qb->mu);
+    qb->accumulated_bytes += strlen(text);
     for (int i = 0; i < ids.len; i++) {
         int h = ids.items[i] % 8192;
         if (qb->unique_tokens[h] != ids.items[i] + 1) {
@@ -1794,28 +1829,42 @@ static void qb_feed(QuantumBuffer *qb, const char *text, EvolvingTokenizer *tok)
         }
         qb->total_tokens++;
     }
+    pthread_mutex_unlock(&qb->mu);
     ia_free(&ids);
 }
 
-static double qb_novelty(QuantumBuffer *qb) {
+/* Caller must hold qb->mu */
+static double qb_novelty_locked(QuantumBuffer *qb) {
     if (qb->total_tokens == 0) return 0.0;
     return (double)qb->unique_count / (double)qb->total_tokens;
 }
 
 static int qb_should_trigger(QuantumBuffer *qb) {
+    pthread_mutex_lock(&qb->mu);
     double now = (double)time(NULL);
     int bytes_ok = qb->accumulated_bytes >= CFG.qb_min_bytes;
-    int novelty_ok = qb_novelty(qb) >= CFG.qb_min_novelty;
+    int novelty_ok = qb_novelty_locked(qb) >= CFG.qb_min_novelty;
     int cooldown_ok = (now - qb->last_burst_time) >= CFG.qb_cooldown_seconds;
-    return (bytes_ok || novelty_ok) && cooldown_ok;
+    int result = (bytes_ok || novelty_ok) && cooldown_ok;
+    pthread_mutex_unlock(&qb->mu);
+    return result;
+}
+
+static void qb_snapshot(QuantumBuffer *qb, int *bytes_out, double *novelty_out) {
+    pthread_mutex_lock(&qb->mu);
+    *bytes_out = qb->accumulated_bytes;
+    *novelty_out = qb_novelty_locked(qb);
+    pthread_mutex_unlock(&qb->mu);
 }
 
 static void qb_reset(QuantumBuffer *qb) {
+    pthread_mutex_lock(&qb->mu);
     qb->accumulated_bytes = 0;
     memset(qb->unique_tokens, 0, sizeof(qb->unique_tokens));
     qb->unique_count = 0;
     qb->total_tokens = 0;
     qb->last_burst_time = (double)time(NULL);
+    pthread_mutex_unlock(&qb->mu);
 }
 
 /* ============================================================

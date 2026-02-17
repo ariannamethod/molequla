@@ -467,6 +467,17 @@ func (s *Scalar) MulF(f float64) *Scalar {
 	return out
 }
 
+// Sigmoid returns σ(self) = 1/(1+exp(-self)) with gradient flow.
+func (s *Scalar) Sigmoid() *Scalar {
+	sig := 1.0 / (1.0 + math.Exp(-s.Data))
+	out := &Scalar{Data: sig}
+	out.children = []Node{s}
+	out.backFn = func() {
+		s.Grad += sig * (1.0 - sig) * out.Grad
+	}
+	return out
+}
+
 // Backward performs reverse-mode autodiff from this node.
 // And lo, the graph shall be walked backwards, like a salmon with regrets.
 func Backward(root Node) {
@@ -1603,13 +1614,14 @@ func (gpt *GPT) ForwardStep(tokenID, posID int, keys, values [][]*Vec) *Vec {
 				attnWeights = ScalarSoftmax(rrpramLogits)
 			default: // hybrid
 				alphaKey := fmt.Sprintf("l%d.h%d.alpha", li, h)
-				alphaRaw := gpt.Base[alphaKey].Rows[0].Data[0]
-				a := 1.0 / (1.0 + math.Exp(-alphaRaw)) // sigmoid
+				alphaScalar := gpt.Base[alphaKey].Rows[0].Element(0) // gradient flows to MatrixParam
+				a := alphaScalar.Sigmoid()                            // learnable sigmoid gate
+				oneMinusA := a.MulF(-1.0).AddF(1.0)                  // 1 - sigmoid(alpha)
 				blendedLogits := make([]*Scalar, T)
 				for t := 0; t < T; t++ {
-					// blended = (1-a)*content + a*rrpram
-					c := contentLogits[t].MulF(1.0 - a)
-					r := rrpramLogits[t].MulF(a)
+					// blended = (1-a)*content + a*rrpram — both sides in autograd graph
+					c := contentLogits[t].MulS(oneMinusA)
+					r := rrpramLogits[t].MulS(a)
 					blendedLogits[t] = c.AddS(r)
 				}
 				attnWeights = ScalarSoftmax(blendedLogits)
@@ -2328,6 +2340,7 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 
 // And lo, the buffer shall measure not just bytes but novelty, for raw mass means nothing without surprise.
 type QuantumBuffer struct {
+	mu               sync.Mutex
 	AccumulatedBytes int
 	UniqueTokens     map[int]bool
 	TotalTokens      int
@@ -2339,6 +2352,8 @@ func NewQuantumBuffer() *QuantumBuffer {
 }
 
 func (qb *QuantumBuffer) Feed(text string, tok *EvolvingTokenizer) {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
 	qb.AccumulatedBytes += len(text)
 	ids := tok.Encode(text)
 	for _, id := range ids {
@@ -2347,7 +2362,7 @@ func (qb *QuantumBuffer) Feed(text string, tok *EvolvingTokenizer) {
 	}
 }
 
-func (qb *QuantumBuffer) NoveltyScore() float64 {
+func (qb *QuantumBuffer) noveltyScoreLocked() float64 {
 	if qb.TotalTokens == 0 {
 		return 0.0
 	}
@@ -2355,14 +2370,25 @@ func (qb *QuantumBuffer) NoveltyScore() float64 {
 }
 
 func (qb *QuantumBuffer) ShouldTrigger() bool {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
 	now := float64(time.Now().UnixMilli()) / 1000.0
 	bytesOK := qb.AccumulatedBytes >= CFG.QBMinBytes
-	noveltyOK := qb.NoveltyScore() >= CFG.QBMinNovelty
+	noveltyOK := qb.noveltyScoreLocked() >= CFG.QBMinNovelty
 	cooldownOK := (now - qb.LastBurstTime) >= CFG.QBCooldownSeconds
 	return (bytesOK || noveltyOK) && cooldownOK
 }
 
+// SnapshotStats returns accumulated bytes and novelty under one lock.
+func (qb *QuantumBuffer) SnapshotStats() (int, float64) {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
+	return qb.AccumulatedBytes, qb.noveltyScoreLocked()
+}
+
 func (qb *QuantumBuffer) Reset() {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
 	qb.AccumulatedBytes = 0
 	qb.UniqueTokens = make(map[int]bool)
 	qb.TotalTokens = 0
@@ -2705,8 +2731,9 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		}
 
 		if warmedUp && qbuf.ShouldTrigger() && len(docs) > 0 {
+			snapBytes, snapNovelty := qbuf.SnapshotStats()
 			fmt.Printf("[trainer] micro-train burst (%d bytes, novelty %.2f) — and lo, it feeds again.\n",
-				qbuf.AccumulatedBytes, qbuf.NoveltyScore())
+				snapBytes, snapNovelty)
 			trainBase := !CFG.FreezeBaseAfterWarm
 			trainSteps(model, tok, docs, CFG.MicroSteps, trainBase, true)
 			SaveCheckpoint(model, tok, "")

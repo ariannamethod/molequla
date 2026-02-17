@@ -814,6 +814,14 @@ class ScalarValue:
 
     def __rmul__(self, other): return self.__mul__(other)
 
+    def sigmoid(self):
+        sig = 1.0 / (1.0 + math.exp(-self.data))
+        out = ScalarValue(sig, (self,))
+        def _back():
+            self.grad += sig * (1.0 - sig) * out.grad
+        out._back_fn = _back
+        return out
+
 def backward(root):
     # And lo, the graph shall be walked backwards, like a salmon with regrets.
     topo = []
@@ -1335,10 +1343,11 @@ class GPT:
                     attn_weights = scalar_softmax(content_logits)
                 elif htype == "rrpram":
                     attn_weights = scalar_softmax(rrpram_logits)
-                else:  # hybrid: blend with sigmoid gate
-                    alpha_raw = self.base[f"l{li}.h{h}.alpha"].rows[0].data[0]
-                    a = 1.0 / (1.0 + math.exp(-alpha_raw))
-                    blended = [c * (1.0 - a) + r * a
+                else:  # hybrid: blend with sigmoid gate (alpha in autograd graph)
+                    alpha_scalar = self.base[f"l{li}.h{h}.alpha"].rows[0].element(0)
+                    a = alpha_scalar.sigmoid()
+                    one_minus_a = a * (-1.0) + 1.0  # 1 - sigmoid(alpha)
+                    blended = [c * one_minus_a + r * a
                                for c, r in zip(content_logits, rrpram_logits)]
                     attn_weights = scalar_softmax(blended)
 
