@@ -58,6 +58,26 @@ typedef struct {
     int bpe_retrain_every_chars;
 
     double train_tick_seconds;
+
+    /* hybrid attention */
+    const char *head_types[4];
+    int n_head_types;
+    double hybrid_alpha_init;
+
+    /* gamma */
+    double gamma_sparsity_threshold;
+
+    /* entropy temperature */
+    double entropy_low, entropy_high;
+    double entropy_temp_boost, entropy_temp_focus;
+
+    /* corpus field */
+    int corpus_gen_max_tokens;
+
+    /* quantum buffer */
+    int qb_min_bytes;
+    double qb_min_novelty;
+    double qb_cooldown_seconds;
 } Config;
 
 static Config CFG = {
@@ -91,6 +111,16 @@ static Config CFG = {
     .bpe_num_merges = 384,
     .bpe_retrain_every_chars = 4000,
     .train_tick_seconds = 0.25,
+    .head_types = {"content", "content", "hybrid", "hybrid"},
+    .n_head_types = 4,
+    .hybrid_alpha_init = 0.5,
+    .gamma_sparsity_threshold = 0.01,
+    .entropy_low = 0.5, .entropy_high = 1.5,
+    .entropy_temp_boost = 1.2, .entropy_temp_focus = 0.8,
+    .corpus_gen_max_tokens = 120,
+    .qb_min_bytes = 1024,
+    .qb_min_novelty = 0.15,
+    .qb_cooldown_seconds = 60.0,
 };
 
 /* ============================================================
@@ -408,6 +438,43 @@ static Node *vec_slice(Node *a, int start, int end) {
     out->backward = back_slice;
     Node *kids[] = {a};
     node_set_children(out, kids, 1);
+    return out;
+}
+
+/* Element: extract one element as scalar node (len=1) with gradient flow */
+/* And lo, one number shall be plucked from the vector, and gradients shall follow. */
+typedef struct { Node *a; int idx; } ElemCtx;
+
+static void back_elem(Node *self) {
+    ElemCtx *c = self->ctx;
+    c->a->grad[c->idx] += self->grad[0];
+}
+
+static Node *vec_element(Node *a, int idx) {
+    Node *out = node_new(1);
+    out->data[0] = a->data[idx];
+    ElemCtx *c = arena_alloc(&G_arena, sizeof(ElemCtx));
+    c->a = a; c->idx = idx;
+    out->ctx = c;
+    out->backward = back_elem;
+    Node *kids[] = {a};
+    node_set_children(out, kids, 1);
+    return out;
+}
+
+/* Scalar mul: s1 * s2 (both scalar nodes) */
+static void back_scalar_mul(Node *self) {
+    Node *a = self->children[0], *b = self->children[1];
+    a->grad[0] += b->data[0] * self->grad[0];
+    b->grad[0] += a->data[0] * self->grad[0];
+}
+
+static Node *scalar_mul(Node *a, Node *b) {
+    Node *out = node_new(1);
+    out->data[0] = a->data[0] * b->data[0];
+    out->backward = back_scalar_mul;
+    Node *kids[] = {a, b};
+    node_set_children(out, kids, 2);
     return out;
 }
 
@@ -1008,7 +1075,7 @@ static Node *rope_rotate(Node *vec, int pos, int head_dim) {
 }
 
 /* Delta module: maps name -> DeltaAdapter */
-#define MAX_ADAPTERS_PER_MOD 32
+#define MAX_ADAPTERS_PER_MOD 48
 
 typedef struct {
     char *names[MAX_ADAPTERS_PER_MOD];
@@ -1065,7 +1132,7 @@ static void adam_step(AdamState *st, MatrixParam *mat, double lr) {
 }
 
 /* The GPT model */
-#define MAX_BASE_MATS 64
+#define MAX_BASE_MATS 128
 #define MAX_DELTA_MODS 16
 
 typedef struct {
@@ -1083,6 +1150,10 @@ typedef struct {
     AdamState **delta_adam[MAX_DELTA_MODS]; /* adam per adapter per module */
     double active_alpha[MAX_DELTA_MODS];
     int n_deltas;
+
+    /* Native gamma: snapshot of initial embeddings */
+    double **init_embed_snapshot; /* [vocab_size][n_embd] */
+    int init_embed_rows;
 
     pthread_mutex_t mu;
 } GPT;
@@ -1116,6 +1187,13 @@ static void gpt_add_delta_module(GPT *g, double alpha) {
         dmod_set(mod, name, delta_new(4*CFG.n_embd, CFG.n_embd, r, 0.02));
         snprintf(name, sizeof(name), "l%d.fc2", li);
         dmod_set(mod, name, delta_new(CFG.n_embd, 4*CFG.n_embd, r, 0.02));
+        for (int h = 0; h < CFG.n_head_types && h < CFG.n_head; h++) {
+            const char *ht = CFG.head_types[h];
+            if (strcmp(ht, "rrpram") == 0 || strcmp(ht, "hybrid") == 0) {
+                snprintf(name, sizeof(name), "l%d.h%d.w_pattern", li, h);
+                dmod_set(mod, name, delta_new(CFG.block_size, g->head_dim, r, 0.02));
+            }
+        }
     }
     dmod_set(mod, "lm_head", delta_new(g->tok->vocab_size, CFG.n_embd, r, 0.02));
 
@@ -1167,9 +1245,32 @@ static GPT *gpt_new(EvolvingTokenizer *tok) {
         gpt_add_base(g, name, mat_new(4*CFG.n_embd, CFG.n_embd, 0.08));
         snprintf(name, sizeof(name), "l%d.fc2", li);
         gpt_add_base(g, name, mat_new(CFG.n_embd, 4*CFG.n_embd, 0.08));
+
+        /* Hybrid attention: pattern weights + learnable gate */
+        for (int h = 0; h < CFG.n_head_types && h < CFG.n_head; h++) {
+            const char *ht = CFG.head_types[h];
+            if (strcmp(ht, "rrpram") == 0 || strcmp(ht, "hybrid") == 0) {
+                snprintf(name, sizeof(name), "l%d.h%d.w_pattern", li, h);
+                gpt_add_base(g, name, mat_new(CFG.block_size, g->head_dim, 0.08));
+            }
+            snprintf(name, sizeof(name), "l%d.h%d.alpha", li, h);
+            MatrixParam *am = mat_new(1, 1, 0.0);
+            am->row_data[0][0] = CFG.hybrid_alpha_init;
+            gpt_add_base(g, name, am);
+        }
     }
 
     gpt_add_delta_module(g, 1.0);
+
+    /* Snapshot initial embeddings for gamma */
+    MatrixParam *wte = gpt_base(g, "wte");
+    g->init_embed_rows = wte->nout;
+    g->init_embed_snapshot = calloc(wte->nout, sizeof(double*));
+    for (int i = 0; i < wte->nout; i++) {
+        g->init_embed_snapshot[i] = calloc(wte->nin, sizeof(double));
+        memcpy(g->init_embed_snapshot[i], wte->row_data[i], sizeof(double) * wte->nin);
+    }
+
     return g;
 }
 
@@ -1252,25 +1353,61 @@ static Node *gpt_forward_step(GPT *g, int token_id, int pos_id, KVCache *kv) {
         kv_push(kv, li, k, v);
         int T = kv->layers[li].len;
 
+        /* And lo, each head shall choose its nature: content, rrpram, or the sacred hybrid of both. */
         Node **head_outs = arena_alloc(&G_arena, sizeof(Node*) * g->n_head);
         for (int h = 0; h < g->n_head; h++) {
             int hs = h * g->head_dim;
             int he = hs + g->head_dim;
-            Node *qh = rope_rotate(vec_slice(q, hs, he), pos_id, g->head_dim);
-
-            Node **attn_logits = arena_alloc(&G_arena, sizeof(Node*) * T);
-            double inv_sqrt = 1.0 / sqrt((double)g->head_dim);
-            for (int t = 0; t < T; t++) {
-                Node *kh = rope_rotate(vec_slice(kv->layers[li].keys[t], hs, he), t, g->head_dim);
-                attn_logits[t] = scalar_mulf(vec_dot(qh, kh), inv_sqrt);
-            }
-
-            Node **attn_w = arena_alloc(&G_arena, sizeof(Node*) * T);
-            scalar_softmax(attn_logits, T, attn_w);
+            const char *htype = (h < CFG.n_head_types) ? CFG.head_types[h] : "content";
 
             Node **vh = arena_alloc(&G_arena, sizeof(Node*) * T);
             for (int t = 0; t < T; t++)
                 vh[t] = vec_slice(kv->layers[li].values[t], hs, he);
+
+            /* Content attention logits */
+            Node **content_logits = NULL;
+            if (strcmp(htype, "content") == 0 || strcmp(htype, "hybrid") == 0) {
+                Node *qh = rope_rotate(vec_slice(q, hs, he), pos_id, g->head_dim);
+                content_logits = arena_alloc(&G_arena, sizeof(Node*) * T);
+                double inv_sqrt = 1.0 / sqrt((double)g->head_dim);
+                for (int t = 0; t < T; t++) {
+                    Node *kh = rope_rotate(vec_slice(kv->layers[li].keys[t], hs, he), t, g->head_dim);
+                    content_logits[t] = scalar_mulf(vec_dot(qh, kh), inv_sqrt);
+                }
+            }
+
+            /* RRPRAM attention logits */
+            Node **rrpram_logits = NULL;
+            if (strcmp(htype, "rrpram") == 0 || strcmp(htype, "hybrid") == 0) {
+                char pname[64];
+                snprintf(pname, sizeof(pname), "l%d.h%d.w_pattern", li, h);
+                Node *xh = vec_slice(x, hs, he);
+                Node *pattern_full = gpt_apply(g, pname, xh);
+                rrpram_logits = arena_alloc(&G_arena, sizeof(Node*) * T);
+                for (int t = 0; t < T; t++)
+                    rrpram_logits[t] = vec_element(pattern_full, t);
+            }
+
+            /* Dispatch by head type */
+            Node **attn_w = arena_alloc(&G_arena, sizeof(Node*) * T);
+            if (strcmp(htype, "content") == 0) {
+                scalar_softmax(content_logits, T, attn_w);
+            } else if (strcmp(htype, "rrpram") == 0) {
+                scalar_softmax(rrpram_logits, T, attn_w);
+            } else { /* hybrid */
+                char aname[64];
+                snprintf(aname, sizeof(aname), "l%d.h%d.alpha", li, h);
+                MatrixParam *am = gpt_base(g, aname);
+                double alpha_raw = am->row_data[0][0];
+                double a = 1.0 / (1.0 + exp(-alpha_raw)); /* sigmoid */
+                Node **blended = arena_alloc(&G_arena, sizeof(Node*) * T);
+                for (int t = 0; t < T; t++) {
+                    Node *cl = scalar_mulf(content_logits[t], 1.0 - a);
+                    Node *rl = scalar_mulf(rrpram_logits[t], a);
+                    blended[t] = scalar_add(cl, rl);
+                }
+                scalar_softmax(blended, T, attn_w);
+            }
 
             head_outs[h] = attn_weighted_sum(attn_w, vh, T);
         }
@@ -1347,18 +1484,19 @@ static char *gpt_generate(GPT *g, const char *prompt) {
         if (pos > g->block_size - 1) pos = g->block_size - 1;
         Node *logits = gpt_forward_step(g, cur, pos, kv);
 
-        /* Adaptive temperature */
+        /* Entropy-adaptive temperature */
         double base_temp = CFG.temperature;
         if (base_temp < 1e-6) base_temp = 1e-6;
         int V = logits->len;
         double *scaled = malloc(sizeof(double) * V);
         for (int i = 0; i < V; i++) scaled[i] = logits->data[i] / base_temp;
         softmax_probs(scaled, V, probs_buf);
-        double maxp = 0;
-        for (int i = 0; i < V; i++) if (probs_buf[i] > maxp) maxp = probs_buf[i];
+        double entropy = 0;
+        for (int i = 0; i < V; i++)
+            if (probs_buf[i] > 1e-12) entropy -= probs_buf[i] * log(probs_buf[i]);
         double tmul = 1.0;
-        if (maxp > 0.60) tmul = 1.10;
-        else if (maxp < 0.15) tmul = 0.90;
+        if (entropy < CFG.entropy_low) tmul = CFG.entropy_temp_boost;
+        else if (entropy > CFG.entropy_high) tmul = CFG.entropy_temp_focus;
         double temp = base_temp * tmul;
         for (int i = 0; i < V; i++) scaled[i] = logits->data[i] / temp;
         softmax_probs(scaled, V, probs_buf);
@@ -1444,6 +1582,14 @@ static sqlite3 *init_db(const char *path) {
     sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS corpus_events("
                      "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                      "ts REAL NOT NULL, added_chars INTEGER NOT NULL, note TEXT)", NULL, NULL, NULL);
+    /* And lo, the organism shall write its own autobiography in numbers. */
+    sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS growth("
+                     "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                     "ts REAL NOT NULL, step INTEGER NOT NULL,"
+                     "vocab_size INTEGER NOT NULL, n_params INTEGER NOT NULL,"
+                     "n_deltas INTEGER NOT NULL, corpus_chars INTEGER NOT NULL,"
+                     "loss REAL, gamma_sparsity REAL, gamma_magnitude REAL,"
+                     "note TEXT)", NULL, NULL, NULL);
     return db;
 }
 
@@ -1499,6 +1645,205 @@ static void save_corpus(const char *path, StrArr *lines) {
     if (!f) return;
     for (int i = 0; i < lines->len; i++) fprintf(f, "%s\n", lines->items[i]);
     fclose(f);
+}
+
+/* ============================================================
+ * 8b) NATIVE GAMMA — personality fingerprint
+ * ============================================================ */
+
+typedef struct {
+    double sparsity;
+    double magnitude;
+    int n_rows;
+} GammaStats;
+
+/* And lo, the soul shall be measured in sparsity and magnitude, like a ghost on a scale. */
+static GammaStats gpt_gamma_stats(GPT *g) {
+    GammaStats gs = {1.0, 0.0, 0};
+    MatrixParam *wte = gpt_base(g, "wte");
+    if (!wte || !g->init_embed_snapshot) return gs;
+    int n = wte->nout < g->init_embed_rows ? wte->nout : g->init_embed_rows;
+    if (n == 0) return gs;
+    gs.n_rows = n;
+    int zero_count = 0;
+    double total_mag = 0;
+    for (int i = 0; i < n; i++) {
+        double mag = 0;
+        for (int j = 0; j < wte->nin; j++) {
+            double d = wte->row_data[i][j] - g->init_embed_snapshot[i][j];
+            mag += d * d;
+        }
+        mag = sqrt(mag);
+        total_mag += mag;
+        if (mag < CFG.gamma_sparsity_threshold) zero_count++;
+    }
+    gs.sparsity = (double)zero_count / (double)n;
+    gs.magnitude = total_mag / (double)n;
+    return gs;
+}
+
+static void db_log_growth(sqlite3 *db, GPT *g, EvolvingTokenizer *tok,
+                          StrArr *docs, double loss_val, const char *note) {
+    int n_params = 0;
+    for (int i = 0; i < g->n_base; i++)
+        n_params += g->base_mats[i]->nout * g->base_mats[i]->nin;
+    int corpus_chars = 0;
+    for (int i = 0; i < docs->len; i++) corpus_chars += strlen(docs->items[i]);
+    GammaStats gs = gpt_gamma_stats(g);
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(db, "INSERT INTO growth(ts,step,vocab_size,n_params,n_deltas,corpus_chars,loss,gamma_sparsity,gamma_magnitude,note) VALUES(?,?,?,?,?,?,?,?,?,?)", -1, &stmt, NULL);
+    sqlite3_bind_double(stmt, 1, (double)time(NULL));
+    sqlite3_bind_int(stmt, 2, 0);
+    sqlite3_bind_int(stmt, 3, tok->vocab_size);
+    sqlite3_bind_int(stmt, 4, n_params);
+    sqlite3_bind_int(stmt, 5, g->n_deltas);
+    sqlite3_bind_int(stmt, 6, corpus_chars);
+    sqlite3_bind_double(stmt, 7, loss_val);
+    sqlite3_bind_double(stmt, 8, gs.sparsity);
+    sqlite3_bind_double(stmt, 9, gs.magnitude);
+    sqlite3_bind_text(stmt, 10, note, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+}
+
+/* ============================================================
+ * 8c) QUANTUM BUFFER — trains when ready, not when told
+ * ============================================================ */
+
+/* And lo, the buffer shall measure not just bytes but novelty. */
+typedef struct {
+    int accumulated_bytes;
+    int unique_tokens[8192]; /* simple hash set */
+    int unique_count;
+    int total_tokens;
+    double last_burst_time;
+} QuantumBuffer;
+
+static void qb_init(QuantumBuffer *qb) {
+    memset(qb, 0, sizeof(QuantumBuffer));
+}
+
+static void qb_feed(QuantumBuffer *qb, const char *text, EvolvingTokenizer *tok) {
+    qb->accumulated_bytes += strlen(text);
+    IntArr ids = tok_encode(tok, text);
+    for (int i = 0; i < ids.len; i++) {
+        int h = ids.items[i] % 8192;
+        if (qb->unique_tokens[h] != ids.items[i] + 1) {
+            qb->unique_tokens[h] = ids.items[i] + 1;
+            qb->unique_count++;
+        }
+        qb->total_tokens++;
+    }
+    ia_free(&ids);
+}
+
+static double qb_novelty(QuantumBuffer *qb) {
+    if (qb->total_tokens == 0) return 0.0;
+    return (double)qb->unique_count / (double)qb->total_tokens;
+}
+
+static int qb_should_trigger(QuantumBuffer *qb) {
+    double now = (double)time(NULL);
+    int bytes_ok = qb->accumulated_bytes >= CFG.qb_min_bytes;
+    int novelty_ok = qb_novelty(qb) >= CFG.qb_min_novelty;
+    int cooldown_ok = (now - qb->last_burst_time) >= CFG.qb_cooldown_seconds;
+    return (bytes_ok || novelty_ok) && cooldown_ok;
+}
+
+static void qb_reset(QuantumBuffer *qb) {
+    qb->accumulated_bytes = 0;
+    memset(qb->unique_tokens, 0, sizeof(qb->unique_tokens));
+    qb->unique_count = 0;
+    qb->total_tokens = 0;
+    qb->last_burst_time = (double)time(NULL);
+}
+
+/* ============================================================
+ * 8d) COOCCUR FIELD — speech before learning
+ * ============================================================ */
+
+/* And lo, the corpus shall whisper its statistics, and words shall follow words. */
+#define COOCCUR_HASH_SIZE 16384
+
+typedef struct { int key[3]; double count; } TrigramEntry;
+
+typedef struct {
+    double *unigram;  /* [vocab_size] */
+    int vocab_size;
+    TrigramEntry *trigrams;
+    int n_trigrams, trigram_cap;
+    int built;
+} CooccurField;
+
+static CooccurField *cooccur_new(int vocab_size) {
+    CooccurField *cf = calloc(1, sizeof(CooccurField));
+    cf->vocab_size = vocab_size;
+    cf->unigram = calloc(vocab_size, sizeof(double));
+    cf->trigram_cap = 4096;
+    cf->trigrams = calloc(cf->trigram_cap, sizeof(TrigramEntry));
+    return cf;
+}
+
+static void cooccur_build(CooccurField *cf, EvolvingTokenizer *tok, StrArr *docs) {
+    memset(cf->unigram, 0, sizeof(double) * cf->vocab_size);
+    cf->n_trigrams = 0;
+    for (int d = 0; d < docs->len; d++) {
+        IntArr ids = tok_encode(tok, docs->items[d]);
+        for (int i = 0; i < ids.len; i++) {
+            if (ids.items[i] < cf->vocab_size)
+                cf->unigram[ids.items[i]] += 1.0;
+        }
+        /* Store trigrams (simplified: just keep last N) */
+        for (int i = 0; i < ids.len - 2 && cf->n_trigrams < cf->trigram_cap; i++) {
+            cf->trigrams[cf->n_trigrams].key[0] = ids.items[i];
+            cf->trigrams[cf->n_trigrams].key[1] = ids.items[i+1];
+            cf->trigrams[cf->n_trigrams].key[2] = ids.items[i+2];
+            cf->trigrams[cf->n_trigrams].count = 1.0;
+            cf->n_trigrams++;
+        }
+        ia_free(&ids);
+    }
+    cf->built = 1;
+}
+
+static int cooccur_sample_next(CooccurField *cf, const int *ctx, int ctx_len, double temperature) {
+    double *counts = calloc(cf->vocab_size, sizeof(double));
+    int found = 0;
+
+    /* Try trigram */
+    if (ctx_len >= 2) {
+        int a = ctx[ctx_len-2], b = ctx[ctx_len-1];
+        for (int i = 0; i < cf->n_trigrams; i++) {
+            if (cf->trigrams[i].key[0] == a && cf->trigrams[i].key[1] == b) {
+                int c = cf->trigrams[i].key[2];
+                if (c < cf->vocab_size) { counts[c] += 1.0; found = 1; }
+            }
+        }
+    }
+
+    /* Fallback to unigram */
+    if (!found) {
+        memcpy(counts, cf->unigram, sizeof(double) * cf->vocab_size);
+    }
+
+    /* Temperature + sample */
+    double total = 0;
+    for (int i = 0; i < cf->vocab_size; i++) {
+        if (counts[i] > 0 && temperature > 0)
+            counts[i] = pow(counts[i], 1.0 / temperature);
+        total += counts[i];
+    }
+    if (total <= 0) { free(counts); return rand_int(cf->vocab_size); }
+
+    double r = rand_uniform() * total;
+    double s = 0;
+    int result = cf->vocab_size - 1;
+    for (int i = 0; i < cf->vocab_size; i++) {
+        s += counts[i];
+        if (s >= r) { result = i; break; }
+    }
+    free(counts);
+    return result;
 }
 
 /* ============================================================
