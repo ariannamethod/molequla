@@ -9,7 +9,7 @@
 
 # molecule | by Arianna Method
 
-> *A GPT organism reproduced in Python, Go, and C. Async, continually-learning, with hybrid attention and native personality.*
+> *A GPT organism reproduced in Python, Go, C, and JavaScript. Async, continually-learning, with hybrid attention, native personality, and mathematical self-reasoning.*
 >
 ---
 
@@ -17,8 +17,9 @@
 
 ```
 THIS IS:
-- Three implementations: Python, Go, C — same architecture
-- One dependency in Python (numpy) — zero in Go and C
+- Four implementations: Python, Go, C, JavaScript — same architecture
+- One dependency in Python (numpy) — zero in Go, C, and JS
+- Runs in the browser: molecule.js, zero npm, zero webpack, one <script> tag
 - Custom autograd engine (vectors, not scalar confetti)
 - RoPE position encoding (GPT-3/4 inspired)
 - SwiGLU-like gated MLP (LLaMA vibes)
@@ -28,11 +29,12 @@ THIS IS:
 - BPE tokenizer that ONLY EXPANDS vocab (weights never invalidate)
 - Corpus field: speaks before it learns (trigram statistics)
 - QuantumBuffer: trains when it's ready, not when you tell it
+- SyntropyTracker: mathematical self-reasoning about its own becoming
 - Entropy-adaptive temperature (no more max-prob hacks)
-- Growth table: SQLite structural autobiography
+- Growth table: SQLite/IndexedDB structural autobiography
 - Native immune system: detects and rejects identity-corrupting noise
 - Async background training (it's alive, not a script)
-- SQLite memory (it remembers conversations)
+- Persistent memory: SQLite (Python/Go/C) or IndexedDB (browser)
 ```
 
 ---
@@ -48,9 +50,11 @@ What if it never forgot? **Delta adapters.**
 What if it could chat? **SQLite memory.**  
 What if it had multiple attention mechanisms? **Hybrid heads.**  
 What if it grew a personality from scratch? **Native gamma.**  
-What if it could speak before training? **Corpus field.**  
-What if it was *alive*?  
-  
+What if it could speak before training? **Corpus field.**
+What if it could reason about its own learning direction? **Syntropy tracker.**
+What if it ran in the browser with zero dependencies? **molecule.js.**
+What if it was *alive*?
+
 So I built it. **molecule.** Thanks to Karpathy's microgpt, but this is not a fork.
 
 ---
@@ -71,6 +75,16 @@ That's it. It will:
 5. Drop you into a chat loop
 
 Type. It responds. It learns. It grows. It never forgets.
+
+### Browser (molecule.js)
+
+```bash
+# No npm. No webpack. No node_modules. Just serve.
+python3 -m http.server 8000
+# Open http://localhost:8000/molecule.html
+```
+
+That's it. One `<script>` tag. The organism creates its own UI, opens IndexedDB for memory, fetches `nonames.txt` for corpus (or uses built-in seed), and starts training in the background via cooperative `setTimeout` multitasking. Close the tab, reopen — it remembers everything.
 
 ```
 molecule is alive. Type and press Enter. Ctrl+C to exit.
@@ -305,6 +319,36 @@ This is **mathematical self-awareness as immune system**: the organism uses its 
 
 Formally, this implements a self-referential quality gate: `f: S → D → {accept, reject}`, where S is the model's state and D is the identity description — satisfying the criteria for introspective computation as defined in [Lee (2025), "Formal Criteria for AI Identity"](https://arxiv.org/abs/2411.18530).
 
+### 15. SyntropyTracker (Mathematical Self-Reasoning)
+
+The immune system rejects poison. But the SyntropyTracker does something deeper: it reasons about the *direction* of learning and steers it.
+
+**Syntropy** = negative entropy trend. Entropy going down = order rising = the organism is *organizing itself*. The tracker measures four signals:
+
+```python
+class SyntropyTracker:
+    def measure(self, model, tok, field, docs):
+        entropy_now = model.compute_model_entropy(tok, docs)      # prediction certainty
+        field_deviation = model.compute_field_deviation(tok, field, docs)  # drift from corpus
+        purpose_magnitude = model.compute_purpose_vector()         # learning momentum
+        purpose_alignment = model.purpose_gamma_alignment()        # cos(purpose, identity)
+```
+
+Then it decides how to adjust learning:
+
+| State | Action | LR Multiplier | Meaning |
+|-------|--------|---------------|---------|
+| Syntropy rising + field in sweet spot + purpose aligned | **amplify** | 1.3× + delta grow | Everything aligned — push harder |
+| Syntropy rising + purpose drifting | **boost** | 1.3× | Good direction, gentle push |
+| Syntropy falling | **dampen** | 0.6× | Losing order — slow down |
+| Field deviation too high | **ground** | 0.6× | Hallucinating — pull back to corpus |
+| Field deviation too low | **explore** | 1.3× | Parroting — push out |
+| Purpose opposes gamma | **realign** | 0.5× | Identity crisis — hard slow |
+
+This is not heuristics — it's **mathematical introspection**. The organism measures its own entropy trend, computes how far it's drifted from corpus physics, measures whether its current learning direction aligns with its accumulated identity, and adjusts. Gamma is memory. Purpose is intention. Syntropy is the arrow.
+
+Every decision is logged to the syntropy_log table with full metrics.
+
 ---
 
 ## The Stack
@@ -325,9 +369,11 @@ Formally, this implements a self-referential quality gate: `f: S → D → {acce
 | Personality | None | **Native gamma** (sparse embedding drift) |
 | Growth tracking | None | **SQLite growth table** |
 | Noise rejection | None | **Native immune system** (γ drift + delta rollback) |
+| Self-reasoning | None | **SyntropyTracker** (entropy trend + field deviation + purpose alignment) |
 | Sampling | top-k | **min_p + typical_p + nucleus** |
 | Weight tying | No | **Yes (GPT-style)** |
-| Dependencies | torch | **numpy** (Python) / **none** (Go, C) |
+| Dependencies | torch | **numpy** (Python) / **none** (Go, C, JS) |
+| Browser | No | **molecule.js** (IndexedDB, zero deps, cooperative training) |
 
 ---
 
@@ -387,17 +433,18 @@ Want bigger? Change `n_embd`, `n_layer`, `block_size`. Want different attention?
 
 ---
 
-## Three Implementations
+## Four Implementations
 
-The same architecture, three languages:
+The same architecture, four languages, four habitats:
 
-| Version | File | Language | Dependencies | Notes |
-|---------|------|----------|--------------|-------|
-| **molecule.py** | `molecule.py` | Python 3.7+ | numpy | The original. numpy-accelerated autograd. |
-| **molecule.go** | `molecule.go` | Go 1.21+ | `modernc.org/sqlite` | Pure Go, no CGO. Goroutines for async training. |
-| **molecule.c** | `molecule.c` | C99 | `sqlite3`, `pthreads` | Arena allocator, pthreads, binary checkpoints. |
+| Version | File | Language | Dependencies | Habitat |
+|---------|------|----------|--------------|---------|
+| **molecule.py** | `molecule.py` | Python 3.7+ | numpy | Terminal. numpy-accelerated autograd. |
+| **molecule.go** | `molecule.go` | Go 1.21+ | `modernc.org/sqlite` | Terminal. Pure Go, no CGO. Goroutines. |
+| **molecule.c** | `molecule.c` | C99 | `sqlite3`, `pthreads` | Terminal. Arena allocator, binary checkpoints. |
+| **molecule.js** | `molecule.js` | ES2020+ | **none** | Browser. IndexedDB, Float64Array, DOM. |
 
-All three are at **full feature parity**: vector autograd, RoPE, SwiGLU, hybrid attention, delta adapters, evolving BPE, native gamma, cooccur field, quantum buffer, entropy temperature, growth table, immune system, no_grad inference, async training, SQLite memory. Python and Go share JSON checkpoint format. C uses binary format (`MOLE` magic header).
+All four are at **full feature parity**: vector autograd, RoPE, SwiGLU, hybrid attention, delta adapters, evolving BPE, native gamma, cooccur field, quantum buffer, entropy temperature, growth table, immune system, syntropy tracker, no_grad inference, async training, persistent memory. Python and Go share JSON checkpoint format. C uses binary format (`MOLE` magic header). JS uses IndexedDB with JSON serialization.
 
 ```bash
 # Python
@@ -408,6 +455,10 @@ go build -o molecule_bin . && ./molecule_bin
 
 # C
 gcc -O2 -o molecule molecule.c -lsqlite3 -lpthread -lm && ./molecule
+
+# JavaScript (browser)
+python3 -m http.server 8000
+# Open http://localhost:8000/molecule.html — that's it.
 ```
 
 
@@ -419,13 +470,15 @@ gcc -O2 -o molecule molecule.c -lsqlite3 -lpthread -lm && ./molecule
 python -m pytest tests/ -v
 ```
 
-**82 tests** covering:
+**139 tests** covering:
 - Autograd (forward + backward, VectorValue + ScalarValue)
 - Tokenizer (char-level + BPE + vocab growth)
 - Model (GPT, MatrixParam, DeltaAdapter, RoPE)
 - Sampling (top-k, top-p, min_p, typical, softmax)
 - Checkpointing (save/load + backward compat)
 - Integration (train → generate)
+- SyntropyTracker (entropy measurement, field deviation, purpose vector, alignment, decisions)
+- Immune system (snapshot, restore, drift check, noise rejection)
 
 ---
 
@@ -436,10 +489,12 @@ This is not a tutorial. This is not a "minimal example." This is a **functional 
 - Learns continuously
 - Never forgets
 - Grows organically
-- Has one dependency (numpy) — Go and C have zero
+- Has one dependency (numpy) — Go, C, and JS have zero
 - Fits in one file per language
+- Runs in a browser tab (molecule.js — no npm, no webpack, nothing)
 - Speaks before it learns
 - Grows a personality from zero
+- Reasons mathematically about its own learning direction
 - Writes its own structural autobiography
 - Rejects noise that would corrupt its identity
 - Actually generates text you can read
@@ -454,7 +509,7 @@ Because atoms are micrograd. We build molecules.
 
 ## Known Limitations
 
-1. **It's Python.** numpy-accelerated but no CUDA. Go and C versions are fast natively. Use those for production.
+1. **Performance varies.** Python has numpy. Go and C are natively fast. JS runs in the browser — fast enough for chat, slower for training (no BLAS, Float64Array only). No CUDA anywhere.
 
 2. **It's small.** 2 layers, 72 dims, 4 heads (2 content + 2 hybrid). You're not getting GPT-4 reasoning. You're getting an embryo that *could* grow.
 
@@ -492,6 +547,6 @@ GNU GPLv3 — Because freedom matters.
 
 - [ariannamethod.ai](https://github.com/ariannamethod/ariannamethod.ai) — Arianna Method Language
 
-- **molecule** — Single-File Continual GPT
+- **molecule** — Single-File Continual GPT (Python, Go, C, JavaScript)
 
 *Patterns over parameters. Emergence over engineering. The organism continues.*
