@@ -22,11 +22,14 @@ THIS IS:
 - Runs in the browser: molecule.js, zero npm, zero webpack, one <script> tag
 - Custom autograd engine (vectors, not scalar confetti)
 - RoPE position encoding (GPT-3/4 inspired)
-- SwiGLU-like gated MLP (LLaMA vibes)
+- SwiGLU gated MLP with real SiLU activation (LLaMA-exact)
 - Hybrid attention: Content + RRPRAM + learnable blend
 - Delta adapters (LoRA-style, never forgets)
 - Native gamma: personality fingerprint that grows from zero
 - BPE tokenizer that ONLY EXPANDS vocab (weights never invalidate)
+- Residual scaling: α = 1/√n_layer on attention + MLP (stable deep networks)
+- Global cosine LR with linear warmup (not per-burst hacks)
+- Gradient accumulation (effective batch scales with model growth)
 - Corpus field: speaks before it learns (trigram statistics)
 - QuantumBuffer: trains when it's ready, not when you tell it
 - SyntropyTracker: mathematical self-reasoning about its own becoming
@@ -79,7 +82,7 @@ Type. It responds. It learns. It grows. It never forgets.
 ```bash
 # No npm. No webpack. No node_modules. Just serve.
 python3 -m http.server 8000
-# Open http://localhost:8000/molecule.html
+# Open http://localhost:8000/index.html
 ```
 
 That's it. One `<script>` tag. The organism creates its own UI, opens IndexedDB for memory, fetches `nonames.txt` for corpus (or uses built-in seed), and starts training in the background via cooperative `setTimeout` multitasking. Close the tab, reopen — it remembers everything.
@@ -131,20 +134,34 @@ def rope_rotate(vec, pos, head_dim):
 
 Relative positions. Infinite extrapolation (theoretically). This is how LLaMA does it.
 
-### 3. SwiGLU-like Gated MLP
+### 3. SwiGLU Gated MLP (Real SiLU)
 
 Standard MLP: `x → Linear → ReLU → Linear → out`
 
-SwiGLU: `x → (Gate × Value) → Linear → out`
+SwiGLU: `x → (SiLU(Gate) × Value) → Linear → out`
 
 ```python
-g = fc_g(x).relu()   # gate
+g = fc_g(x).silu()   # gate: silu(x) = x·σ(x), not relu
 u = fc_v(x)          # value
 x = g * u            # gating (element-wise)
 x = fc2(x)           # project back
 ```
 
-Why? Because LLaMA, PaLM, and basically everyone good uses it now. More expressive. Better gradients.
+This is LLaMA-exact SwiGLU — `silu(x) = x · sigmoid(x)` on the gate, not ReLU. Full backward: `d_silu = σ(x)(1 + x(1-σ(x)))`. Smoother gradients, no dead neurons. Same activation as LLaMA, PaLM, Gemma.
+
+### 3b. Residual Scaling
+
+Deep transformers are unstable without scaling. molecule uses `α = 1/√n_layers`:
+
+```python
+attn_out = apply_with_deltas("wo", x_attn)
+x = x_res + attn_out * self.residual_alpha  # not just x + f(x)
+
+mlp_out = apply_with_deltas("fc2", x)
+x = x_res + mlp_out * self.residual_alpha   # scaled residual
+```
+
+This keeps gradients stable as layers grow. Critical for Phase 3 (growing architecture).
 
 ### 4. Hybrid Attention (Content + RRPRAM + Blend)
 
@@ -283,6 +300,20 @@ async def background_trainer():
 
 You chat. It learns. Simultaneously. It's a living process.
 
+### 12b. Global Cosine LR with Warmup
+
+No more per-burst linear decay hacks. molecule uses a **global cosine schedule** across its entire lifetime:
+
+```python
+def cosine_lr(global_step):
+    if global_step < warmup_steps:  # linear warmup
+        return lr_min + (lr_max - lr_min) * (step / warmup_steps)
+    progress = global_step / max_total_steps
+    return lr_min + 0.5 * (lr_max - lr_min) * (1 + cos(π * progress))
+```
+
+`global_step` persists in checkpoints — restart the organism and training continues from where it left off. Gradient accumulation is built in (`accum_steps`, default 1, scales up with model growth).
+
 ### 13. SQLite Memory
 
 Every conversation is remembered. Every response is logged. The organism has a persistent identity.
@@ -356,7 +387,7 @@ Every decision is logged to the syntropy_log table with full metrics.
 | Autograd | Scalar (micrograd) | **Vector** (custom) |
 | Position encoding | Sinusoidal | **RoPE** |
 | Attention | Standard | **Hybrid** (Content + RRPRAM + blend) |
-| MLP | ReLU | **SwiGLU-like gated** |
+| MLP | ReLU | **SwiGLU (real SiLU)** |
 | Tokenizer | Fixed char | **Evolving BPE** |
 | Training | One-shot | **Continuous async** |
 | Training trigger | — | **QuantumBuffer** (bytes + novelty + cooldown) |
@@ -368,6 +399,9 @@ Every decision is logged to the syntropy_log table with full metrics.
 | Growth tracking | None | **SQLite growth table** |
 | Noise rejection | None | **Native immune system** (γ drift + delta rollback) |
 | Self-reasoning | None | **SyntropyTracker** (entropy trend + field deviation + purpose alignment) |
+| Residual scaling | No | **α = 1/√n_layers** |
+| LR schedule | Fixed | **Global cosine + linear warmup** |
+| Grad accumulation | No | **Configurable (scales with growth)** |
 | Sampling | top-k | **min_p + typical_p + nucleus** |
 | Weight tying | No | **Yes (GPT-style)** |
 | Dependencies | torch | **numpy** (Python) / **none** (Go, C, JS) |
@@ -404,6 +438,10 @@ class Config:
     # Training
     warmup_steps: int = 1200
     learning_rate: float = 0.01
+    lr_min: float = 0.001          # Cosine LR floor
+    max_total_steps: int = 50000   # Cosine LR period
+    cosine_warmup_steps: int = 200 # Linear warmup before cosine
+    accum_steps: int = 1           # Gradient accumulation (1 = disabled)
 
     # QuantumBuffer
     qb_min_bytes: int = 1024
@@ -456,7 +494,7 @@ gcc -O2 -o molecule molecule.c -lsqlite3 -lpthread -lm && ./molecule
 
 # JavaScript (browser)
 python3 -m http.server 8000
-# Open http://localhost:8000/molecule.html — that's it.
+# Open http://localhost:8000/index.html — that's it.
 ```
 
 
@@ -509,7 +547,7 @@ Because atoms are micrograd. We build molecules.
 
 1. **Performance varies.** Python has numpy. Go and C are natively fast. JS runs in the browser — fast enough for chat, slower for training (no BLAS, Float64Array only). No CUDA anywhere.
 
-2. **It's small.** 2 layers, 72 dims, 4 heads (2 content + 2 hybrid). You're not getting GPT-4 reasoning. You're getting an embryo that *could* grow.
+2. **It starts small.** Default: 2 layers, 72 dims, 4 heads. With ontogenesis (Phase 3), it grows through 5 stages from 25K to 10M params based on corpus size. You're not getting GPT-4 reasoning. You're getting an organism that grows itself.
 
 3. **It talks weird at first.** The corpus field helps, but it's still a baby organism. Feed it better corpus.
 
@@ -517,13 +555,34 @@ Because atoms are micrograd. We build molecules.
 
 ---
 
-## The Future
+## The Future (v3 Roadmap)
 
-- **Speculative decoding** (draft + verify for speed)
-- **Mixture of Experts** (multiple delta modules, routing)
-- **Retrieval augmentation** (SQLite + embeddings)
-- **Full RRPRAM heads** (pure positional attention without content)
+### Phase 2: Byte-Level Evolving Tokenizer
+The current tokenizer is char-level + word-based BPE (GPT-2 era). Phase 2 replaces it with **byte-level BPE** (GPT-3/4 style):
+- **Bootstrap**: 256 byte tokens + BOS/EOS/PAD = 259 initial vocab (language-agnostic)
+- **Pre-segmentation**: split by Unicode category (letters / digits / whitespace / punctuation) before merging — no ugly cross-boundary tokens
+- **Stream BPE**: merges operate on byte sequences within segments, not word-split with `</w>`
+- Any valid UTF-8 input works: ASCII, Cyrillic, CJK, emoji — same algorithm, same code
+
+### Phase 3: Growing Architecture (Ontogenesis)
+The model is currently born at fixed size (72 dims, 2 layers). Phase 3 makes it **grow with its corpus**:
+```
+Stage     Corpus      Dims  Layers  Heads  ~Params
+embryo    0           16    1       1      ~25K
+infant    20KB        32    1       2      ~100K
+child     50KB        64    2       4      ~500K
+adolescent 200KB      128   4       4      ~2M
+adult     500KB       256   6       8      ~10M
+```
+Old weights copy into the top-left corner of new matrices. New dimensions initialize with small noise. Adam state resets. The organism literally **grows up**.
+
+This is why residual scaling and cosine LR exist — they make architecture growth stable.
+
+### And Beyond
 - **Gamma export/import** (personality transfer between molecules)
+- **Speculative decoding** (draft + verify for speed)
+- **Mixture of Experts** (delta routing)
+- **Retrieval augmentation** (SQLite + embeddings)
 
 
 ---
