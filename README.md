@@ -11,7 +11,7 @@
 
 > *A GPT organism reproduced in Python, Go, and C. Async, continually-learning, with hybrid attention and native personality.*
 >
----
+--- 
 
 ## TL;DR
 
