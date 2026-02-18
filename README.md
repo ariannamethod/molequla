@@ -393,9 +393,11 @@ The same architecture, three languages:
 
 | Version | File | Language | Dependencies | Notes |
 |---------|------|----------|--------------|-------|
-| **molecule.py** | `molecule.py` | Python 3.7+ | numpy | The original. numpy-accelerated autograd. **v2 with all features.** |
+| **molecule.py** | `molecule.py` | Python 3.7+ | numpy | The original. numpy-accelerated autograd. |
 | **molecule.go** | `molecule.go` | Go 1.21+ | `modernc.org/sqlite` | Pure Go, no CGO. Goroutines for async training. |
 | **molecule.c** | `molecule.c` | C99 | `sqlite3`, `pthreads` | Arena allocator, pthreads, binary checkpoints. |
+
+All three are at **full feature parity**: vector autograd, RoPE, SwiGLU, hybrid attention, delta adapters, evolving BPE, native gamma, cooccur field, quantum buffer, entropy temperature, growth table, immune system, no_grad inference, async training, SQLite memory. Python and Go share JSON checkpoint format. C uses binary format (`MOLE` magic header).
 
 ```bash
 # Python
@@ -408,9 +410,6 @@ go build -o molecule_bin . && ./molecule_bin
 gcc -O2 -o molecule molecule.c -lsqlite3 -lpthread -lm && ./molecule
 ```
 
-All three share the same core architecture: vector autograd, RoPE, SwiGLU, delta adapters, evolving BPE, async training, SQLite memory. Python and Go share JSON checkpoint format. C uses binary format (`MOLE` magic header).
-
-> **Note:** Python is currently ahead — v2 features (hybrid attention, native gamma, cooccur field, quantum buffer, entropy temperature, growth table) are being ported to Go and C.
 
 ---
 
@@ -438,7 +437,7 @@ This is not a tutorial. This is not a "minimal example." This is a **functional 
 - Never forgets
 - Grows organically
 - Has one dependency (numpy) — Go and C have zero
-- Fits in one file
+- Fits in one file per language
 - Speaks before it learns
 - Grows a personality from zero
 - Writes its own structural autobiography
