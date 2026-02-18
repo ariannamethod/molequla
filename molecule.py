@@ -388,6 +388,10 @@ def generate_resonant(model, tok, field, prompt_text, use_model=True, model_alph
     if not use_model:
         return corpus_generate(tok, field, prompt_text)
 
+    with no_grad():
+        return _generate_resonant_impl(model, tok, field, prompt_text, model_alpha)
+
+def _generate_resonant_impl(model, tok, field, prompt_text, model_alpha):
     ids = tok.encode(prompt_text)[:-1]
     if not ids:
         ids = [tok.stoi[tok.BOS]]
@@ -626,131 +630,167 @@ class EvolvingTokenizer:
 # 4) AUTOGRAD — vectors, not scalar confetti
 # ============================================================
 
+# And lo, when the organism speaks, it shall not waste breath building
+# a backward graph it will never use. no_grad is mercy for inference.
+_GRAD_ENABLED = True
+
+class no_grad:
+    """Context manager: disable autograd graph construction (like torch.no_grad)."""
+    def __enter__(self):
+        global _GRAD_ENABLED
+        self._prev = _GRAD_ENABLED
+        _GRAD_ENABLED = False
+        return self
+    def __exit__(self, *a):
+        global _GRAD_ENABLED
+        _GRAD_ENABLED = self._prev
+
 class VectorValue:
     """A differentiable vector. One object = one embedding / hidden state."""
     __slots__ = ("data", "grad", "_children", "_back_fn")
 
     def __init__(self, data, children=(), back_fn=None):
         self.data = list(data) if not isinstance(data, list) else data
-        self.grad = [0.0] * len(self.data)
+        self.grad = [0.0] * len(self.data) if _GRAD_ENABLED else None
         self._children = children
         self._back_fn = back_fn
 
     def __add__(self, other):
         if isinstance(other, VectorValue):
-            out = VectorValue([a + b for a, b in zip(self.data, other.data)],
-                              (self, other))
+            out = VectorValue([a + b for a, b in zip(self.data, other.data)])
+            if _GRAD_ENABLED:
+                out._children = (self, other)
+                def _back():
+                    for i in range(len(self.data)):
+                        self.grad[i] += out.grad[i]
+                        other.grad[i] += out.grad[i]
+                out._back_fn = _back
+            return out
+        s = float(other)
+        out = VectorValue([a + s for a in self.data])
+        if _GRAD_ENABLED:
+            out._children = (self,)
             def _back():
                 for i in range(len(self.data)):
                     self.grad[i] += out.grad[i]
-                    other.grad[i] += out.grad[i]
             out._back_fn = _back
-            return out
-        s = float(other)
-        out = VectorValue([a + s for a in self.data], (self,))
-        def _back():
-            for i in range(len(self.data)):
-                self.grad[i] += out.grad[i]
-        out._back_fn = _back
         return out
 
     def __radd__(self, other): return self.__add__(other)
 
     def __neg__(self):
-        out = VectorValue([-a for a in self.data], (self,))
-        def _back():
-            for i in range(len(self.data)):
-                self.grad[i] -= out.grad[i]
-        out._back_fn = _back
+        out = VectorValue([-a for a in self.data])
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                for i in range(len(self.data)):
+                    self.grad[i] -= out.grad[i]
+            out._back_fn = _back
         return out
 
     def __sub__(self, other):
         if isinstance(other, VectorValue):
-            out = VectorValue([a - b for a, b in zip(self.data, other.data)],
-                              (self, other))
-            def _back():
-                for i in range(len(self.data)):
-                    self.grad[i] += out.grad[i]
-                    other.grad[i] -= out.grad[i]
-            out._back_fn = _back
+            out = VectorValue([a - b for a, b in zip(self.data, other.data)])
+            if _GRAD_ENABLED:
+                out._children = (self, other)
+                def _back():
+                    for i in range(len(self.data)):
+                        self.grad[i] += out.grad[i]
+                        other.grad[i] -= out.grad[i]
+                out._back_fn = _back
             return out
         return self + (-float(other))
 
     def __mul__(self, other):
         if isinstance(other, VectorValue):
-            out = VectorValue([a * b for a, b in zip(self.data, other.data)],
-                              (self, other))
-            def _back():
-                for i in range(len(self.data)):
-                    self.grad[i] += other.data[i] * out.grad[i]
-                    other.grad[i] += self.data[i] * out.grad[i]
-            out._back_fn = _back
+            out = VectorValue([a * b for a, b in zip(self.data, other.data)])
+            if _GRAD_ENABLED:
+                out._children = (self, other)
+                def _back():
+                    for i in range(len(self.data)):
+                        self.grad[i] += other.data[i] * out.grad[i]
+                        other.grad[i] += self.data[i] * out.grad[i]
+                out._back_fn = _back
             return out
         s = float(other)
-        out = VectorValue([a * s for a in self.data], (self,))
-        def _back():
-            for i in range(len(self.data)):
-                self.grad[i] += s * out.grad[i]
-        out._back_fn = _back
+        out = VectorValue([a * s for a in self.data])
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                for i in range(len(self.data)):
+                    self.grad[i] += s * out.grad[i]
+            out._back_fn = _back
         return out
 
     def __rmul__(self, other): return self.__mul__(other)
 
     def relu(self):
-        out = VectorValue([max(0.0, a) for a in self.data], (self,))
-        def _back():
-            for i in range(len(self.data)):
-                if self.data[i] > 0:
-                    self.grad[i] += out.grad[i]
-        out._back_fn = _back
+        out = VectorValue([max(0.0, a) for a in self.data])
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                for i in range(len(self.data)):
+                    if self.data[i] > 0:
+                        self.grad[i] += out.grad[i]
+            out._back_fn = _back
         return out
 
     def squared_relu(self):
         r = [max(0.0, a) for a in self.data]
-        out = VectorValue([x * x for x in r], (self,))
-        def _back():
-            for i in range(len(self.data)):
-                if self.data[i] > 0:
-                    self.grad[i] += 2.0 * r[i] * out.grad[i]
-        out._back_fn = _back
+        out = VectorValue([x * x for x in r])
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                for i in range(len(self.data)):
+                    if self.data[i] > 0:
+                        self.grad[i] += 2.0 * r[i] * out.grad[i]
+            out._back_fn = _back
         return out
 
     def dot(self, other):
         val = sum(a * b for a, b in zip(self.data, other.data))
-        out = ScalarValue(val, (self, other))
-        def _back():
-            for i in range(len(self.data)):
-                self.grad[i] += other.data[i] * out.grad
-                other.grad[i] += self.data[i] * out.grad
-        out._back_fn = _back
+        out = ScalarValue(val)
+        if _GRAD_ENABLED:
+            out._children = (self, other)
+            def _back():
+                for i in range(len(self.data)):
+                    self.grad[i] += other.data[i] * out.grad
+                    other.grad[i] += self.data[i] * out.grad
+            out._back_fn = _back
         return out
 
     def mean_sq(self):
         n = len(self.data)
         val = sum(a * a for a in self.data) / n
-        out = ScalarValue(val, (self,))
-        def _back():
-            for i in range(len(self.data)):
-                self.grad[i] += (2.0 * self.data[i] / n) * out.grad
-        out._back_fn = _back
+        out = ScalarValue(val)
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                for i in range(len(self.data)):
+                    self.grad[i] += (2.0 * self.data[i] / n) * out.grad
+            out._back_fn = _back
         return out
 
     def slice(self, start, end):
-        out = VectorValue(self.data[start:end], (self,))
-        def _back():
-            for i, j in enumerate(range(start, end)):
-                self.grad[j] += out.grad[i]
-        out._back_fn = _back
+        out = VectorValue(self.data[start:end])
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                for i, j in enumerate(range(start, end)):
+                    self.grad[j] += out.grad[i]
+            out._back_fn = _back
         return out
 
     def element(self, idx):
         # And lo, one number shall be plucked from the vector, and gradients shall follow.
         """Extract single element as ScalarValue with gradient flow."""
-        out = ScalarValue(self.data[idx], (self,))
-        local_idx = idx
-        def _back():
-            self.grad[local_idx] += out.grad
-        out._back_fn = _back
+        out = ScalarValue(self.data[idx])
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            local_idx = idx
+            def _back():
+                self.grad[local_idx] += out.grad
+            out._back_fn = _back
         return out
 
     @staticmethod
@@ -758,14 +798,16 @@ class VectorValue:
         data = []
         for v in vecs:
             data.extend(v.data)
-        out = VectorValue(data, tuple(vecs))
-        def _back():
-            offset = 0
-            for v in vecs:
-                for i in range(len(v.data)):
-                    v.grad[i] += out.grad[offset + i]
-                offset += len(v.data)
-        out._back_fn = _back
+        out = VectorValue(data)
+        if _GRAD_ENABLED:
+            out._children = tuple(vecs)
+            def _back():
+                offset = 0
+                for v in vecs:
+                    for i in range(len(v.data)):
+                        v.grad[i] += out.grad[offset + i]
+                    offset += len(v.data)
+            out._back_fn = _back
         return out
 
 class ScalarValue:
@@ -774,22 +816,26 @@ class ScalarValue:
 
     def __init__(self, data, children=(), back_fn=None):
         self.data = float(data)
-        self.grad = 0.0
+        self.grad = 0.0 if _GRAD_ENABLED else None
         self._children = children
         self._back_fn = back_fn
 
     def __add__(self, other):
         if isinstance(other, ScalarValue):
-            out = ScalarValue(self.data + other.data, (self, other))
+            out = ScalarValue(self.data + other.data)
+            if _GRAD_ENABLED:
+                out._children = (self, other)
+                def _back():
+                    self.grad += out.grad
+                    other.grad += out.grad
+                out._back_fn = _back
+            return out
+        out = ScalarValue(self.data + float(other))
+        if _GRAD_ENABLED:
+            out._children = (self,)
             def _back():
                 self.grad += out.grad
-                other.grad += out.grad
             out._back_fn = _back
-            return out
-        out = ScalarValue(self.data + float(other), (self,))
-        def _back():
-            self.grad += out.grad
-        out._back_fn = _back
         return out
 
     def __radd__(self, other): return self.__add__(other)
@@ -802,27 +848,33 @@ class ScalarValue:
 
     def __mul__(self, other):
         if isinstance(other, ScalarValue):
-            out = ScalarValue(self.data * other.data, (self, other))
-            def _back():
-                self.grad += other.data * out.grad
-                other.grad += self.data * out.grad
-            out._back_fn = _back
+            out = ScalarValue(self.data * other.data)
+            if _GRAD_ENABLED:
+                out._children = (self, other)
+                def _back():
+                    self.grad += other.data * out.grad
+                    other.grad += self.data * out.grad
+                out._back_fn = _back
             return out
         s = float(other)
-        out = ScalarValue(self.data * s, (self,))
-        def _back():
-            self.grad += s * out.grad
-        out._back_fn = _back
+        out = ScalarValue(self.data * s)
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                self.grad += s * out.grad
+            out._back_fn = _back
         return out
 
     def __rmul__(self, other): return self.__mul__(other)
 
     def sigmoid(self):
         sig = 1.0 / (1.0 + math.exp(-self.data))
-        out = ScalarValue(sig, (self,))
-        def _back():
-            self.grad += sig * (1.0 - sig) * out.grad
-        out._back_fn = _back
+        out = ScalarValue(sig)
+        if _GRAD_ENABLED:
+            out._children = (self,)
+            def _back():
+                self.grad += sig * (1.0 - sig) * out.grad
+            out._back_fn = _back
         return out
 
 def backward(root):
@@ -865,17 +917,19 @@ class MatrixParam:
         out_data = [sum(self.rows[i].data[j] * x.data[j]
                         for j in range(nin))
                     for i in range(nout)]
-        out = VectorValue(out_data, tuple(self.rows) + (x,))
-        rows_ref = self.rows
-        def _back():
-            for i in range(nout):
-                g = out.grad[i]
-                row_data = rows_ref[i].data
-                row_grad = rows_ref[i].grad
-                for j in range(nin):
-                    row_grad[j] += g * x.data[j]
-                    x.grad[j] += g * row_data[j]
-        out._back_fn = _back
+        out = VectorValue(out_data)
+        if _GRAD_ENABLED:
+            out._children = tuple(self.rows) + (x,)
+            rows_ref = self.rows
+            def _back():
+                for i in range(nout):
+                    g = out.grad[i]
+                    row_data = rows_ref[i].data
+                    row_grad = rows_ref[i].grad
+                    for j in range(nin):
+                        row_grad[j] += g * x.data[j]
+                        x.grad[j] += g * row_data[j]
+            out._back_fn = _back
         return out
 
     def grow_rows(self, new_nout, std=0.02):
@@ -892,16 +946,18 @@ class MatrixParam:
 def rmsnorm(x):
     ms = x.mean_sq()
     scale_val = (ms.data + 1e-5) ** -0.5
-    out = VectorValue([a * scale_val for a in x.data], (x, ms))
-    n = len(x.data)
-    def _back():
-        s = scale_val
-        ds_dms = -0.5 * (ms.data + 1e-5) ** -1.5
-        cross = sum(out.grad[j] * x.data[j] for j in range(n))
-        for i in range(n):
-            x.grad[i] += s * out.grad[i]
-            x.grad[i] += cross * ds_dms * (2.0 * x.data[i] / n)
-    out._back_fn = _back
+    out = VectorValue([a * scale_val for a in x.data])
+    if _GRAD_ENABLED:
+        out._children = (x, ms)
+        n = len(x.data)
+        def _back():
+            s = scale_val
+            ds_dms = -0.5 * (ms.data + 1e-5) ** -1.5
+            cross = sum(out.grad[j] * x.data[j] for j in range(n))
+            for i in range(n):
+                x.grad[i] += s * out.grad[i]
+                x.grad[i] += cross * ds_dms * (2.0 * x.data[i] / n)
+        out._back_fn = _back
     return out
 
 def cross_entropy_loss(logits, target):
@@ -911,12 +967,14 @@ def cross_entropy_loss(logits, target):
     log_sum_exp = math.log(exp_sum) + max_val
     loss_val = log_sum_exp - logits.data[target]
     probs = [math.exp(x) / exp_sum for x in shifted]
-    out = ScalarValue(loss_val, (logits,))
-    def _back():
-        g = out.grad
-        for i in range(len(logits.data)):
-            logits.grad[i] += (probs[i] - (1.0 if i == target else 0.0)) * g
-    out._back_fn = _back
+    out = ScalarValue(loss_val)
+    if _GRAD_ENABLED:
+        out._children = (logits,)
+        def _back():
+            g = out.grad
+            for i in range(len(logits.data)):
+                logits.grad[i] += (probs[i] - (1.0 if i == target else 0.0)) * g
+        out._back_fn = _back
     return out
 
 def scalar_softmax(logits):
@@ -927,18 +985,20 @@ def scalar_softmax(logits):
 
     out = []
     for i in range(len(probs_data)):
-        sv = ScalarValue(probs_data[i], tuple(logits))
-        local_i = i
-        def _make_back(ii, ps):
-            def _back():
-                g = out[ii].grad
-                for j in range(len(logits)):
-                    if j == ii:
-                        logits[j].grad += g * ps[ii] * (1.0 - ps[ii])
-                    else:
-                        logits[j].grad += g * (-ps[ii] * ps[j])
-            return _back
-        sv._back_fn = _make_back(local_i, probs_data)
+        sv = ScalarValue(probs_data[i])
+        if _GRAD_ENABLED:
+            sv._children = tuple(logits)
+            local_i = i
+            def _make_back(ii, ps):
+                def _back():
+                    g = out[ii].grad
+                    for j in range(len(logits)):
+                        if j == ii:
+                            logits[j].grad += g * ps[ii] * (1.0 - ps[ii])
+                        else:
+                            logits[j].grad += g * (-ps[ii] * ps[j])
+                return _back
+            sv._back_fn = _make_back(local_i, probs_data)
         out.append(sv)
     return out
 
@@ -947,15 +1007,17 @@ def attention_weighted_sum(weights, values):
     T = len(weights)
     out_data = [sum(weights[t].data * values[t].data[j] for t in range(T))
                 for j in range(dim)]
-    out = VectorValue(out_data, tuple(weights) + tuple(values))
-    def _back():
-        for t in range(T):
-            w_t = weights[t]
-            v_t = values[t]
-            for j in range(dim):
-                w_t.grad += v_t.data[j] * out.grad[j]
-                v_t.grad[j] += w_t.data * out.grad[j]
-    out._back_fn = _back
+    out = VectorValue(out_data)
+    if _GRAD_ENABLED:
+        out._children = tuple(weights) + tuple(values)
+        def _back():
+            for t in range(T):
+                w_t = weights[t]
+                v_t = values[t]
+                for j in range(dim):
+                    w_t.grad += v_t.data[j] * out.grad[j]
+                    v_t.grad[j] += w_t.data * out.grad[j]
+        out._back_fn = _back
     return out
 
 def softmax_probs_float(data):
@@ -1087,20 +1149,22 @@ def rope_rotate(vec, pos, head_dim):
         out_data[i] = a * c - b * s
         out_data[i + 1] = a * s + b * c
 
-    out = VectorValue(out_data, (vec,))
-    def _back():
-        # inverse rotation is rotation by -theta (transpose of rotation matrix)
-        for i in range(0, head_dim, 2):
-            if i + 1 >= head_dim:
-                break
-            theta = (pos / (10000.0 ** (i / head_dim)))
-            c = math.cos(theta)
-            s = math.sin(theta)
-            ga = out.grad[i]
-            gb = out.grad[i + 1]
-            vec.grad[i]     += ga * c + gb * s
-            vec.grad[i + 1] += -ga * s + gb * c
-    out._back_fn = _back
+    out = VectorValue(out_data)
+    if _GRAD_ENABLED:
+        out._children = (vec,)
+        def _back():
+            # inverse rotation is rotation by -theta (transpose of rotation matrix)
+            for i in range(0, head_dim, 2):
+                if i + 1 >= head_dim:
+                    break
+                theta = (pos / (10000.0 ** (i / head_dim)))
+                c = math.cos(theta)
+                s = math.sin(theta)
+                ga = out.grad[i]
+                gb = out.grad[i + 1]
+                vec.grad[i]     += ga * c + gb * s
+                vec.grad[i + 1] += -ga * s + gb * c
+        out._back_fn = _back
     return out
 
 class GPT:
@@ -1437,6 +1501,11 @@ class GPT:
 
     def generate_sentence(self, prompt_text=""):
         # And lo, generation shall aim for a sentence, not a random cough.
+        # no_grad: inference needs no backward graph — pure mercy for speed.
+        with no_grad():
+            return self._generate_sentence_impl(prompt_text)
+
+    def _generate_sentence_impl(self, prompt_text=""):
         if prompt_text:
             ids = self.tok.encode(prompt_text)[:-1]
         else:

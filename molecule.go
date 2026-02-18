@@ -25,6 +25,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// And lo, when the organism speaks, it shall not waste breath building
+// a backward graph it will never use. gradEnabled is mercy for inference.
+var gradEnabled = true
+
 // ============================================================
 // 0) CONFIG — bend reality here (carefully, mortals)
 // ============================================================
@@ -195,11 +199,13 @@ func (v *Vec) Add(other *Vec) *Vec {
 		d[i] = v.Data[i] + other.Data[i]
 	}
 	out := NewVec(d)
-	out.children = []Node{v, other}
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += out.Grad[i]
-			other.Grad[i] += out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v, other}
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += out.Grad[i]
+				other.Grad[i] += out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -213,11 +219,13 @@ func (v *Vec) Sub(other *Vec) *Vec {
 		d[i] = v.Data[i] - other.Data[i]
 	}
 	out := NewVec(d)
-	out.children = []Node{v, other}
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += out.Grad[i]
-			other.Grad[i] -= out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v, other}
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += out.Grad[i]
+				other.Grad[i] -= out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -231,10 +239,12 @@ func (v *Vec) Neg() *Vec {
 		d[i] = -v.Data[i]
 	}
 	out := NewVec(d)
-	out.children = []Node{v}
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] -= out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v}
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] -= out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -248,13 +258,15 @@ func (v *Vec) MulVec(other *Vec) *Vec {
 		d[i] = v.Data[i] * other.Data[i]
 	}
 	out := NewVec(d)
-	out.children = []Node{v, other}
-	vData := v.Data
-	oData := other.Data
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += oData[i] * out.Grad[i]
-			other.Grad[i] += vData[i] * out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v, other}
+		vData := v.Data
+		oData := other.Data
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += oData[i] * out.Grad[i]
+				other.Grad[i] += vData[i] * out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -268,10 +280,12 @@ func (v *Vec) Scale(s float64) *Vec {
 		d[i] = v.Data[i] * s
 	}
 	out := NewVec(d)
-	out.children = []Node{v}
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += s * out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v}
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += s * out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -285,10 +299,12 @@ func (v *Vec) AddScalar(s float64) *Vec {
 		d[i] = v.Data[i] + s
 	}
 	out := NewVec(d)
-	out.children = []Node{v}
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v}
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -304,12 +320,14 @@ func (v *Vec) ReLU() *Vec {
 		}
 	}
 	out := NewVec(d)
-	out.children = []Node{v}
-	vData := v.Data
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			if vData[i] > 0 {
-				v.Grad[i] += out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v}
+		vData := v.Data
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				if vData[i] > 0 {
+					v.Grad[i] += out.Grad[i]
+				}
 			}
 		}
 	}
@@ -324,13 +342,15 @@ func (v *Vec) Dot(other *Vec) *Scalar {
 		val += v.Data[i] * other.Data[i]
 	}
 	out := &Scalar{Data: val}
-	out.children = []Node{v, other}
-	vData := v.Data
-	oData := other.Data
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += oData[i] * out.Grad
-			other.Grad[i] += vData[i] * out.Grad
+	if gradEnabled {
+		out.children = []Node{v, other}
+		vData := v.Data
+		oData := other.Data
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += oData[i] * out.Grad
+				other.Grad[i] += vData[i] * out.Grad
+			}
 		}
 	}
 	return out
@@ -346,11 +366,13 @@ func (v *Vec) MeanSq() *Scalar {
 	}
 	val /= nf
 	out := &Scalar{Data: val}
-	out.children = []Node{v}
-	vData := v.Data
-	out.backFn = func() {
-		for i := 0; i < n; i++ {
-			v.Grad[i] += (2.0 * vData[i] / nf) * out.Grad
+	if gradEnabled {
+		out.children = []Node{v}
+		vData := v.Data
+		out.backFn = func() {
+			for i := 0; i < n; i++ {
+				v.Grad[i] += (2.0 * vData[i] / nf) * out.Grad
+			}
 		}
 	}
 	return out
@@ -360,9 +382,11 @@ func (v *Vec) MeanSq() *Scalar {
 // And lo, one number shall be plucked from the vector, and gradients shall follow.
 func (v *Vec) Element(idx int) *Scalar {
 	out := &Scalar{Data: v.Data[idx]}
-	out.children = []Node{v}
-	out.backFn = func() {
-		v.Grad[idx] += out.Grad
+	if gradEnabled {
+		out.children = []Node{v}
+		out.backFn = func() {
+			v.Grad[idx] += out.Grad
+		}
 	}
 	return out
 }
@@ -372,10 +396,12 @@ func (v *Vec) Slice(start, end int) *Vec {
 	d := make([]float64, end-start)
 	copy(d, v.Data[start:end])
 	out := NewVec(d)
-	out.children = []Node{v}
-	out.backFn = func() {
-		for i, j := 0, start; j < end; i, j = i+1, j+1 {
-			v.Grad[j] += out.Grad[i]
+	if gradEnabled {
+		out.children = []Node{v}
+		out.backFn = func() {
+			for i, j := 0, start; j < end; i, j = i+1, j+1 {
+				v.Grad[j] += out.Grad[i]
+			}
 		}
 	}
 	return out
@@ -388,21 +414,25 @@ func Concat(vecs []*Vec) *Vec {
 		total += len(v.Data)
 	}
 	d := make([]float64, 0, total)
-	kids := make([]Node, len(vecs))
-	for i, v := range vecs {
+	for _, v := range vecs {
 		d = append(d, v.Data...)
-		kids[i] = v
 	}
 	out := NewVec(d)
-	out.children = kids
-	out.backFn = func() {
-		offset := 0
-		for _, v := range vecs {
-			n := len(v.Data)
-			for i := 0; i < n; i++ {
-				v.Grad[i] += out.Grad[offset+i]
+	if gradEnabled {
+		kids := make([]Node, len(vecs))
+		for i, v := range vecs {
+			kids[i] = v
+		}
+		out.children = kids
+		out.backFn = func() {
+			offset := 0
+			for _, v := range vecs {
+				n := len(v.Data)
+				for i := 0; i < n; i++ {
+					v.Grad[i] += out.Grad[offset+i]
+				}
+				offset += n
 			}
-			offset += n
 		}
 	}
 	return out
@@ -430,10 +460,12 @@ func (s *Scalar) doBackward() {
 // AddS returns self + other (scalar + scalar).
 func (s *Scalar) AddS(other *Scalar) *Scalar {
 	out := &Scalar{Data: s.Data + other.Data}
-	out.children = []Node{s, other}
-	out.backFn = func() {
-		s.Grad += out.Grad
-		other.Grad += out.Grad
+	if gradEnabled {
+		out.children = []Node{s, other}
+		out.backFn = func() {
+			s.Grad += out.Grad
+			other.Grad += out.Grad
+		}
 	}
 	return out
 }
@@ -441,9 +473,11 @@ func (s *Scalar) AddS(other *Scalar) *Scalar {
 // AddF returns self + f (scalar + float).
 func (s *Scalar) AddF(f float64) *Scalar {
 	out := &Scalar{Data: s.Data + f}
-	out.children = []Node{s}
-	out.backFn = func() {
-		s.Grad += out.Grad
+	if gradEnabled {
+		out.children = []Node{s}
+		out.backFn = func() {
+			s.Grad += out.Grad
+		}
 	}
 	return out
 }
@@ -451,12 +485,14 @@ func (s *Scalar) AddF(f float64) *Scalar {
 // MulS returns self * other (scalar * scalar).
 func (s *Scalar) MulS(other *Scalar) *Scalar {
 	out := &Scalar{Data: s.Data * other.Data}
-	out.children = []Node{s, other}
-	sData := s.Data
-	oData := other.Data
-	out.backFn = func() {
-		s.Grad += oData * out.Grad
-		other.Grad += sData * out.Grad
+	if gradEnabled {
+		out.children = []Node{s, other}
+		sData := s.Data
+		oData := other.Data
+		out.backFn = func() {
+			s.Grad += oData * out.Grad
+			other.Grad += sData * out.Grad
+		}
 	}
 	return out
 }
@@ -464,9 +500,11 @@ func (s *Scalar) MulS(other *Scalar) *Scalar {
 // MulF returns self * f (scalar * float).
 func (s *Scalar) MulF(f float64) *Scalar {
 	out := &Scalar{Data: s.Data * f}
-	out.children = []Node{s}
-	out.backFn = func() {
-		s.Grad += f * out.Grad
+	if gradEnabled {
+		out.children = []Node{s}
+		out.backFn = func() {
+			s.Grad += f * out.Grad
+		}
 	}
 	return out
 }
@@ -475,9 +513,11 @@ func (s *Scalar) MulF(f float64) *Scalar {
 func (s *Scalar) Sigmoid() *Scalar {
 	sig := 1.0 / (1.0 + math.Exp(-s.Data))
 	out := &Scalar{Data: sig}
-	out.children = []Node{s}
-	out.backFn = func() {
-		s.Grad += sig * (1.0 - sig) * out.Grad
+	if gradEnabled {
+		out.children = []Node{s}
+		out.backFn = func() {
+			s.Grad += sig * (1.0 - sig) * out.Grad
+		}
 	}
 	return out
 }
@@ -553,21 +593,22 @@ func (m *MatrixParam) Matvec(x *Vec) *Vec {
 		outData[i] = sum
 	}
 
-	kids := make([]Node, nout+1)
-	for i := 0; i < nout; i++ {
-		kids[i] = m.Rows[i]
-	}
-	kids[nout] = x
-
 	out := NewVec(outData)
-	out.children = kids
-	rowsRef := m.Rows
-	out.backFn = func() {
+	if gradEnabled {
+		kids := make([]Node, nout+1)
 		for i := 0; i < nout; i++ {
-			g := out.Grad[i]
-			for j := 0; j < nin; j++ {
-				rowsRef[i].Grad[j] += g * x.Data[j]
-				x.Grad[j] += g * rowsRef[i].Data[j]
+			kids[i] = m.Rows[i]
+		}
+		kids[nout] = x
+		out.children = kids
+		rowsRef := m.Rows
+		out.backFn = func() {
+			for i := 0; i < nout; i++ {
+				g := out.Grad[i]
+				for j := 0; j < nin; j++ {
+					rowsRef[i].Grad[j] += g * x.Data[j]
+					x.Grad[j] += g * rowsRef[i].Data[j]
+				}
 			}
 		}
 	}
@@ -605,18 +646,20 @@ func RMSNorm(x *Vec) *Vec {
 		d[i] = x.Data[i] * scaleVal
 	}
 	out := NewVec(d)
-	out.children = []Node{x, ms}
-	xData := x.Data
-	out.backFn = func() {
-		s := scaleVal
-		dsDms := -0.5 * math.Pow(ms.Data+1e-5, -1.5)
-		cross := 0.0
-		for j := 0; j < n; j++ {
-			cross += out.Grad[j] * xData[j]
-		}
-		for i := 0; i < n; i++ {
-			x.Grad[i] += s * out.Grad[i]
-			x.Grad[i] += cross * dsDms * (2.0 * xData[i] / float64(n))
+	if gradEnabled {
+		out.children = []Node{x, ms}
+		xData := x.Data
+		out.backFn = func() {
+			s := scaleVal
+			dsDms := -0.5 * math.Pow(ms.Data+1e-5, -1.5)
+			cross := 0.0
+			for j := 0; j < n; j++ {
+				cross += out.Grad[j] * xData[j]
+			}
+			for i := 0; i < n; i++ {
+				x.Grad[i] += s * out.Grad[i]
+				x.Grad[i] += cross * dsDms * (2.0 * xData[i] / float64(n))
+			}
 		}
 	}
 	return out
@@ -646,15 +689,17 @@ func CrossEntropyLoss(logits *Vec, target int) *Scalar {
 	}
 
 	out := &Scalar{Data: lossVal}
-	out.children = []Node{logits}
-	out.backFn = func() {
-		g := out.Grad
-		for i := 0; i < n; i++ {
-			target_indicator := 0.0
-			if i == target {
-				target_indicator = 1.0
+	if gradEnabled {
+		out.children = []Node{logits}
+		out.backFn = func() {
+			g := out.Grad
+			for i := 0; i < n; i++ {
+				target_indicator := 0.0
+				if i == target {
+					target_indicator = 1.0
+				}
+				logits.Grad[i] += (probs[i] - target_indicator) * g
 			}
-			logits.Grad[i] += (probs[i] - target_indicator) * g
 		}
 	}
 	return out
@@ -680,28 +725,33 @@ func ScalarSoftmax(logits []*Scalar) []*Scalar {
 		probsData[i] = expsData[i] / total
 	}
 
-	kids := make([]Node, n)
-	for i := 0; i < n; i++ {
-		kids[i] = logits[i]
+	var kids []Node
+	if gradEnabled {
+		kids = make([]Node, n)
+		for i := 0; i < n; i++ {
+			kids[i] = logits[i]
+		}
 	}
 
 	out := make([]*Scalar, n)
 	for i := 0; i < n; i++ {
 		sv := &Scalar{Data: probsData[i]}
-		sv.children = kids
-		ii := i
-		ps := probsData
-		out[i] = sv
-		sv.backFn = func() {
-			g := out[ii].Grad
-			for j := 0; j < n; j++ {
-				if j == ii {
-					logits[j].Grad += g * ps[ii] * (1.0 - ps[ii])
-				} else {
-					logits[j].Grad += g * (-ps[ii] * ps[j])
+		if gradEnabled {
+			sv.children = kids
+			ii := i
+			ps := probsData
+			sv.backFn = func() {
+				g := out[ii].Grad
+				for j := 0; j < n; j++ {
+					if j == ii {
+						logits[j].Grad += g * ps[ii] * (1.0 - ps[ii])
+					} else {
+						logits[j].Grad += g * (-ps[ii] * ps[j])
+					}
 				}
 			}
 		}
+		out[i] = sv
 	}
 	return out
 }
@@ -717,21 +767,22 @@ func AttentionWeightedSum(weights []*Scalar, values []*Vec) *Vec {
 		}
 	}
 
-	kids := make([]Node, 0, T*2)
-	for _, w := range weights {
-		kids = append(kids, w)
-	}
-	for _, v := range values {
-		kids = append(kids, v)
-	}
-
 	out := NewVec(outData)
-	out.children = kids
-	out.backFn = func() {
-		for t := 0; t < T; t++ {
-			for j := 0; j < dim; j++ {
-				weights[t].Grad += values[t].Data[j] * out.Grad[j]
-				values[t].Grad[j] += weights[t].Data * out.Grad[j]
+	if gradEnabled {
+		kids := make([]Node, 0, T*2)
+		for _, w := range weights {
+			kids = append(kids, w)
+		}
+		for _, v := range values {
+			kids = append(kids, v)
+		}
+		out.children = kids
+		out.backFn = func() {
+			for t := 0; t < T; t++ {
+				for j := 0; j < dim; j++ {
+					weights[t].Grad += values[t].Data[j] * out.Grad[j]
+					values[t].Grad[j] += weights[t].Data * out.Grad[j]
+				}
 			}
 		}
 	}
@@ -1223,16 +1274,18 @@ func RoPERotate(vec *Vec, pos int, headDim int) *Vec {
 	}
 
 	out := NewVec(outData)
-	out.children = []Node{vec}
-	out.backFn = func() {
-		for i := 0; i < headDim-1; i += 2 {
-			theta := float64(pos) / math.Pow(10000.0, float64(i)/float64(headDim))
-			c := math.Cos(theta)
-			s := math.Sin(theta)
-			ga := out.Grad[i]
-			gb := out.Grad[i+1]
-			vec.Grad[i] += ga*c + gb*s
-			vec.Grad[i+1] += -ga*s + gb*c
+	if gradEnabled {
+		out.children = []Node{vec}
+		out.backFn = func() {
+			for i := 0; i < headDim-1; i += 2 {
+				theta := float64(pos) / math.Pow(10000.0, float64(i)/float64(headDim))
+				c := math.Cos(theta)
+				s := math.Sin(theta)
+				ga := out.Grad[i]
+				gb := out.Grad[i+1]
+				vec.Grad[i] += ga*c + gb*s
+				vec.Grad[i+1] += -ga*s + gb*c
+			}
 		}
 	}
 	return out
@@ -1765,6 +1818,9 @@ func (gpt *GPT) LossOnBatch(batchIDs [][]int) *Scalar {
 func (gpt *GPT) GenerateSentence(promptText string) string {
 	gpt.mu.Lock()
 	defer gpt.mu.Unlock()
+
+	gradEnabled = false
+	defer func() { gradEnabled = true }()
 
 	var ids []int
 	if promptText != "" {
@@ -2592,6 +2648,9 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 
 	model.mu.Lock()
 	defer model.mu.Unlock()
+
+	gradEnabled = false
+	defer func() { gradEnabled = true }()
 
 	var ids []int
 	if prompt != "" {

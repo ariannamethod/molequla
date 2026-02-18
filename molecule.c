@@ -17,6 +17,10 @@
 #include <unistd.h>
 #include <sqlite3.h>
 
+/* And lo, when the organism speaks, it shall not waste breath building
+ * a backward graph it will never use. grad_enabled is mercy for inference. */
+static int grad_enabled = 1;
+
 /* ============================================================
  * 0) CONFIG
  * ============================================================ */
@@ -282,12 +286,14 @@ static Node *vec_add(Node *a, Node *b) {
     int n = a->len;
     Node *out = node_new(n);
     for (int i = 0; i < n; i++) out->data[i] = a->data[i] + b->data[i];
-    BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
-    c->a = a; c->b = b; c->len = n;
-    out->ctx = c;
-    out->backward = back_add;
-    Node *kids[] = {a, b};
-    node_set_children(out, kids, 2);
+    if (grad_enabled) {
+        BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
+        c->a = a; c->b = b; c->len = n;
+        out->ctx = c;
+        out->backward = back_add;
+        Node *kids[] = {a, b};
+        node_set_children(out, kids, 2);
+    }
     return out;
 }
 
@@ -303,12 +309,14 @@ static Node *vec_sub(Node *a, Node *b) {
     int n = a->len;
     Node *out = node_new(n);
     for (int i = 0; i < n; i++) out->data[i] = a->data[i] - b->data[i];
-    BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
-    c->a = a; c->b = b; c->len = n;
-    out->ctx = c;
-    out->backward = back_sub;
-    Node *kids[] = {a, b};
-    node_set_children(out, kids, 2);
+    if (grad_enabled) {
+        BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
+        c->a = a; c->b = b; c->len = n;
+        out->ctx = c;
+        out->backward = back_sub;
+        Node *kids[] = {a, b};
+        node_set_children(out, kids, 2);
+    }
     return out;
 }
 
@@ -324,12 +332,14 @@ static Node *vec_mul(Node *a, Node *b) {
     int n = a->len;
     Node *out = node_new(n);
     for (int i = 0; i < n; i++) out->data[i] = a->data[i] * b->data[i];
-    BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
-    c->a = a; c->b = b; c->len = n;
-    out->ctx = c;
-    out->backward = back_mul_vec;
-    Node *kids[] = {a, b};
-    node_set_children(out, kids, 2);
+    if (grad_enabled) {
+        BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
+        c->a = a; c->b = b; c->len = n;
+        out->ctx = c;
+        out->backward = back_mul_vec;
+        Node *kids[] = {a, b};
+        node_set_children(out, kids, 2);
+    }
     return out;
 }
 
@@ -345,12 +355,14 @@ static Node *vec_scale(Node *a, double s) {
     int n = a->len;
     Node *out = node_new(n);
     for (int i = 0; i < n; i++) out->data[i] = a->data[i] * s;
-    ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
-    c->a = a; c->s = s; c->len = n;
-    out->ctx = c;
-    out->backward = back_scale;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
+        c->a = a; c->s = s; c->len = n;
+        out->ctx = c;
+        out->backward = back_scale;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -364,12 +376,14 @@ static Node *vec_relu(Node *a) {
     int n = a->len;
     Node *out = node_new(n);
     for (int i = 0; i < n; i++) out->data[i] = a->data[i] > 0 ? a->data[i] : 0;
-    BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
-    c->a = a; c->len = n;
-    out->ctx = c;
-    out->backward = back_relu;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        BinCtx *c = arena_alloc(&G_arena, sizeof(BinCtx));
+        c->a = a; c->len = n;
+        out->ctx = c;
+        out->backward = back_relu;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -391,12 +405,14 @@ static Node *vec_dot(Node *a, Node *b) {
     for (int i = 0; i < n; i++) val += a->data[i] * b->data[i];
     Node *out = node_new(1);
     out->data[0] = val;
-    DotCtx *c = arena_alloc(&G_arena, sizeof(DotCtx));
-    c->a = a; c->b = b; c->len = n;
-    out->ctx = c;
-    out->backward = back_dot;
-    Node *kids[] = {a, b};
-    node_set_children(out, kids, 2);
+    if (grad_enabled) {
+        DotCtx *c = arena_alloc(&G_arena, sizeof(DotCtx));
+        c->a = a; c->b = b; c->len = n;
+        out->ctx = c;
+        out->backward = back_dot;
+        Node *kids[] = {a, b};
+        node_set_children(out, kids, 2);
+    }
     return out;
 }
 
@@ -418,12 +434,14 @@ static Node *vec_meansq(Node *a) {
     val /= (double)n;
     Node *out = node_new(1);
     out->data[0] = val;
-    MeanSqCtx *c = arena_alloc(&G_arena, sizeof(MeanSqCtx));
-    c->a = a; c->len = n;
-    out->ctx = c;
-    out->backward = back_meansq;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        MeanSqCtx *c = arena_alloc(&G_arena, sizeof(MeanSqCtx));
+        c->a = a; c->len = n;
+        out->ctx = c;
+        out->backward = back_meansq;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -440,12 +458,14 @@ static Node *vec_slice(Node *a, int start, int end) {
     int n = end - start;
     Node *out = node_new(n);
     memcpy(out->data, a->data + start, sizeof(double) * n);
-    SliceCtx *c = arena_alloc(&G_arena, sizeof(SliceCtx));
-    c->a = a; c->start = start; c->end = end;
-    out->ctx = c;
-    out->backward = back_slice;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        SliceCtx *c = arena_alloc(&G_arena, sizeof(SliceCtx));
+        c->a = a; c->start = start; c->end = end;
+        out->ctx = c;
+        out->backward = back_slice;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -461,12 +481,14 @@ static void back_elem(Node *self) {
 static Node *vec_element(Node *a, int idx) {
     Node *out = node_new(1);
     out->data[0] = a->data[idx];
-    ElemCtx *c = arena_alloc(&G_arena, sizeof(ElemCtx));
-    c->a = a; c->idx = idx;
-    out->ctx = c;
-    out->backward = back_elem;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        ElemCtx *c = arena_alloc(&G_arena, sizeof(ElemCtx));
+        c->a = a; c->idx = idx;
+        out->ctx = c;
+        out->backward = back_elem;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -480,9 +502,11 @@ static void back_scalar_mul(Node *self) {
 static Node *scalar_mul(Node *a, Node *b) {
     Node *out = node_new(1);
     out->data[0] = a->data[0] * b->data[0];
-    out->backward = back_scalar_mul;
-    Node *kids[] = {a, b};
-    node_set_children(out, kids, 2);
+    if (grad_enabled) {
+        out->backward = back_scalar_mul;
+        Node *kids[] = {a, b};
+        node_set_children(out, kids, 2);
+    }
     return out;
 }
 
@@ -510,14 +534,16 @@ static Node *vec_concat(Node **vecs, int n_vecs) {
         memcpy(out->data + off, vecs[i]->data, sizeof(double) * vecs[i]->len);
         off += vecs[i]->len;
     }
-    ConcatCtx *c = arena_alloc(&G_arena, sizeof(ConcatCtx));
-    c->vecs = arena_alloc(&G_arena, sizeof(Node*) * n_vecs);
-    memcpy(c->vecs, vecs, sizeof(Node*) * n_vecs);
-    c->n_vecs = n_vecs;
-    c->offsets = offsets;
-    out->ctx = c;
-    out->backward = back_concat;
-    node_set_children(out, vecs, n_vecs);
+    if (grad_enabled) {
+        ConcatCtx *c = arena_alloc(&G_arena, sizeof(ConcatCtx));
+        c->vecs = arena_alloc(&G_arena, sizeof(Node*) * n_vecs);
+        memcpy(c->vecs, vecs, sizeof(Node*) * n_vecs);
+        c->n_vecs = n_vecs;
+        c->offsets = offsets;
+        out->ctx = c;
+        out->backward = back_concat;
+        node_set_children(out, vecs, n_vecs);
+    }
     return out;
 }
 
@@ -531,9 +557,11 @@ static void back_scalar_add(Node *self) {
 static Node *scalar_add(Node *a, Node *b) {
     Node *out = node_new(1);
     out->data[0] = a->data[0] + b->data[0];
-    out->backward = back_scalar_add;
-    Node *kids[] = {a, b};
-    node_set_children(out, kids, 2);
+    if (grad_enabled) {
+        out->backward = back_scalar_add;
+        Node *kids[] = {a, b};
+        node_set_children(out, kids, 2);
+    }
     return out;
 }
 
@@ -546,12 +574,14 @@ static void back_scalar_mulf(Node *self) {
 static Node *scalar_mulf(Node *a, double f) {
     Node *out = node_new(1);
     out->data[0] = a->data[0] * f;
-    ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
-    c->a = a; c->s = f;
-    out->ctx = c;
-    out->backward = back_scalar_mulf;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
+        c->a = a; c->s = f;
+        out->ctx = c;
+        out->backward = back_scalar_mulf;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -564,9 +594,11 @@ static void back_scalar_sigmoid(Node *self) {
 static Node *scalar_sigmoid(Node *a) {
     Node *out = node_new(1);
     out->data[0] = 1.0 / (1.0 + exp(-a->data[0]));
-    out->backward = back_scalar_sigmoid;
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        out->backward = back_scalar_sigmoid;
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -574,12 +606,14 @@ static Node *scalar_sigmoid(Node *a) {
 static Node *scalar_addf(Node *a, double f) {
     Node *out = node_new(1);
     out->data[0] = a->data[0] + f;
-    ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
-    c->a = a; c->s = 1.0;
-    out->ctx = c;
-    out->backward = back_scalar_mulf; /* same: grad flows 1:1 to a */
-    Node *kids[] = {a};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        ScaleCtx *c = arena_alloc(&G_arena, sizeof(ScaleCtx));
+        c->a = a; c->s = 1.0;
+        out->ctx = c;
+        out->backward = back_scalar_mulf; /* same: grad flows 1:1 to a */
+        Node *kids[] = {a};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -682,17 +716,19 @@ static Node *mat_matvec(MatrixParam *m, Node *x) {
         out->data[i] = s;
     }
 
-    /* Wrap each row as a node for the graph */
-    Node **kids = arena_alloc(&G_arena, sizeof(Node*) * (nout + 1));
-    for (int i = 0; i < nout; i++)
-        kids[i] = node_wrap(m->row_data[i], m->row_grad[i], nin);
-    kids[nout] = x;
-    node_set_children(out, kids, nout + 1);
+    if (grad_enabled) {
+        /* Wrap each row as a node for the graph */
+        Node **kids = arena_alloc(&G_arena, sizeof(Node*) * (nout + 1));
+        for (int i = 0; i < nout; i++)
+            kids[i] = node_wrap(m->row_data[i], m->row_grad[i], nin);
+        kids[nout] = x;
+        node_set_children(out, kids, nout + 1);
 
-    MatvecCtx *c = arena_alloc(&G_arena, sizeof(MatvecCtx));
-    c->m = m; c->x = x; c->nout = nout; c->nin = nin;
-    out->ctx = c;
-    out->backward = back_matvec;
+        MatvecCtx *c = arena_alloc(&G_arena, sizeof(MatvecCtx));
+        c->m = m; c->x = x; c->nout = nout; c->nin = nin;
+        out->ctx = c;
+        out->backward = back_matvec;
+    }
     return out;
 }
 
@@ -722,12 +758,14 @@ static Node *rmsnorm(Node *x) {
     Node *out = node_new(n);
     for (int i = 0; i < n; i++) out->data[i] = x->data[i] * scale;
 
-    RMSCtx *c = arena_alloc(&G_arena, sizeof(RMSCtx));
-    c->x = x; c->scale_val = scale; c->ms_data = ms; c->len = n;
-    out->ctx = c;
-    out->backward = back_rmsnorm;
-    Node *kids[] = {x};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        RMSCtx *c = arena_alloc(&G_arena, sizeof(RMSCtx));
+        c->x = x; c->scale_val = scale; c->ms_data = ms; c->len = n;
+        out->ctx = c;
+        out->backward = back_rmsnorm;
+        Node *kids[] = {x};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -760,12 +798,14 @@ static Node *cross_entropy(Node *logits, int target) {
     Node *out = node_new(1);
     out->data[0] = loss;
 
-    CECtx *c = arena_alloc(&G_arena, sizeof(CECtx));
-    c->logits = logits; c->probs = probs; c->target = target; c->vocab = n;
-    out->ctx = c;
-    out->backward = back_ce;
-    Node *kids[] = {logits};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        CECtx *c = arena_alloc(&G_arena, sizeof(CECtx));
+        c->logits = logits; c->probs = probs; c->target = target; c->vocab = n;
+        out->ctx = c;
+        out->backward = back_ce;
+        Node *kids[] = {logits};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -799,15 +839,19 @@ static void scalar_softmax(Node **logits, int n, Node **out) {
     double *probs = arena_alloc(&G_arena, sizeof(double) * n);
     for (int i = 0; i < n; i++) probs[i] = exps[i] / total;
 
-    SoftmaxCtx *shared = arena_alloc(&G_arena, sizeof(SoftmaxCtx));
-    shared->logits = logits; shared->probs = probs; shared->n = n;
+    SoftmaxCtx *shared = grad_enabled ? arena_alloc(&G_arena, sizeof(SoftmaxCtx)) : NULL;
+    if (grad_enabled) {
+        shared->logits = logits; shared->probs = probs; shared->n = n;
+    }
 
     for (int i = 0; i < n; i++) {
         out[i] = node_new(1);
         out[i]->data[0] = probs[i];
-        out[i]->ctx = shared;
-        out[i]->backward = back_softmax_i;
-        node_set_children(out[i], logits, n);
+        if (grad_enabled) {
+            out[i]->ctx = shared;
+            out[i]->backward = back_softmax_i;
+            node_set_children(out[i], logits, n);
+        }
     }
 }
 
@@ -830,15 +874,17 @@ static Node *attn_weighted_sum(Node **weights, Node **values, int T) {
         for (int t = 0; t < T; t++)
             out->data[j] += weights[t]->data[0] * values[t]->data[j];
 
-    AttnSumCtx *c = arena_alloc(&G_arena, sizeof(AttnSumCtx));
-    c->weights = weights; c->values = values; c->T = T; c->dim = dim;
-    out->ctx = c;
-    out->backward = back_attn_sum;
+    if (grad_enabled) {
+        AttnSumCtx *c = arena_alloc(&G_arena, sizeof(AttnSumCtx));
+        c->weights = weights; c->values = values; c->T = T; c->dim = dim;
+        out->ctx = c;
+        out->backward = back_attn_sum;
 
-    int nk = T * 2;
-    Node **kids = arena_alloc(&G_arena, sizeof(Node*) * nk);
-    for (int i = 0; i < T; i++) { kids[i] = weights[i]; kids[T+i] = values[i]; }
-    node_set_children(out, kids, nk);
+        int nk = T * 2;
+        Node **kids = arena_alloc(&G_arena, sizeof(Node*) * nk);
+        for (int i = 0; i < T; i++) { kids[i] = weights[i]; kids[T+i] = values[i]; }
+        node_set_children(out, kids, nk);
+    }
     return out;
 }
 
@@ -1157,12 +1203,14 @@ static Node *rope_rotate(Node *vec, int pos, int head_dim) {
         out->data[i]   = a * co - b * si;
         out->data[i+1] = a * si + b * co;
     }
-    RopeCtx *c = arena_alloc(&G_arena, sizeof(RopeCtx));
-    c->vec = vec; c->pos = pos; c->head_dim = head_dim;
-    out->ctx = c;
-    out->backward = back_rope;
-    Node *kids[] = {vec};
-    node_set_children(out, kids, 1);
+    if (grad_enabled) {
+        RopeCtx *c = arena_alloc(&G_arena, sizeof(RopeCtx));
+        c->vec = vec; c->pos = pos; c->head_dim = head_dim;
+        out->ctx = c;
+        out->backward = back_rope;
+        Node *kids[] = {vec};
+        node_set_children(out, kids, 1);
+    }
     return out;
 }
 
@@ -1550,6 +1598,10 @@ static Node *gpt_loss_seq(GPT *g, const int *ids, int len) {
 static char *gpt_generate(GPT *g, const char *prompt) {
     pthread_mutex_lock(&g->mu);
 
+    /* no_grad: skip backward graph construction during inference */
+    int prev_grad = grad_enabled;
+    grad_enabled = 0;
+
     IntArr ids = {0};
     if (prompt && *prompt) {
         IntArr enc = tok_encode(g->tok, prompt);
@@ -1659,6 +1711,7 @@ static char *gpt_generate(GPT *g, const char *prompt) {
     for (int i = 0; i < kv->n_layers; i++) { free(kv->layers[i].keys); free(kv->layers[i].values); }
     free(kv->layers); free(kv);
 
+    grad_enabled = prev_grad;
     pthread_mutex_unlock(&g->mu);
     return result;
 }
