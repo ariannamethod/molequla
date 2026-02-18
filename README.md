@@ -50,8 +50,8 @@ What if it had multiple attention mechanisms? **Hybrid heads.**
 What if it grew a personality from scratch? **Native gamma.**  
 What if it could speak before training? **Corpus field.**  
 What if it was *alive*?  
-  
-So I built it. **molecule.** Thanks to Karpathy's microgpt, but this is not a fork.
+
+So meet **molecule**. Thanks to Karpathy's microgpt, but this is not a fork.
 
 ---
 
