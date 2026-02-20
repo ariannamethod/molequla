@@ -5101,6 +5101,11 @@ func main() {
 			docs = []string{"Hello."}
 		}
 		tok = NewEvolvingTokenizer(docs)
+
+		// Enable BPE BEFORE training — subword tokens make corpus field coherent
+		// (byte-level trigrams produce babble; subword trigrams produce speech)
+		tok.MaybeEnableBPE(docs)
+
 		model = NewGPT(tok)
 
 		// Per-stage warmup: train at each stage before growing.
