@@ -2114,12 +2114,12 @@ static int gpt_maybe_grow_architecture(GPT *g, int corpus_chars) {
 
     /* 1. Grow embedding matrices (columns = embd dimension) */
     MatrixParam *wte = gpt_base(g, "wte");
-    mat_grow_cols(wte, new_embd, 0.08);
+    mat_grow_cols(wte, new_embd, 0.001);
     MatrixParam *wpe = gpt_base(g, "wpe");
-    mat_grow_cols(wpe, new_embd, 0.08);
+    mat_grow_cols(wpe, new_embd, 0.001);
     if (!CFG.tie_embeddings) {
         MatrixParam *lm = gpt_base(g, "lm_head");
-        if (lm && lm != wte) mat_grow_cols(lm, new_embd, 0.08);
+        if (lm && lm != wte) mat_grow_cols(lm, new_embd, 0.001);
     }
 
     /* Update head types for new head count */
@@ -2132,23 +2132,23 @@ static int gpt_maybe_grow_architecture(GPT *g, int corpus_chars) {
         for (int w = 0; w < 4; w++) {
             snprintf(name, sizeof(name), "l%d.%s", li, wnames[w]);
             MatrixParam *m = gpt_base(g, name);
-            if (m) mat_grow(m, new_embd, new_embd, 0.08);
+            if (m) mat_grow(m, new_embd, new_embd, 0.001);
         }
         snprintf(name, sizeof(name), "l%d.fc_g", li);
         MatrixParam *m = gpt_base(g, name);
-        if (m) mat_grow(m, 4 * new_embd, new_embd, 0.08);
+        if (m) mat_grow(m, 4 * new_embd, new_embd, 0.001);
         snprintf(name, sizeof(name), "l%d.fc_v", li);
         m = gpt_base(g, name);
-        if (m) mat_grow(m, 4 * new_embd, new_embd, 0.08);
+        if (m) mat_grow(m, 4 * new_embd, new_embd, 0.001);
         snprintf(name, sizeof(name), "l%d.fc2", li);
         m = gpt_base(g, name);
-        if (m) mat_grow(m, new_embd, 4 * new_embd, 0.08);
+        if (m) mat_grow(m, new_embd, 4 * new_embd, 0.001);
 
         /* Grow existing head pattern matrices */
         for (int h = 0; h < old_head; h++) {
             snprintf(name, sizeof(name), "l%d.h%d.w_pattern", li, h);
             m = gpt_base(g, name);
-            if (m) mat_grow_cols(m, new_head_dim, 0.08);
+            if (m) mat_grow_cols(m, new_head_dim, 0.001);
         }
         /* Add new heads for existing layer */
         for (int h = old_head; h < new_head && h < CFG.n_head_types; h++) {

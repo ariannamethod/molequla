@@ -1999,28 +1999,29 @@ func (gpt *GPT) MaybeGrowArchitecture(corpusChars int) bool {
 	fmt.Printf("  embd: %d -> %d, layer: %d -> %d, head: %d -> %d\n",
 		oldEmbd, newEmbd, oldLayer, newLayer, oldHead, newHead)
 
-	// 1. Grow embedding matrices (columns only — vocab rows stay)
-	gpt.Base["wte"].GrowCols(newEmbd, 0.02)
-	gpt.Base["wpe"].GrowCols(newEmbd, 0.02)
+	// 1. Grow embedding matrices — near-zero init preserves model behavior
+	// (Net2Net principle: new dims contribute ~nothing initially, learn gradually)
+	gpt.Base["wte"].GrowCols(newEmbd, 0.001)
+	gpt.Base["wpe"].GrowCols(newEmbd, 0.001)
 	if !CFG.TieEmbeddings {
-		gpt.Base["lm_head"].GrowCols(newEmbd, 0.02)
+		gpt.Base["lm_head"].GrowCols(newEmbd, 0.001)
 	}
 
-	// 2. Grow existing layer matrices
+	// 2. Grow existing layer matrices — near-zero to avoid disrupting learned representations
 	newHtypes := headTypesForNHead(newHead)
 	for li := 0; li < oldLayer; li++ {
 		pfx := fmt.Sprintf("l%d.", li)
 		for _, name := range []string{"wq", "wk", "wv", "wo"} {
-			gpt.Base[pfx+name].Grow(newEmbd, newEmbd, 0.08)
+			gpt.Base[pfx+name].Grow(newEmbd, newEmbd, 0.001)
 		}
-		gpt.Base[pfx+"fc_g"].Grow(4*newEmbd, newEmbd, 0.08)
-		gpt.Base[pfx+"fc_v"].Grow(4*newEmbd, newEmbd, 0.08)
-		gpt.Base[pfx+"fc2"].Grow(newEmbd, 4*newEmbd, 0.08)
+		gpt.Base[pfx+"fc_g"].Grow(4*newEmbd, newEmbd, 0.001)
+		gpt.Base[pfx+"fc_v"].Grow(4*newEmbd, newEmbd, 0.001)
+		gpt.Base[pfx+"fc2"].Grow(newEmbd, 4*newEmbd, 0.001)
 		// Grow existing head pattern matrices
 		for h := 0; h < oldHead; h++ {
 			pkey := fmt.Sprintf("l%d.h%d.w_pattern", li, h)
 			if _, ok := gpt.Base[pkey]; ok {
-				gpt.Base[pkey].GrowCols(newHeadDim, 0.08)
+				gpt.Base[pkey].GrowCols(newHeadDim, 0.001)
 			}
 		}
 		// Add new heads for existing layer

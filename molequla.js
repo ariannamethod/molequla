@@ -1723,25 +1723,25 @@ class GPT {
         logUI(`  embd: ${oldEmbd} -> ${newEmbd}, layer: ${oldLayer} -> ${newLayer}, head: ${oldHead} -> ${newHead}`);
 
         // 1. Grow embedding matrices (columns only — vocab rows stay)
-        this.base["wte"].growCols(newEmbd);
-        this.base["wpe"].growCols(newEmbd);
+        this.base["wte"].growCols(newEmbd, 0.001);
+        this.base["wpe"].growCols(newEmbd, 0.001);
         if (!CFG.tieEmbeddings) {
-            this.base["lm_head"].growCols(newEmbd);
+            this.base["lm_head"].growCols(newEmbd, 0.001);
         }
 
         // 2. Grow existing layer matrices
         const newHtypes = headTypesForNHead(newHead);
         for (let li = 0; li < oldLayer; li++) {
             for (const name of ["wq", "wk", "wv", "wo"]) {
-                this.base[`l${li}.${name}`].grow(newEmbd, newEmbd);
+                this.base[`l${li}.${name}`].grow(newEmbd, newEmbd, 0.001);
             }
-            this.base[`l${li}.fc_g`].grow(4 * newEmbd, newEmbd);
-            this.base[`l${li}.fc_v`].grow(4 * newEmbd, newEmbd);
-            this.base[`l${li}.fc2`].grow(newEmbd, 4 * newEmbd);
+            this.base[`l${li}.fc_g`].grow(4 * newEmbd, newEmbd, 0.001);
+            this.base[`l${li}.fc_v`].grow(4 * newEmbd, newEmbd, 0.001);
+            this.base[`l${li}.fc2`].grow(newEmbd, 4 * newEmbd, 0.001);
             // Grow existing head pattern matrices
             for (let h = 0; h < oldHead; h++) {
                 const pkey = `l${li}.h${h}.w_pattern`;
-                if (this.base[pkey]) this.base[pkey].growCols(newHeadDim);
+                if (this.base[pkey]) this.base[pkey].growCols(newHeadDim, 0.001);
             }
             // Add new heads for existing layer
             for (let h = oldHead; h < newHead; h++) {

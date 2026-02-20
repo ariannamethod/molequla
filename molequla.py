@@ -1126,7 +1126,7 @@ class MatrixParam:
         self.nout = new_nout
         self._W_cache = None
 
-    def grow_cols(self, new_nin, std=0.02):
+    def grow_cols(self, new_nin, std=0.001):
         # And lo, the matrix shall widen its reach, each row stretching into new dimensions.
         if new_nin <= self.nin:
             return
@@ -1138,7 +1138,7 @@ class MatrixParam:
         self.nin = new_nin
         self._W_cache = None
 
-    def grow(self, new_nout, new_nin, std=0.02):
+    def grow(self, new_nout, new_nin, std=0.001):
         # Ontogenesis: grow both dimensions. Cols first so new rows get full width.
         self.grow_cols(new_nin, std)
         self.grow_rows(new_nout, std)
