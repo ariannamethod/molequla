@@ -3980,7 +3980,9 @@ static void train_steps(GPT *g, EvolvingTokenizer *tok, StrArr *docs, int steps,
         total_loss = scalar_mulf(total_loss, 1.0 / batch);
         backward(total_loss);
 
-        double lr = CFG.learning_rate * (1.0 - (double)step / (double)(steps > 1 ? steps : 1));
+        double lr = cosine_lr(g->global_step);
+        /* Scale LR inversely with model size: larger models need smaller LR */
+        lr *= sqrt((double)CFG.growth_stages[0][1] / (double)g->n_embd);
 
         /* Ontogenesis freeze: after growth, base params are excluded,
          * only deltas train until new weights stabilize. */
@@ -4409,8 +4411,9 @@ static void *background_trainer(void *arg) {
         }
 
         if (!*ctx->warmed_up && docs.len > 0) {
-            printf("[trainer] warmup training... (and so it begins)\n");
-            train_steps(ctx->model, ctx->tok, &docs, CFG.warmup_steps, 1, 1);
+            int effective_warmup = CFG.warmup_steps * ctx->model->n_layer;
+            printf("[trainer] warmup training... %d steps (scaled for %d layers)\n", effective_warmup, ctx->model->n_layer);
+            train_steps(ctx->model, ctx->tok, &docs, effective_warmup, 1, 1);
             save_checkpoint(ctx->model, ctx->tok, NULL);
             db_log_growth(ctx->db, ctx->model, ctx->tok, &docs, 0.0, "warmup_complete");
             *ctx->warmed_up = 1;

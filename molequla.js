@@ -2800,6 +2800,8 @@ function trainSteps(model, tok, docs, steps, trainBase, trainDeltas) {
         }
 
         let lr = cosineLR(model.globalStep);
+        // Scale LR inversely with model size: larger models need smaller LR
+        lr *= Math.sqrt(CFG.growthStages[0][1] / model.nEmbd);
         // Post-growth LR dampening: reduce LR during freeze to prevent delta overfit to noise
         if (model._growthFreezeRemaining > 0) lr *= CFG.postGrowthLRScale;
         if (baseParams.length) model.adamStep(baseParams, "base", lr);
@@ -3206,13 +3208,14 @@ async function trainerTick() {
 
         // Warmup
         if (!_warmedUp && docs.length > 0) {
-            logUI("[trainer] warmup training... (and so it begins)");
+            const effectiveWarmup = CFG.warmupSteps * _model.nLayer;
+            logUI(`[trainer] warmup training... ${effectiveWarmup} steps (scaled for ${_model.nLayer} layers)`);
             setStatus("warming up...");
 
             // Do warmup in chunks to avoid freezing UI
             const chunkSize = 50;
-            for (let start = 0; start < CFG.warmupSteps; start += chunkSize) {
-                const steps = Math.min(chunkSize, CFG.warmupSteps - start);
+            for (let start = 0; start < effectiveWarmup; start += chunkSize) {
+                const steps = Math.min(chunkSize, effectiveWarmup - start);
                 trainSteps(_model, _tok, docs, steps, true, true);
                 // yield to browser
                 await new Promise(r => setTimeout(r, 0));

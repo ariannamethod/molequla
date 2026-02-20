@@ -1771,6 +1771,8 @@ fn train_steps(model: &mut GPT, docs: &[String], steps: usize, train_base: bool,
         }
 
         let mut lr = cosine_lr(model.global_step, &cfg);
+        // Scale LR inversely with model size: larger models need smaller LR
+        lr *= (cfg.growth_stages[0][1] as f64 / model.n_embd as f64).sqrt();
         // Post-growth LR dampening: reduce LR during freeze to prevent delta overfit to noise
         if model.growth_freeze_remaining > 0 { lr *= cfg.post_growth_lr_scale; }
         model.global_step += 1;
@@ -2401,11 +2403,15 @@ fn background_trainer(
         }
     }
 
-    // Warmup
-    eprintln!("[molequla.rs] Warmup: {} steps...", cfg.warmup_steps);
+    // Warmup — scale steps by number of layers (more layers need more training)
+    let effective_warmup = cfg.warmup_steps * {
+        let m = model.lock().unwrap();
+        m.n_layer
+    };
+    eprintln!("[molequla.rs] Warmup: {} steps (scaled for layers)...", effective_warmup);
     {
         let mut m = model.lock().unwrap();
-        train_steps(&mut m, &docs, cfg.warmup_steps, true, true);
+        train_steps(&mut m, &docs, effective_warmup, true, true);
     }
     eprintln!("[molequla.rs] Warmup complete. Entering quantum burst loop.");
 

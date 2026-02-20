@@ -4677,6 +4677,8 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 		}
 
 		lr := cosineLR(model.globalStep)
+		// Scale LR inversely with model size: larger models need smaller LR
+		lr *= math.Sqrt(float64(CFG.GrowthStages[0][1]) / float64(model.NEmbd))
 		// Post-growth LR dampening: reduce LR during freeze to prevent delta overfit to noise
 		if model.growthFreezeRemaining > 0 {
 			lr *= CFG.PostGrowthLRScale
@@ -4740,8 +4742,9 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		}
 
 		if !warmedUp && len(docs) > 0 {
-			fmt.Println("[trainer] warmup training... (and so it begins)")
-			trainSteps(model, tok, docs, CFG.WarmupSteps, true, true)
+			effectiveWarmup := CFG.WarmupSteps * model.NLayer
+			fmt.Printf("[trainer] warmup training... %d steps (scaled for %d layers)\n", effectiveWarmup, model.NLayer)
+			trainSteps(model, tok, docs, effectiveWarmup, true, true)
 			SaveCheckpoint(model, tok, "")
 			dbLogGrowth(db, model, tok, docs, 0.0, "warmup_complete")
 			warmedUp = true

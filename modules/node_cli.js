@@ -202,7 +202,11 @@ function nodeTrainSteps(model, tok, docs, nSteps, logEvery) {
             else accumLoss += scaled.data;
         }
 
-        const lr = cosineLR(model.globalStep || 0);
+        let lr = cosineLR(model.globalStep || 0);
+        // Scale LR inversely with model size: larger models need smaller LR
+        lr *= Math.sqrt((CFG.growthStages || [[0,16]])[0][1] / (model.nEmbd || 16));
+        // Post-growth LR dampening
+        if (model._growthFreezeRemaining > 0) lr *= (CFG.postGrowthLRScale || 0.3);
         if (baseParams.length) model.adamStep(baseParams, "base", lr);
         if (deltaParams.length) model.adamStep(deltaParams, "delta", lr);
         model.globalStep = (model.globalStep || 0) + 1;
@@ -278,11 +282,13 @@ async function main() {
         console.log(`[bpe] Enabled. vocab=${tok.vocabSize}`);
     }
 
-    // Warmup training
+    // Warmup training — scale by number of layers
+    const nLayer = model.nLayer || 1;
+    const effectiveWarmup = CFG.warmupSteps * nLayer;
     const startStep = model.globalStep || 0;
-    const remaining = Math.max(0, CFG.warmupSteps - startStep);
+    const remaining = Math.max(0, effectiveWarmup - startStep);
     if (remaining > 0) {
-        console.log(`[trainer] Warmup: ${remaining} steps from step ${startStep}...`);
+        console.log(`[trainer] Warmup: ${remaining} steps (scaled for ${nLayer} layers) from step ${startStep}...`);
         nodeTrainSteps(model, tok, corpusLines, remaining, 100);
         console.log("[trainer] Warmup complete.");
         saveCheckpoint(model, tok);
