@@ -3494,6 +3494,8 @@ type CheckpointJSON struct {
 	Deltas    []map[string]DeltaJSON     `json:"deltas"`
 }
 
+func intPtr(v int) *int { return &v }
+
 // We need a different approach - Base stores name -> [][]float64 (matrix rows)
 type CheckpointData struct {
 	Cfg               json.RawMessage        `json:"cfg"`
@@ -3504,7 +3506,7 @@ type CheckpointData struct {
 	InitEmbedSnapshot [][]float64            `json:"init_embed_snapshot,omitempty"`
 	GlobalStep        int                    `json:"global_step"`
 	GrowthStepOffset  int                    `json:"growth_step_offset"`
-	LastWarmupStage   int                    `json:"last_warmup_stage"`
+	LastWarmupStage   *int                   `json:"last_warmup_stage,omitempty"`
 }
 
 type TokenizerJSON struct {
@@ -3588,7 +3590,7 @@ func SaveCheckpoint(model *GPT, tok *EvolvingTokenizer, path string) error {
 		InitEmbedSnapshot: model.InitEmbedSnapshot,
 		GlobalStep:        model.globalStep,
 		GrowthStepOffset:  model.growthStepOffset,
-		LastWarmupStage:   model.lastWarmupStage,
+		LastWarmupStage:   intPtr(model.lastWarmupStage),
 	}
 
 	f, err := os.Create(path)
@@ -3706,8 +3708,8 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 	// Restore global step and growth state
 	model.globalStep = ckpt.GlobalStep
 	model.growthStepOffset = ckpt.GrowthStepOffset
-	if ckpt.LastWarmupStage != 0 {
-		model.lastWarmupStage = ckpt.LastWarmupStage
+	if ckpt.LastWarmupStage != nil {
+		model.lastWarmupStage = *ckpt.LastWarmupStage
 	} else if ckpt.GlobalStep > 0 {
 		// Old checkpoint without lastWarmupStage: assume current stage is warmed up
 		model.lastWarmupStage = model.CurrentGrowthStage()
@@ -3956,7 +3958,7 @@ func CorpusGenerate(tok *EvolvingTokenizer, field *CooccurField, prompt string, 
 }
 
 // And lo, the model and the corpus shall duet like two drunks harmonizing.
-func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, prompt string, docs []string, useModel bool, modelAlpha float64) string {
+func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, prompt string, docs []string, useModel bool) string {
 	if !useModel || model == nil {
 		return CorpusGenerate(tok, field, prompt, CFG.CorpusGenMaxTokens)
 	}
@@ -5162,7 +5164,7 @@ func main() {
 			// Use model+corpus blend (same as normal REPL) so corpus field helps early stages speak
 			fmt.Printf("\n[stage %d — %s] What it sounds like now:\n", stage, stageName)
 			for _, probe := range stageProbes {
-				answer := GenerateResonant(model, tok, tmpCooccur, probe, docs, true, 0.5)
+				answer := GenerateResonant(model, tok, tmpCooccur, probe, docs, true)
 				if answer == "" {
 					answer = "..."
 				}
@@ -5188,7 +5190,7 @@ func main() {
 					if line == "/grow" || line == "" {
 						break
 					}
-					answer := GenerateResonant(model, tok, tmpCooccur, line, docs, true, 0.5)
+					answer := GenerateResonant(model, tok, tmpCooccur, line, docs, true)
 					if answer == "" {
 						answer = "..."
 					}
@@ -5279,7 +5281,7 @@ func main() {
 		model.mu.Unlock()
 
 		// Generation: per-token sigmoid fade is computed inside GenerateResonant
-		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, 0.5)
+		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true)
 		if answer == "" {
 			answer = "..."
 		}

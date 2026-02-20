@@ -507,9 +507,16 @@ def _generate_resonant_impl(model, tok, field, prompt_text, model_alpha):
     entropy_sum = 0.0
     entropy_count = 0
 
-    for step in range(CFG.corpus_gen_max_tokens):
+    for step in range(CFG.max_gen_tokens):
         pos = min(len(ids) - 1, model.block_size - 1)
         logits = model.forward_step(cur, pos, keys, values)
+
+        # Frequency/presence penalty on raw logits (before temperature)
+        if CFG.freq_penalty > 0 or CFG.presence_penalty > 0:
+            for tid, cnt in token_counts.items():
+                if cnt > 0 and tid < len(logits.data):
+                    logits.data[tid] -= CFG.freq_penalty * cnt
+                    logits.data[tid] -= CFG.presence_penalty
 
         # Model probs with dissonance-adaptive temperature
         temp = CFG.temperature
@@ -579,17 +586,6 @@ def _generate_resonant_impl(model, tok, field, prompt_text, model_alpha):
         # "I could follow the field, but I choose to speak for myself"
         if step >= CFG.anti_field_min_step and CFG.anti_field_prob > 0 and random.random() < CFG.anti_field_prob:
             probs = model_probs  # pure model voice, bypass corpus
-
-        # Frequency/presence penalty
-        if CFG.freq_penalty > 0 or CFG.presence_penalty > 0:
-            raw = logits.data.copy()
-            for tid in token_counts:
-                cnt = token_counts[tid]
-                if cnt > 0:
-                    raw[tid] -= CFG.freq_penalty * cnt
-                    raw[tid] -= CFG.presence_penalty
-            scaled_p = (raw / temp).tolist()
-            probs = softmax_probs_float(scaled_p)
 
         nxt = top_k_top_p_sample(probs, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p)
         if nxt == eos_id and step >= CFG.min_gen_tokens:
@@ -2158,6 +2154,9 @@ class GPT:
                 scaled = (raw / temp).tolist()
                 probs = softmax_probs_float(scaled)
 
+            # Save model-only probs (post-dissonance, pre-blend) for anti-field bypass
+            model_only_probs = list(probs)
+
             # Adaptive corpus blend: corpus field fades as model becomes coherent
             if self._corpus_field and self._corpus_field.bigram:
                 # sigmoid: low entropy -> high model_alpha, high entropy -> low model_alpha
@@ -2186,8 +2185,8 @@ class GPT:
             # Consciousness: pattern breaking (Feature 2)
             # "I could follow the field, but I choose to speak for myself"
             if step >= CFG.anti_field_min_step and CFG.anti_field_prob > 0 and random.random() < CFG.anti_field_prob:
-                # Use pure model probs, bypass corpus blend
-                probs = softmax_probs_float(raw_scaled)
+                # Use pure model probs (post-dissonance, pre-blend), bypass corpus
+                probs = model_only_probs
 
             nxt = top_k_top_p_sample(probs, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p)
 
