@@ -3076,7 +3076,9 @@ fn main() {
                         GPT::new(tok, &cfg) },
         }
     } else {
-        let tok = EvolvingTokenizer::new(&docs);
+        let mut tok = EvolvingTokenizer::new(&docs);
+        // Enable BPE before warmup — subword tokens for coherent corpus field
+        tok.maybe_enable_bpe(&docs, &cfg);
         GPT::new(tok, &cfg)
     };
 
@@ -3170,6 +3172,13 @@ fn main() {
             corpus_field.lock().unwrap().build(&m.tok, &fresh_docs);
         }
 
+        // Enrich corpus field with user input (after rebuild, so it's not lost)
+        {
+            let m = model.lock().unwrap();
+            let user_ids = m.tok.encode(&text);
+            corpus_field.lock().unwrap().ingest_tokens(&user_ids);
+        }
+
         let prompt = build_prompt(&db.lock().unwrap(), &text);
 
         // Consciousness: self-prediction error (Feature 4)
@@ -3210,6 +3219,13 @@ fn main() {
 
         println!("{}", answer);
         db_add_message(&db.lock().unwrap(), "assistant", &answer);
+
+        // Self-enrichment: organism's speech enriches its own corpus field
+        if answer.len() > 3 {
+            let m = model.lock().unwrap();
+            let answer_ids = m.tok.encode(&answer);
+            corpus_field.lock().unwrap().ingest_tokens(&answer_ids);
+        }
 
         // Consciousness: overthinkg rings (Feature 3)
         // "Let me re-read what I just said to strengthen my patterns."
