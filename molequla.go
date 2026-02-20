@@ -211,8 +211,8 @@ var CFG = Config{
 	MaxGenTokens:         180,
 	MinGenTokens:         16,
 	RepetitionGuard:      4,
-	FreqPenalty:          0.3,
-	PresencePenalty:      0.3,
+	FreqPenalty:          0.1,
+	PresencePenalty:      0.1,
 	EnableBPEAfterChars:  20000,
 	BPENumMerges:         384,
 	BPERetrainEveryChars: 4000,
@@ -1627,6 +1627,8 @@ type GPT struct {
 	syntropyTempOff  float64 // temperature offset from syntropy state (-0.05 to +0.05)
 
 	growthFreezeRemaining int // ontogenesis: freeze base after growth, train only deltas
+	growthStepOffset      int // reset to globalStep on each growth — for LR warmup phase
+	lastWarmupStage       int // last stage that completed warmup (-1 = none)
 
 	corpusField *CooccurField // set by backgroundTrainer for adaptive blend
 
@@ -1665,6 +1667,7 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 
 	gpt.residualAlpha = 1.0 / math.Sqrt(math.Max(1, float64(CFG.NLayer)))
 	gpt.deltaAlphaScale = 1.0 // conscience: full delta influence by default
+	gpt.lastWarmupStage = -1  // no stage warmed up yet
 
 	V := tok.VocabSize
 	gpt.Base["wte"] = NewMatrixParam(V, CFG.NEmbd, 0.08)
@@ -2211,6 +2214,8 @@ func (gpt *GPT) MaybeGrowArchitecture(corpusChars int) bool {
 
 	// 9. Set freeze (only train deltas until new weights stabilize)
 	gpt.growthFreezeRemaining = CFG.FreezeAfterGrowthSteps
+	// Reset LR warmup phase so new weights get linear ramp-up
+	gpt.growthStepOffset = gpt.globalStep
 
 	fmt.Printf("[growth] Done. Freeze for %d steps.\n", CFG.FreezeAfterGrowthSteps)
 	return true
@@ -3497,6 +3502,8 @@ type CheckpointData struct {
 	Deltas            []map[string]DeltaJSON `json:"deltas"`
 	InitEmbedSnapshot [][]float64            `json:"init_embed_snapshot,omitempty"`
 	GlobalStep        int                    `json:"global_step"`
+	GrowthStepOffset  int                    `json:"growth_step_offset"`
+	LastWarmupStage   int                    `json:"last_warmup_stage"`
 }
 
 type TokenizerJSON struct {
@@ -3579,6 +3586,8 @@ func SaveCheckpoint(model *GPT, tok *EvolvingTokenizer, path string) error {
 		Deltas:            deltas,
 		InitEmbedSnapshot: model.InitEmbedSnapshot,
 		GlobalStep:        model.globalStep,
+		GrowthStepOffset:  model.growthStepOffset,
+		LastWarmupStage:   model.lastWarmupStage,
 	}
 
 	f, err := os.Create(path)
@@ -3693,8 +3702,15 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 		}
 	}
 
-	// Restore global step
+	// Restore global step and growth state
 	model.globalStep = ckpt.GlobalStep
+	model.growthStepOffset = ckpt.GrowthStepOffset
+	if ckpt.LastWarmupStage != 0 {
+		model.lastWarmupStage = ckpt.LastWarmupStage
+	} else if ckpt.GlobalStep > 0 {
+		// Old checkpoint without lastWarmupStage: assume current stage is warmed up
+		model.lastWarmupStage = model.CurrentGrowthStage()
+	}
 
 	// Ensure hybrid attention weights exist (backward compat with old checkpoints)
 	for li := 0; li < CFG.NLayer; li++ {
@@ -4689,10 +4705,11 @@ func parseCLIArgs() (organismID string, configPath string) {
 }
 
 // cosineLR returns learning rate for the given global step using cosine schedule with linear warmup.
-func cosineLR(globalStep int) float64 {
-	if globalStep < CFG.CosineWarmupSteps {
-		// Linear warmup from LRMin to LearningRate
-		t := float64(globalStep) / math.Max(1, float64(CFG.CosineWarmupSteps))
+// stepsSinceGrowth enables LR ramp-up after each growth event (new weights need high LR initially).
+func cosineLR(globalStep, stepsSinceGrowth int) float64 {
+	if stepsSinceGrowth < CFG.CosineWarmupSteps {
+		// Linear warmup from LRMin to LearningRate (resets after each growth)
+		t := float64(stepsSinceGrowth) / math.Max(1, float64(CFG.CosineWarmupSteps))
 		return CFG.LRMin + (CFG.LearningRate-CFG.LRMin)*t
 	}
 	progress := math.Min(1.0, float64(globalStep)/math.Max(1, float64(CFG.MaxTotalSteps)))
@@ -4757,7 +4774,8 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 			lastLossVal = loss.Data * float64(accum) // unscaled for display
 		}
 
-		lr := cosineLR(model.globalStep)
+		stepsSinceGrowth := model.globalStep - model.growthStepOffset
+		lr := cosineLR(model.globalStep, stepsSinceGrowth)
 		// Scale LR inversely with model size: larger models need smaller LR
 		lr *= float64(CFG.GrowthStages[0][1]) / float64(model.NEmbd)
 		// Post-growth LR dampening: reduce LR during freeze to prevent delta overfit to noise
@@ -4781,7 +4799,6 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 
 func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *QuantumBuffer, swarm *SwarmRegistry, stop chan struct{}) {
 	// And lo, asynchronous training shall occur, because sleeping is for humans.
-	warmedUp := false
 	syntracker := NewSyntropyTracker()
 	field := NewCooccurField()
 	tickCount := 0
@@ -4822,26 +4839,19 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			SaveCheckpoint(model, tok, "")
 		}
 
-		if !warmedUp && len(docs) > 0 {
-			embryoEmbd := CFG.GrowthStages[0][1]
-			warmupScale := model.NEmbd / embryoEmbd
-			if warmupScale < 1 { warmupScale = 1 }
-			effectiveWarmup := CFG.WarmupSteps * warmupScale
-			remaining := effectiveWarmup - model.globalStep
-			if remaining > 0 {
-				fmt.Printf("[trainer] warmup training... %d steps (scaled %dx for embd=%d, from step %d)\n",
-					remaining, warmupScale, model.NEmbd, model.globalStep)
-				trainSteps(model, tok, docs, remaining, true, true)
-				SaveCheckpoint(model, tok, "")
-				dbLogGrowth(db, model, tok, docs, 0.0, "warmup_complete")
-			} else {
-				fmt.Printf("[trainer] already trained %d steps, skipping warmup.\n", model.globalStep)
-			}
-			warmedUp = true
-			fmt.Println("[trainer] warmup complete. base may freeze now, like a proud fossil.")
+		// Per-stage warmup: if model grew since last warmup, train before continuing
+		currentStage := model.CurrentGrowthStage()
+		if currentStage > model.lastWarmupStage && len(docs) > 0 {
+			fmt.Printf("[trainer] warmup for stage %d (embd=%d) — %d steps\n",
+				currentStage, model.NEmbd, CFG.WarmupSteps)
+			trainSteps(model, tok, docs, CFG.WarmupSteps, true, true)
+			model.lastWarmupStage = currentStage
+			SaveCheckpoint(model, tok, "")
+			dbLogGrowth(db, model, tok, docs, 0.0, fmt.Sprintf("warmup_stage_%d", currentStage))
+			fmt.Printf("[trainer] warmup complete at stage %d. base may freeze now, like a proud fossil.\n", currentStage)
 		}
 
-		if warmedUp && qbuf.ShouldTrigger() && len(docs) > 0 {
+		if model.lastWarmupStage >= 0 && qbuf.ShouldTrigger() && len(docs) > 0 {
 			snapBytes, snapNovelty := qbuf.SnapshotStats()
 			fmt.Printf("[trainer] micro-train burst (%d bytes, novelty %.2f) — and lo, it feeds again.\n",
 				snapBytes, snapNovelty)
@@ -5091,14 +5101,33 @@ func main() {
 		tok = NewEvolvingTokenizer(docs)
 		model = NewGPT(tok)
 
-		// Initialize at the correct stage for corpus size (don't start at embryo for large corpus)
+		// Per-stage warmup: train at each stage before growing.
+		// Corpus size determines ceiling (which stages are reachable), not starting point.
+		// The organism always starts as embryo and grows through training.
 		corpusChars := 0
 		for _, d := range docs {
 			corpusChars += len(d)
 		}
-		for model.MaybeGrowArchitecture(corpusChars) {
-			model.growthFreezeRemaining = 0 // skip freeze during init — no weights to preserve yet
+		stageNames := []string{"embryo", "infant", "child", "adolescent", "adult"}
+		for {
+			stage := model.CurrentGrowthStage()
+			stageName := "unknown"
+			if stage >= 0 && stage < len(stageNames) {
+				stageName = stageNames[stage]
+			}
+			// Train warmup at current stage
+			fmt.Printf("[init] Stage %d (%s): embd=%d, layer=%d, head=%d — warmup %d steps\n",
+				stage, stageName, model.NEmbd, model.NLayer, model.NHead, CFG.WarmupSteps)
+			trainSteps(model, tok, docs, CFG.WarmupSteps, true, true)
+			model.lastWarmupStage = stage
+			SaveCheckpoint(model, tok, "")
+			// Try to grow to next stage (gated by corpus size)
+			if !model.MaybeGrowArchitecture(corpusChars) {
+				break // corpus too small for next stage, or already at max
+			}
+			model.growthFreezeRemaining = 0 // skip freeze during init — we're about to warmup anyway
 		}
+		fmt.Printf("[init] Warmup complete at stage %d. Organism ready.\n", model.CurrentGrowthStage())
 	}
 
 	// Enable BPE in main before REPL starts (avoid race with background trainer)
