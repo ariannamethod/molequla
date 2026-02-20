@@ -108,17 +108,17 @@ const CFG = {
     entropyTempFocus: 0.8,
 
     // corpus generation
-    corpusGenMaxTokens: 60,
+    corpusGenMaxTokens: 120,
     corpusFadeK: 3.0,            // sigmoid steepness for corpus→model transition
     corpusFadeThreshold: 1.5,    // entropy at which blend is 50/50
 
     // syntropy
-    syntropyWindow: 20,
-    fieldDeviationFloor: 0.5,
-    fieldDeviationCeiling: 5.0,
+    syntropyWindow: 8,
+    fieldDeviationFloor: 0.1,
+    fieldDeviationCeiling: 12.0,
     syntropyLrBoost: 1.3,
     syntropyLrDampen: 0.6,
-    syntropyDeltaGrowBoost: 0.2,
+    syntropyDeltaGrowBoost: 0.15,
 
     // cosine LR schedule
     lrMin: 0.001,
@@ -129,8 +129,8 @@ const CFG = {
     accumSteps: 1,
 
     // quantum buffer
-    qbCooldownSeconds: 10.0,
-    qbMinBytes: 480,
+    qbCooldownSeconds: 60.0,
+    qbMinBytes: 1024,
     qbMinNovelty: 0.15,
 
     // consciousness: per-token dissonance feedback
@@ -163,7 +163,7 @@ function headTypesForNHead(n) {
     // Compute head type array for a given number of heads.
     if (n <= 1) return ["content"];
     if (n === 2) return ["content", "hybrid"];
-    const half = Math.floor(n / 2);
+    const half = Math.ceil(n / 2); // majority content
     const result = [];
     for (let i = 0; i < half; i++) result.push("content");
     for (let i = 0; i < n - half; i++) result.push("hybrid");

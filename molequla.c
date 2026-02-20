@@ -90,7 +90,7 @@ typedef struct {
     double train_tick_seconds;
 
     /* hybrid attention */
-    const char *head_types[4];
+    const char *head_types[8];
     int n_head_types;
     double hybrid_alpha_init;
 
@@ -261,8 +261,7 @@ static Config CFG = {
  * 1→content, 2→content+hybrid, 4→2c+2h, 8→4c+4h */
 static void head_types_for_n_head(int n) {
     if (n <= 0) n = 1;
-    int ht_count = n < 4 ? n : 4; /* max 4 slots in head_types array */
-    int actual = n < ht_count ? n : ht_count;
+    if (n > 8) n = 8; /* max 8 slots in head_types array */
     if (n <= 1) {
         CFG.head_types[0] = "content";
         CFG.n_head_types = 1;
@@ -271,13 +270,12 @@ static void head_types_for_n_head(int n) {
         CFG.head_types[1] = "hybrid";
         CFG.n_head_types = 2;
     } else {
-        /* half content, half hybrid — but we only have 4 slots */
-        int half = actual / 2;
+        /* majority content, rest hybrid: 5→3c+2h, 8→4c+4h */
+        int half = (n + 1) / 2;
         for (int i = 0; i < half; i++) CFG.head_types[i] = "content";
-        for (int i = half; i < actual; i++) CFG.head_types[i] = "hybrid";
-        CFG.n_head_types = actual;
+        for (int i = half; i < n; i++) CFG.head_types[i] = "hybrid";
+        CFG.n_head_types = n;
     }
-    (void)actual;
 }
 
 /* ============================================================
@@ -4746,9 +4744,15 @@ int main(int argc, char **argv) {
         for (int i = 0; i < docs.len; i++) corpus_chars += (int)strlen(docs.items[i]);
         for (;;) {
             int stage = gpt_current_growth_stage(model);
-            printf("[init] Stage %d: embd=%d — warmup %d steps\n",
-                   stage, model->n_embd, CFG.warmup_steps);
-            train_steps(model, tok, &docs, CFG.warmup_steps, 1, 1);
+            {
+                int embryo_embd = CFG.growth_stages[0][1];
+                int warmup_scale = model->n_embd / (embryo_embd > 0 ? embryo_embd : 16);
+                if (warmup_scale < 1) warmup_scale = 1;
+                int effective_warmup = CFG.warmup_steps * warmup_scale;
+                printf("[init] Stage %d: embd=%d — warmup %d steps (scaled %dx)\n",
+                       stage, model->n_embd, effective_warmup, warmup_scale);
+                train_steps(model, tok, &docs, effective_warmup, 1, 1);
+            }
             model->last_warmup_stage = stage;
             save_checkpoint(model, tok, NULL);
             if (!gpt_maybe_grow_architecture(model, corpus_chars)) break;

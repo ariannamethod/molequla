@@ -173,7 +173,7 @@ def head_types_for_n_head(n):
         return ("content",)
     if n == 2:
         return ("content", "hybrid")
-    half = n // 2
+    half = (n + 1) // 2  # ceiling: majority content
     return tuple(["content"] * half + ["hybrid"] * (n - half))
 
 # ============================================================
@@ -3137,8 +3137,11 @@ async def chat_main():
                 stage = model.current_growth_stage()
                 stage_name = ["embryo", "infant", "child", "adolescent", "teen", "adult"][min(stage, 5)]
                 _, embd, layer, head = CFG.growth_stages[min(stage, len(CFG.growth_stages)-1)]
-                print(f"[init] Stage {stage} ({stage_name}): embd={embd}, layer={layer}, head={head}")
-                train_steps(model, tok, docs, CFG.warmup_steps)
+                embryo_embd = CFG.growth_stages[0][1]
+                warmup_scale = max(1, model.n_embd // embryo_embd)
+                effective_warmup = CFG.warmup_steps * warmup_scale
+                print(f"[init] Stage {stage} ({stage_name}): embd={embd} — {effective_warmup} steps (scaled {warmup_scale}x)")
+                train_steps(model, tok, docs, effective_warmup)
                 model.last_warmup_stage = stage
                 save_checkpoint(model, tok)
                 if not model.maybe_grow_architecture(corpus_chars):

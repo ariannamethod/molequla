@@ -154,7 +154,7 @@ impl Default for Config {
 fn head_types_for(n: usize) -> Vec<String> {
     if n <= 1 { return vec!["content".into()]; }
     if n == 2 { return vec!["content".into(), "hybrid".into()]; }
-    let half = n / 2;
+    let half = (n + 1) / 2; // majority content
     let mut t: Vec<String> = (0..half).map(|_| "content".into()).collect();
     t.extend((half..n).map(|_| "hybrid".into()));
     t
@@ -3072,7 +3072,8 @@ fn main() {
         match load_checkpoint(&cfg.ckpt_path) {
             Ok(m) => { eprintln!("[init] Loaded checkpoint, step={}", m.global_step); m },
             Err(e) => { eprintln!("[init] Checkpoint load failed: {}, starting fresh", e);
-                        let tok = EvolvingTokenizer::new(&docs);
+                        let mut tok = EvolvingTokenizer::new(&docs);
+                        tok.maybe_enable_bpe(&docs, &cfg);
                         GPT::new(tok, &cfg) },
         }
     } else {
@@ -3092,9 +3093,12 @@ fn main() {
         loop {
             let stage = model.current_growth_stage();
             let stage_name = stage_names[stage.max(0) as usize % stage_names.len()];
-            eprintln!("[init] Stage {} ({}): embd={}, warmup {} steps",
-                      stage, stage_name, model.n_embd, cfg.warmup_steps);
-            train_steps(&mut model, &docs, cfg.warmup_steps, true, true);
+            let embryo_embd = cfg.growth_stages[0][1].max(1);
+            let warmup_scale = (model.n_embd / embryo_embd).max(1);
+            let effective_warmup = cfg.warmup_steps * warmup_scale;
+            eprintln!("[init] Stage {} ({}): embd={}, warmup {} steps (scaled {}x)",
+                      stage, stage_name, model.n_embd, effective_warmup, warmup_scale);
+            train_steps(&mut model, &docs, effective_warmup, true, true);
             model.last_warmup_stage = stage;
             save_checkpoint(&model, &cfg.ckpt_path).ok();
             if !model.maybe_grow_architecture(corpus_chars) { break; }

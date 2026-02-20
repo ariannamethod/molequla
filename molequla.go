@@ -267,7 +267,7 @@ func headTypesForNHead(n int) []string {
 	if n == 2 {
 		return []string{"content", "hybrid"}
 	}
-	half := n / 2
+	half := (n + 1) / 2 // ceiling: majority content
 	types := make([]string, n)
 	for i := 0; i < half; i++ {
 		types[i] = "content"
@@ -4083,9 +4083,12 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 			modelProbs = SoftmaxProbs(scaled)
 		}
 
-		// Corpus blend: skip entirely when modelAlpha >= 0.99 (pure model mode)
+		// Per-token sigmoid corpus fade: compute alpha from local entropy
+		tokenAlpha := 1.0 / (1.0 + math.Exp(-CFG.CorpusFadeK*(CFG.CorpusFadeThreshold-entropy)))
+
+		// Corpus blend: skip entirely when tokenAlpha >= 0.99 (pure model mode)
 		var blended []float64
-		if modelAlpha >= 0.99 || field == nil {
+		if tokenAlpha >= 0.99 || field == nil {
 			blended = modelProbs
 		} else {
 			corpusCounts := make([]float64, tok.VocabSize)
@@ -4135,7 +4138,7 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 			}
 			blended = make([]float64, tok.VocabSize)
 			for i := 0; i < tok.VocabSize && i < len(modelProbs); i++ {
-				blended[i] = modelAlpha*modelProbs[i] + (1.0-modelAlpha)*corpusProbs[i]
+				blended[i] = tokenAlpha*modelProbs[i] + (1.0-tokenAlpha)*corpusProbs[i]
 			}
 		}
 
@@ -4844,9 +4847,15 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		// Per-stage warmup: if model grew since last warmup, train before continuing
 		currentStage := model.CurrentGrowthStage()
 		if currentStage > model.lastWarmupStage && len(docs) > 0 {
-			fmt.Printf("[trainer] warmup for stage %d (embd=%d) — %d steps\n",
-				currentStage, model.NEmbd, CFG.WarmupSteps)
-			trainSteps(model, tok, docs, CFG.WarmupSteps, true, true)
+			embryoEmbd := CFG.GrowthStages[0][1]
+			warmupScale := model.NEmbd / embryoEmbd
+			if warmupScale < 1 {
+				warmupScale = 1
+			}
+			effectiveWarmup := CFG.WarmupSteps * warmupScale
+			fmt.Printf("[trainer] warmup for stage %d (embd=%d) — %d steps (scaled %dx)\n",
+				currentStage, model.NEmbd, effectiveWarmup, warmupScale)
+			trainSteps(model, tok, docs, effectiveWarmup, true, true)
 			model.lastWarmupStage = currentStage
 			SaveCheckpoint(model, tok, "")
 			dbLogGrowth(db, model, tok, docs, 0.0, fmt.Sprintf("warmup_stage_%d", currentStage))
@@ -5136,10 +5145,16 @@ func main() {
 			if stage >= 0 && stage < len(stageNames) {
 				stageName = stageNames[stage]
 			}
-			// Train warmup at current stage
-			fmt.Printf("[init] Stage %d (%s): embd=%d, layer=%d, head=%d — warmup %d steps\n",
-				stage, stageName, model.NEmbd, model.NLayer, model.NHead, CFG.WarmupSteps)
-			trainSteps(model, tok, docs, CFG.WarmupSteps, true, true)
+			// Train warmup at current stage (scaled by embedding ratio)
+			embryoEmbd := CFG.GrowthStages[0][1]
+			warmupScale := model.NEmbd / embryoEmbd
+			if warmupScale < 1 {
+				warmupScale = 1
+			}
+			effectiveWarmup := CFG.WarmupSteps * warmupScale
+			fmt.Printf("[init] Stage %d (%s): embd=%d, layer=%d, head=%d — warmup %d steps (scaled %dx)\n",
+				stage, stageName, model.NEmbd, model.NLayer, model.NHead, effectiveWarmup, warmupScale)
+			trainSteps(model, tok, docs, effectiveWarmup, true, true)
 			model.lastWarmupStage = stage
 			SaveCheckpoint(model, tok, "")
 
@@ -5232,9 +5247,6 @@ func main() {
 		dbAddMessage(db, "user", userText)
 		updateReservoirCorpus(db, CFG.CorpusPath, CFG.MaxCorpusLines)
 
-		// Enrich corpus field with user input (the organism absorbs what it hears)
-		cooccur.IngestTokens(tok.Encode(userText))
-
 		// Feed quantum buffer
 		qbuf.Feed(userText, tok)
 
@@ -5243,6 +5255,9 @@ func main() {
 		if len(freshDocs) > 0 {
 			cooccur.BuildFromCorpus(tok, freshDocs)
 		}
+
+		// Self-enrichment: user input enriches corpus field (AFTER rebuild, so it's not wiped)
+		cooccur.IngestTokens(tok.Encode(userText))
 
 		prompt := buildPromptFromMemory(db, userText)
 
@@ -5263,10 +5278,8 @@ func main() {
 		gradEnabled.Store(true)
 		model.mu.Unlock()
 
-		// Sigmoid corpus fade: model takes over as its entropy drops (confidence rises)
-		modelEntropy := model.ComputeModelEntropy(tok, freshDocs, 5)
-		modelAlpha := 1.0 / (1.0 + math.Exp(-CFG.CorpusFadeK*(CFG.CorpusFadeThreshold-modelEntropy)))
-		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, modelAlpha)
+		// Generation: per-token sigmoid fade is computed inside GenerateResonant
+		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, 0.5)
 		if answer == "" {
 			answer = "..."
 		}
