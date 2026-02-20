@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -31,7 +32,9 @@ import (
 
 // And lo, when the organism speaks, it shall not waste breath building
 // a backward graph it will never use. gradEnabled is mercy for inference.
-var gradEnabled = true
+var gradEnabled atomic.Bool
+
+func init() { gradEnabled.Store(true) }
 
 // ============================================================
 // 0) CONFIG — bend reality here (carefully, mortals)
@@ -90,7 +93,9 @@ type Config struct {
 	TypicalP       float64 `json:"typical_p"` // Typical sampling: prefer tokens with typical information content
 	MaxGenTokens   int     `json:"max_gen_tokens"`
 	MinGenTokens   int     `json:"min_gen_tokens"`
-	RepetitionGuard int    `json:"repetition_guard"`
+	RepetitionGuard int     `json:"repetition_guard"`
+	FreqPenalty     float64 `json:"freq_penalty"`      // penalize logits by count * freq_penalty
+	PresencePenalty float64 `json:"presence_penalty"`   // flat penalty for any token that appeared
 
 	// tokenizer evolution
 	EnableBPEAfterChars  int `json:"enable_bpe_after_chars"`
@@ -203,6 +208,8 @@ var CFG = Config{
 	MaxGenTokens:         180,
 	MinGenTokens:         16,
 	RepetitionGuard:      4,
+	FreqPenalty:          0.3,
+	PresencePenalty:      0.3,
 	EnableBPEAfterChars:  20000,
 	BPENumMerges:         384,
 	BPERetrainEveryChars: 4000,
@@ -309,7 +316,7 @@ func (v *Vec) Add(other *Vec) *Vec {
 		d[i] = v.Data[i] + other.Data[i]
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v, other}
 		out.backFn = func() {
 			for i := 0; i < n; i++ {
@@ -329,7 +336,7 @@ func (v *Vec) Sub(other *Vec) *Vec {
 		d[i] = v.Data[i] - other.Data[i]
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v, other}
 		out.backFn = func() {
 			for i := 0; i < n; i++ {
@@ -349,7 +356,7 @@ func (v *Vec) Neg() *Vec {
 		d[i] = -v.Data[i]
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		out.backFn = func() {
 			for i := 0; i < n; i++ {
@@ -368,7 +375,7 @@ func (v *Vec) MulVec(other *Vec) *Vec {
 		d[i] = v.Data[i] * other.Data[i]
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v, other}
 		vData := v.Data
 		oData := other.Data
@@ -390,7 +397,7 @@ func (v *Vec) Scale(s float64) *Vec {
 		d[i] = v.Data[i] * s
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		out.backFn = func() {
 			for i := 0; i < n; i++ {
@@ -409,7 +416,7 @@ func (v *Vec) AddScalar(s float64) *Vec {
 		d[i] = v.Data[i] + s
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		out.backFn = func() {
 			for i := 0; i < n; i++ {
@@ -430,7 +437,7 @@ func (v *Vec) ReLU() *Vec {
 		}
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		vData := v.Data
 		out.backFn = func() {
@@ -454,7 +461,7 @@ func (v *Vec) SiLU() *Vec {
 		d[i] = v.Data[i] * sig[i]
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		vData := v.Data
 		out.backFn = func() {
@@ -475,7 +482,7 @@ func (v *Vec) Dot(other *Vec) *Scalar {
 		val += v.Data[i] * other.Data[i]
 	}
 	out := &Scalar{Data: val}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v, other}
 		vData := v.Data
 		oData := other.Data
@@ -499,7 +506,7 @@ func (v *Vec) MeanSq() *Scalar {
 	}
 	val /= nf
 	out := &Scalar{Data: val}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		vData := v.Data
 		out.backFn = func() {
@@ -515,7 +522,7 @@ func (v *Vec) MeanSq() *Scalar {
 // And lo, one number shall be plucked from the vector, and gradients shall follow.
 func (v *Vec) Element(idx int) *Scalar {
 	out := &Scalar{Data: v.Data[idx]}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		out.backFn = func() {
 			v.Grad[idx] += out.Grad
@@ -529,7 +536,7 @@ func (v *Vec) Slice(start, end int) *Vec {
 	d := make([]float64, end-start)
 	copy(d, v.Data[start:end])
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{v}
 		out.backFn = func() {
 			for i, j := 0, start; j < end; i, j = i+1, j+1 {
@@ -551,7 +558,7 @@ func Concat(vecs []*Vec) *Vec {
 		d = append(d, v.Data...)
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		kids := make([]Node, len(vecs))
 		for i, v := range vecs {
 			kids[i] = v
@@ -593,7 +600,7 @@ func (s *Scalar) doBackward() {
 // AddS returns self + other (scalar + scalar).
 func (s *Scalar) AddS(other *Scalar) *Scalar {
 	out := &Scalar{Data: s.Data + other.Data}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{s, other}
 		out.backFn = func() {
 			s.Grad += out.Grad
@@ -606,7 +613,7 @@ func (s *Scalar) AddS(other *Scalar) *Scalar {
 // AddF returns self + f (scalar + float).
 func (s *Scalar) AddF(f float64) *Scalar {
 	out := &Scalar{Data: s.Data + f}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{s}
 		out.backFn = func() {
 			s.Grad += out.Grad
@@ -618,7 +625,7 @@ func (s *Scalar) AddF(f float64) *Scalar {
 // MulS returns self * other (scalar * scalar).
 func (s *Scalar) MulS(other *Scalar) *Scalar {
 	out := &Scalar{Data: s.Data * other.Data}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{s, other}
 		sData := s.Data
 		oData := other.Data
@@ -633,7 +640,7 @@ func (s *Scalar) MulS(other *Scalar) *Scalar {
 // MulF returns self * f (scalar * float).
 func (s *Scalar) MulF(f float64) *Scalar {
 	out := &Scalar{Data: s.Data * f}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{s}
 		out.backFn = func() {
 			s.Grad += f * out.Grad
@@ -646,7 +653,7 @@ func (s *Scalar) MulF(f float64) *Scalar {
 func (s *Scalar) Sigmoid() *Scalar {
 	sig := 1.0 / (1.0 + math.Exp(-s.Data))
 	out := &Scalar{Data: sig}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{s}
 		out.backFn = func() {
 			s.Grad += sig * (1.0 - sig) * out.Grad
@@ -738,7 +745,7 @@ func (m *MatrixParam) Matvec(x *Vec) *Vec {
 	}
 
 	out := NewVec(outData)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		kids := make([]Node, nout+1)
 		for i := 0; i < nout; i++ {
 			kids[i] = m.Rows[i]
@@ -815,7 +822,7 @@ func RMSNorm(x *Vec) *Vec {
 		d[i] = x.Data[i] * scaleVal
 	}
 	out := NewVec(d)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{x, ms}
 		xData := x.Data
 		out.backFn = func() {
@@ -858,7 +865,7 @@ func CrossEntropyLoss(logits *Vec, target int) *Scalar {
 	}
 
 	out := &Scalar{Data: lossVal}
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{logits}
 		out.backFn = func() {
 			g := out.Grad
@@ -895,7 +902,7 @@ func ScalarSoftmax(logits []*Scalar) []*Scalar {
 	}
 
 	var kids []Node
-	if gradEnabled {
+	if gradEnabled.Load() {
 		kids = make([]Node, n)
 		for i := 0; i < n; i++ {
 			kids[i] = logits[i]
@@ -905,7 +912,7 @@ func ScalarSoftmax(logits []*Scalar) []*Scalar {
 	out := make([]*Scalar, n)
 	for i := 0; i < n; i++ {
 		sv := &Scalar{Data: probsData[i]}
-		if gradEnabled {
+		if gradEnabled.Load() {
 			sv.children = kids
 			ii := i
 			ps := probsData
@@ -937,7 +944,7 @@ func AttentionWeightedSum(weights []*Scalar, values []*Vec) *Vec {
 	}
 
 	out := NewVec(outData)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		kids := make([]Node, 0, T*2)
 		for _, w := range weights {
 			kids = append(kids, w)
@@ -1543,7 +1550,7 @@ func RoPERotate(vec *Vec, pos int, headDim int) *Vec {
 	}
 
 	out := NewVec(outData)
-	if gradEnabled {
+	if gradEnabled.Load() {
 		out.children = []Node{vec}
 		out.backFn = func() {
 			rpBack := getRoPECosSin(pos, headDim)
@@ -2219,8 +2226,8 @@ func (gpt *GPT) ComputeFieldDeviation(tok *EvolvingTokenizer, field *CooccurFiel
 		}
 	}
 
-	gradEnabled = false
-	defer func() { gradEnabled = true }()
+	gradEnabled.Store(false)
+	defer func() { gradEnabled.Store(true) }()
 
 	vocabSize := tok.VocabSize
 
@@ -2349,8 +2356,8 @@ func (gpt *GPT) ComputeModelEntropy(tok *EvolvingTokenizer, docs []string, sampl
 		}
 	}
 
-	gradEnabled = false
-	defer func() { gradEnabled = true }()
+	gradEnabled.Store(false)
+	defer func() { gradEnabled.Store(true) }()
 
 	for _, doc := range sampled {
 		ids := tok.Encode(doc)
@@ -2718,8 +2725,8 @@ func (gpt *GPT) QuickLoss(tok *EvolvingTokenizer, docs []string, n int) float64 
 	if len(docs) == 0 {
 		return 0
 	}
-	gradEnabled = false
-	defer func() { gradEnabled = true }()
+	gradEnabled.Store(false)
+	defer func() { gradEnabled.Store(true) }()
 	total := 0.0
 	for i := 0; i < n; i++ {
 		doc := docs[rand.Intn(len(docs))]
@@ -2738,8 +2745,8 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 	gpt.mu.Lock()
 	defer gpt.mu.Unlock()
 
-	gradEnabled = false
-	defer func() { gradEnabled = true }()
+	gradEnabled.Store(false)
+	defer func() { gradEnabled.Store(true) }()
 
 	var ids []int
 	if promptText != "" {
@@ -2781,6 +2788,7 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 	lowDropCount := 0    // consecutive tokens below drop threshold
 	entropySum := 0.0    // for conscience mean entropy
 	entropyCount := 0
+	tokenCounts := make(map[int]int) // frequency penalty: count of each generated token
 
 	for step := 0; step < CFG.MaxGenTokens; step++ {
 		pos := len(ids) - 1
@@ -2788,6 +2796,18 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 			pos = gpt.BlockSize - 1
 		}
 		logits := gpt.ForwardStep(cur, pos, keys, values)
+
+		// Frequency + presence penalty on logits (before temperature scaling)
+		if CFG.FreqPenalty > 0 || CFG.PresencePenalty > 0 {
+			for tid, cnt := range tokenCounts {
+				if tid < len(logits.Data) {
+					logits.Data[tid] -= CFG.FreqPenalty * float64(cnt)
+					if cnt > 0 {
+						logits.Data[tid] -= CFG.PresencePenalty
+					}
+				}
+			}
+		}
 
 		// Entropy-adaptive temperature + syntropy bridge (single softmax when possible)
 		baseTemp := CFG.Temperature + gpt.syntropyTempOff
@@ -2855,6 +2875,7 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 			modelAlpha := 1.0 / (1.0 + math.Exp(-CFG.CorpusFadeK*(CFG.CorpusFadeThreshold-entropy)))
 			if modelAlpha < 0.99 {
 				var corpusDist map[int]float64
+				gpt.corpusField.mu.RLock()
 				// Try trigram first
 				if len(ids) >= 2 {
 					a, b := ids[len(ids)-2], ids[len(ids)-1]
@@ -2869,6 +2890,7 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 						corpusDist = ctx
 					}
 				}
+				gpt.corpusField.mu.RUnlock()
 				if corpusDist != nil && len(corpusDist) > 0 {
 					totalC := 0.0
 					for _, cnt := range corpusDist {
@@ -2918,6 +2940,7 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 		ids = append(ids, nxt)
 		cur = nxt
 		outIDs = append(outIDs, nxt)
+		tokenCounts[nxt]++
 
 		// Repetition guard
 		recent = append(recent, nxt)
@@ -3084,7 +3107,7 @@ func OverthinkcRings(model *GPT, tok *EvolvingTokenizer, field *CooccurField, te
 		}
 
 		// Quick generation without locking (caller should hold lock or run async)
-		gradEnabled = false
+		gradEnabled.Store(false)
 		keys := make([][]*Vec, model.NLayer)
 		values := make([][]*Vec, model.NLayer)
 		for i := 0; i < model.NLayer; i++ {
@@ -3112,7 +3135,7 @@ func OverthinkcRings(model *GPT, tok *EvolvingTokenizer, field *CooccurField, te
 			phantomIDs = append(phantomIDs, nxt)
 			cur = nxt
 		}
-		gradEnabled = true
+		gradEnabled.Store(true)
 
 		if len(phantomIDs) > 0 {
 			field.IngestTokens(phantomIDs)
@@ -3904,8 +3927,8 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 	model.mu.Lock()
 	defer model.mu.Unlock()
 
-	gradEnabled = false
-	defer func() { gradEnabled = true }()
+	gradEnabled.Store(false)
+	defer func() { gradEnabled.Store(true) }()
 
 	var ids []int
 	if prompt != "" {
@@ -3942,6 +3965,7 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 	lowDropCount := 0
 	entropySum := 0.0
 	entropyCount := 0
+	tokenCounts := make(map[int]int) // frequency penalty
 
 	for step := 0; step < CFG.MaxGenTokens; step++ {
 		pos := len(ids) - 1
@@ -3950,8 +3974,29 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		}
 		logits := model.ForwardStep(cur, pos, keys, values)
 
-		// Model probs with dissonance-adaptive temperature
+		// Frequency + presence penalty on logits
+		if CFG.FreqPenalty > 0 || CFG.PresencePenalty > 0 {
+			for tid, cnt := range tokenCounts {
+				if tid < len(logits.Data) {
+					logits.Data[tid] -= CFG.FreqPenalty * float64(cnt)
+					if cnt > 0 {
+						logits.Data[tid] -= CFG.PresencePenalty
+					}
+				}
+			}
+		}
+
+		// Model probs with surprise-modulated + dissonance-adaptive temperature
 		temp := CFG.Temperature
+		// Consciousness: surprise modulation (Feature 4 — now wired)
+		if model.surpriseBaseline > 1e-6 {
+			surpriseRatio := model.lastSurprise / model.surpriseBaseline
+			if surpriseRatio > 1.5 {
+				temp *= 0.85 // high surprise → be careful
+			} else if surpriseRatio < 0.5 {
+				temp *= 1.1 // low surprise → explore slightly
+			}
+		}
 		if temp <= 1e-6 {
 			temp = 1e-6
 		}
@@ -4001,56 +4046,60 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 			modelProbs = SoftmaxProbs(scaled)
 		}
 
-		// Corpus probs
-		corpusCounts := make([]float64, tok.VocabSize)
-		ctxForCorpus := ids
-		if len(ctxForCorpus) > 3 {
-			ctxForCorpus = ctxForCorpus[len(ctxForCorpus)-3:]
-		}
-		_ = field.SampleNext(ctxForCorpus, tok.VocabSize, temp)
-		// Rebuild corpus distribution
-		corpusTotal := 0.0
-		if len(ctxForCorpus) >= 2 {
-			a, b := ctxForCorpus[len(ctxForCorpus)-2], ctxForCorpus[len(ctxForCorpus)-1]
-			if ctx, ok := field.TrigramByContext[[2]int{a, b}]; ok {
-				for tid, v := range ctx {
-					if tid < tok.VocabSize {
-						corpusCounts[tid] += v
-						corpusTotal += v
-					}
-				}
-			}
-		}
-		if corpusTotal == 0 && len(ctxForCorpus) >= 1 {
-			prev := ctxForCorpus[len(ctxForCorpus)-1]
-			if ctx, ok := field.BigramByFirst[prev]; ok {
-				for tid, v := range ctx {
-					if tid < tok.VocabSize {
-						corpusCounts[tid] += v
-					}
-				}
-			}
-		}
-		corpusTotal = 0.0
-		for _, c := range corpusCounts {
-			corpusTotal += c
-		}
-		corpusProbs := make([]float64, tok.VocabSize)
-		if corpusTotal > 0 {
-			for i, c := range corpusCounts {
-				corpusProbs[i] = c / corpusTotal
-			}
+		// Corpus blend: skip entirely when modelAlpha >= 0.99 (pure model mode)
+		var blended []float64
+		if modelAlpha >= 0.99 || field == nil {
+			blended = modelProbs
 		} else {
-			uni := 1.0 / float64(tok.VocabSize)
-			for i := range corpusProbs {
-				corpusProbs[i] = uni
+			corpusCounts := make([]float64, tok.VocabSize)
+			ctxForCorpus := ids
+			if len(ctxForCorpus) > 3 {
+				ctxForCorpus = ctxForCorpus[len(ctxForCorpus)-3:]
 			}
-		}
-
-		// Blend model and corpus probs using caller's alpha
-		blended := make([]float64, tok.VocabSize)
-		for i := 0; i < tok.VocabSize && i < len(modelProbs); i++ {
-			blended[i] = modelAlpha*modelProbs[i] + (1.0-modelAlpha)*corpusProbs[i]
+			// Rebuild corpus distribution under read lock
+			field.mu.RLock()
+			corpusTotal := 0.0
+			if len(ctxForCorpus) >= 2 {
+				a, b := ctxForCorpus[len(ctxForCorpus)-2], ctxForCorpus[len(ctxForCorpus)-1]
+				if ctx, ok := field.TrigramByContext[[2]int{a, b}]; ok {
+					for tid, v := range ctx {
+						if tid < tok.VocabSize {
+							corpusCounts[tid] += v
+							corpusTotal += v
+						}
+					}
+				}
+			}
+			if corpusTotal == 0 && len(ctxForCorpus) >= 1 {
+				prev := ctxForCorpus[len(ctxForCorpus)-1]
+				if ctx, ok := field.BigramByFirst[prev]; ok {
+					for tid, v := range ctx {
+						if tid < tok.VocabSize {
+							corpusCounts[tid] += v
+						}
+					}
+				}
+			}
+			field.mu.RUnlock()
+			corpusTotal = 0.0
+			for _, c := range corpusCounts {
+				corpusTotal += c
+			}
+			corpusProbs := make([]float64, tok.VocabSize)
+			if corpusTotal > 0 {
+				for i, c := range corpusCounts {
+					corpusProbs[i] = c / corpusTotal
+				}
+			} else {
+				uni := 1.0 / float64(tok.VocabSize)
+				for i := range corpusProbs {
+					corpusProbs[i] = uni
+				}
+			}
+			blended = make([]float64, tok.VocabSize)
+			for i := 0; i < tok.VocabSize && i < len(modelProbs); i++ {
+				blended[i] = modelAlpha*modelProbs[i] + (1.0-modelAlpha)*corpusProbs[i]
+			}
 		}
 
 		// Consciousness: pattern breaking (Feature 2)
@@ -4070,6 +4119,7 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		ids = append(ids, nxt)
 		cur = nxt
 		outIDs = append(outIDs, nxt)
+		tokenCounts[nxt]++
 
 		// Repetition guard: break if last rg*2 tokens are a repeating pattern
 		recentBuf = append(recentBuf, nxt)
@@ -5093,7 +5143,7 @@ func main() {
 		// Consciousness: self-prediction error (Feature 4)
 		// "How surprised am I by this input?"
 		model.mu.Lock()
-		gradEnabled = false
+		gradEnabled.Store(false)
 		promptIDs := tok.Encode(prompt)
 		if len(promptIDs) > 2 {
 			surprise := model.ComputeSelfPredictionError(promptIDs)
@@ -5104,7 +5154,7 @@ func main() {
 				model.surpriseBaseline = 0.3*surprise + 0.7*model.surpriseBaseline
 			}
 		}
-		gradEnabled = true
+		gradEnabled.Store(true)
 		model.mu.Unlock()
 
 		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, 1.0)
