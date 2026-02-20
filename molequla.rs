@@ -2332,7 +2332,7 @@ impl SyntropyTracker {
         }
     }
 
-    fn decide(&self, cfg: &Config) -> SyntropyDecision {
+    fn decide(&self, cfg: &Config, model_stage: i32, adult_stage: usize) -> SyntropyDecision {
         let mut d = SyntropyDecision {
             lr_multiplier: 1.0, temp_offset: 0.0, accum_override: 0,
             delta_grow_override: None, action: "steady".into(),
@@ -2343,6 +2343,10 @@ impl SyntropyTracker {
         if trend > 0.01 && dev > cfg.field_deviation_floor && dev < cfg.field_deviation_ceiling {
             d.lr_multiplier = cfg.syntropy_lr_boost;
             d.temp_offset = -0.05;
+            d.delta_grow_override = Some(cfg.syntropy_delta_grow_boost);
+            d.action = "amplify".into();
+        } else if trend > 0.01 {
+            d.lr_multiplier = cfg.syntropy_lr_boost;
             d.action = "boost".into();
         } else if trend < -0.01 {
             d.lr_multiplier = cfg.syntropy_lr_dampen;
@@ -2357,7 +2361,30 @@ impl SyntropyTracker {
             d.temp_offset = 0.05;
             d.action = "explore".into();
         }
+
+        // Divide: adult stage + sustained high entropy + falling syntropy
+        if model_stage as usize >= adult_stage && self.entropy_history.len() >= cfg.syntropy_window {
+            let high_count = self.entropy_history.iter().filter(|&&e| e > cfg.entropy_high).count();
+            if high_count > cfg.syntropy_window * 3 / 4 && trend < -0.01 {
+                d.lr_multiplier = cfg.syntropy_lr_dampen;
+                d.action = "divide".into();
+            }
+        }
+
         d
+    }
+
+    fn should_hibernate(&self, peers: &[(String, f64, f64)]) -> bool {
+        if peers.is_empty() { return false; }
+        // A peer has syntropy > 0.05 (thriving) and we're on a plateau
+        let thriving_peer = peers.iter().any(|(_, syn, _)| *syn > 0.05);
+        if thriving_peer && self.burst_history.len() >= 8 {
+            let sum: f64 = self.burst_history[self.burst_history.len()-8..].iter()
+                .map(|b| b.loss_after - b.loss_before).sum();
+            let avg_delta = sum / 8.0;
+            if avg_delta.abs() < 0.01 { return true; }
+        }
+        false
     }
 }
 
@@ -2699,7 +2726,7 @@ fn background_trainer(
     swarm: Arc<Mutex<SwarmRegistry>>,
     stop: Arc<AtomicBool>,
 ) {
-    let cfg = model.lock().unwrap().cfg.clone();
+    let mut cfg = model.lock().unwrap().cfg.clone();
     let mut syntracker = SyntropyTracker::new();
     let mut tick = 0u64;
 
@@ -2758,15 +2785,43 @@ fn background_trainer(
 
         // Syntropy measure + decide
         syntracker.measure(&m, &docs, &cfg);
-        let decision = syntracker.decide(&cfg);
+        let adult_stage = cfg.growth_stages.len().saturating_sub(1);
+        let decision = syntracker.decide(&cfg, m.current_growth_stage(), adult_stage);
         m.syntropy_temp_offset = decision.temp_offset;
+
+        eprintln!("[syntropy] action={} | trend={:.4} | lr_mul={:.2}",
+                  decision.action, syntracker.syntropy_trend, decision.lr_multiplier);
+
+        // Handle ecology actions
+        if decision.action == "divide" {
+            eprintln!("[ecology] DIVIDE action — spawning child (not implemented in this session)");
+            // TODO: spawn child process via std::process::Command
+        }
+
+        // Check hibernation
+        {
+            let peers = swarm.lock().map(|sw| sw.discover_peers()).unwrap_or_default();
+            if syntracker.should_hibernate(&peers) {
+                eprintln!("[ecology] HIBERNATION — organism going to sleep");
+                save_checkpoint(&m, &cfg.ckpt_path).ok();
+                if let Ok(sw) = swarm.lock() { sw.unregister(); }
+                break;
+            }
+        }
 
         // Immune system: snapshot gamma direction
         let (pre_dir, pre_mag) = m.gamma_contrastive_projection();
 
+        // Apply syntropy-adjusted learning rate
+        let original_lr = cfg.learning_rate;
+        cfg.learning_rate = original_lr * decision.lr_multiplier;
+
         // Train micro-burst
         let steps = cfg.micro_steps;
         train_steps(&mut m, &docs, steps, !cfg.freeze_base_after_warmup, true);
+
+        // Restore LR
+        cfg.learning_rate = original_lr;
 
         // Immune check
         if pre_mag > cfg.gamma_min_magnitude {
@@ -2783,8 +2838,8 @@ fn background_trainer(
             }
         }
 
-        // Delta grow chance
-        let grow_prob = cfg.delta_grow_prob;
+        // Delta grow chance (influenced by syntropy)
+        let grow_prob = decision.delta_grow_override.unwrap_or(cfg.delta_grow_prob);
         if rand::thread_rng().gen::<f64>() < grow_prob {
             m.add_delta_module(1.0);
             eprintln!("[molequla.rs] Delta module added, total={}", m.deltas.len());

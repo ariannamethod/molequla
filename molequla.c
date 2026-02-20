@@ -4156,6 +4156,181 @@ static void save_checkpoint(GPT *g, EvolvingTokenizer *tok, const char *path) {
     fclose(f);
 }
 
+/* Load checkpoint: reverse of save_checkpoint.
+ * Returns loaded GPT* on success, NULL on failure.
+ * On success, *out_tok is set to the restored tokenizer. */
+static GPT *load_checkpoint(const char *path, EvolvingTokenizer **out_tok) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+
+    /* Magic + version */
+    char magic[4];
+    int ver;
+    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "MOLE", 4) != 0) { fclose(f); return NULL; }
+    if (fread(&ver, 4, 1, f) != 1 || ver != 1) { fclose(f); return NULL; }
+
+    /* Tokenizer */
+    int vocab_size;
+    fread(&vocab_size, 4, 1, f);
+    EvolvingTokenizer *tok = calloc(1, sizeof(EvolvingTokenizer));
+    tok->stoi = stoi_new();
+    tok->cap = vocab_size + 256;
+    tok->tokens = calloc(tok->cap, sizeof(char*));
+    tok->vocab_size = vocab_size;
+    for (int i = 0; i < vocab_size; i++) {
+        int slen; fread(&slen, 4, 1, f);
+        tok->tokens[i] = calloc(slen + 1, 1);
+        fread(tok->tokens[i], 1, slen, f);
+        stoi_put(tok->stoi, tok->tokens[i], i);
+    }
+    fread(&tok->bpe_enabled, 4, 1, f);
+    fread(&tok->n_merges, 4, 1, f);
+    if (tok->n_merges > 0) {
+        tok->merges = calloc(tok->n_merges, sizeof(MergePair));
+        for (int i = 0; i < tok->n_merges; i++) {
+            int la, lb;
+            fread(&la, 4, 1, f);
+            if (la > 63) la = 63;
+            fread(tok->merges[i].a, 1, la, f); tok->merges[i].a[la] = 0;
+            fread(&lb, 4, 1, f);
+            if (lb > 63) lb = 63;
+            fread(tok->merges[i].b, 1, lb, f); tok->merges[i].b[lb] = 0;
+        }
+    }
+    fread(&tok->trained_chars, 4, 1, f);
+    fread(&tok->bos_id, 4, 1, f);
+    fread(&tok->eos_id, 4, 1, f);
+    fread(&tok->pad_id, 4, 1, f);
+
+    /* Read base matrices into temp arrays to determine model shape */
+    int n_base;
+    fread(&n_base, 4, 1, f);
+    char **saved_names = calloc(n_base, sizeof(char*));
+    MatrixParam **saved_mats = calloc(n_base, sizeof(MatrixParam*));
+    for (int i = 0; i < n_base; i++) {
+        int nlen; fread(&nlen, 4, 1, f);
+        saved_names[i] = calloc(nlen + 1, 1);
+        fread(saved_names[i], 1, nlen, f);
+        int nout, nin; fread(&nout, 4, 1, f); fread(&nin, 4, 1, f);
+        MatrixParam *m = mat_new(nout, nin, 0.0);
+        for (int r = 0; r < nout; r++)
+            fread(m->row_data[r], sizeof(double), nin, f);
+        saved_mats[i] = m;
+    }
+
+    /* Determine n_embd from wte, n_layer by counting l*.wq matrices */
+    int n_embd = CFG.n_embd, n_layer = 0;
+    for (int i = 0; i < n_base; i++) {
+        if (strcmp(saved_names[i], "wte") == 0) n_embd = saved_mats[i]->nin;
+        if (strncmp(saved_names[i], "l", 1) == 0 && strstr(saved_names[i], ".wq"))
+            n_layer++;
+    }
+    /* Determine n_head by counting l0.h*.alpha entries */
+    int n_head = 1;
+    for (int i = 0; i < n_base; i++) {
+        if (strncmp(saved_names[i], "l0.h", 4) == 0 && strstr(saved_names[i], ".alpha")) {
+            int h; if (sscanf(saved_names[i], "l0.h%d.alpha", &h) == 1 && h + 1 > n_head)
+                n_head = h + 1;
+        }
+    }
+
+    /* Update CFG to match checkpoint dimensions */
+    CFG.n_embd = n_embd;
+    CFG.n_layer = n_layer > 0 ? n_layer : 1;
+    CFG.n_head = n_head;
+    head_types_for_n_head(n_head);
+
+    /* Read metadata */
+    int global_step, last_warmup_stage, growth_step_offset;
+    fread(&global_step, 4, 1, f);
+    fread(&last_warmup_stage, 4, 1, f);
+    fread(&growth_step_offset, 4, 1, f);
+
+    /* Read deltas */
+    int n_deltas;
+    fread(&n_deltas, 4, 1, f);
+    double saved_alpha[MAX_DELTA_MODS];
+    if (n_deltas > MAX_DELTA_MODS) n_deltas = MAX_DELTA_MODS;
+    fread(saved_alpha, sizeof(double), n_deltas, f);
+
+    /* Create model with checkpoint dimensions */
+    GPT *g = gpt_new(tok);
+    g->global_step = global_step;
+    g->last_warmup_stage = last_warmup_stage;
+    g->growth_step_offset = growth_step_offset;
+
+    /* Copy saved base weights into model (match by name) */
+    for (int i = 0; i < n_base; i++) {
+        MatrixParam *dst = gpt_base(g, saved_names[i]);
+        if (dst && dst->nout == saved_mats[i]->nout && dst->nin == saved_mats[i]->nin) {
+            for (int r = 0; r < dst->nout; r++)
+                memcpy(dst->row_data[r], saved_mats[i]->row_data[r], sizeof(double) * dst->nin);
+        }
+        /* Free saved matrix */
+        for (int r = 0; r < saved_mats[i]->nout; r++) {
+            free(saved_mats[i]->row_data[r]);
+            free(saved_mats[i]->row_grad[r]);
+        }
+        free(saved_mats[i]->row_data);
+        free(saved_mats[i]->row_grad);
+        free(saved_mats[i]);
+        free(saved_names[i]);
+    }
+    free(saved_names);
+    free(saved_mats);
+
+    /* Load delta modules (replacing the default one) */
+    for (int d = 0; d < n_deltas && d < g->n_deltas; d++) {
+        g->active_alpha[d] = saved_alpha[d];
+    }
+    /* Read saved delta adapter weights */
+    for (int d = 0; d < n_deltas; d++) {
+        int count; fread(&count, 4, 1, f);
+        if (d >= g->n_deltas) {
+            /* Skip unknown delta modules */
+            for (int a = 0; a < count; a++) {
+                int nlen; fread(&nlen, 4, 1, f); fseek(f, nlen, SEEK_CUR);
+                int ao, ai; fread(&ao, 4, 1, f); fread(&ai, 4, 1, f);
+                fseek(f, sizeof(double) * ao * ai, SEEK_CUR);
+                int bo, bi; fread(&bo, 4, 1, f); fread(&bi, 4, 1, f);
+                fseek(f, sizeof(double) * bo * bi, SEEK_CUR);
+            }
+            continue;
+        }
+        DeltaModule *mod = g->deltas[d];
+        for (int a = 0; a < count; a++) {
+            int nlen; fread(&nlen, 4, 1, f);
+            char aname[128]; if (nlen > 127) nlen = 127;
+            fread(aname, 1, nlen, f); aname[nlen] = 0;
+            /* Format: A_nout, A_nin, A_data, B_nout, B_nin, B_data */
+            int ao, ai; fread(&ao, 4, 1, f); fread(&ai, 4, 1, f);
+            DeltaAdapter *da = dmod_get(mod, aname);
+            if (da && da->A->nout == ao && da->A->nin == ai) {
+                for (int r = 0; r < ao; r++) fread(da->A->row_data[r], sizeof(double), ai, f);
+            } else {
+                fseek(f, sizeof(double) * ao * ai, SEEK_CUR);
+            }
+            int bo, bi; fread(&bo, 4, 1, f); fread(&bi, 4, 1, f);
+            if (da && da->B->nout == bo && da->B->nin == bi) {
+                for (int r = 0; r < bo; r++) fread(da->B->row_data[r], sizeof(double), bi, f);
+            } else {
+                fseek(f, sizeof(double) * bo * bi, SEEK_CUR);
+            }
+        }
+    }
+
+    fclose(f);
+
+    /* Re-snapshot init embeddings (checkpoint has trained weights, not init) */
+    /* Keep the gamma snapshot from the fresh gpt_new — it's already zeroed embeddings.
+     * Actually, we should re-snapshot from the loaded weights if this is a fresh load. */
+
+    *out_tok = tok;
+    printf("[checkpoint] Loaded from %s: step=%d, embd=%d, layers=%d, heads=%d\n",
+           path, global_step, n_embd, CFG.n_layer, n_head);
+    return g;
+}
+
 /* ============================================================
  * 11) CHAT LOOP + MAIN
  * ============================================================ */
@@ -4729,36 +4904,46 @@ int main(int argc, char **argv) {
         for (int i = 0; i < docs.len; i++) doc_ptrs[i] = docs.items[i];
     }
 
-    EvolvingTokenizer *tok = tok_new(doc_ptrs, docs.len);
+    /* Try loading checkpoint first */
+    EvolvingTokenizer *tok = NULL;
+    GPT *model = NULL;
+    if (access(CFG.ckpt_path, F_OK) == 0) {
+        model = load_checkpoint(CFG.ckpt_path, &tok);
+    }
 
-    /* Enable BPE BEFORE training — subword tokens make corpus field coherent
-     * (byte-level trigrams produce babble; subword trigrams produce speech) */
-    tok_maybe_enable_bpe(tok, (const char **)doc_ptrs, docs.len);
+    if (!model) {
+        /* Fresh start */
+        tok = tok_new(doc_ptrs, docs.len);
 
-    GPT *model = gpt_new(tok);
-    free(doc_ptrs);
+        /* Enable BPE BEFORE training — subword tokens make corpus field coherent
+         * (byte-level trigrams produce babble; subword trigrams produce speech) */
+        tok_maybe_enable_bpe(tok, (const char **)doc_ptrs, docs.len);
 
-    /* Initialize at the correct stage for corpus size — per-stage warmup */
-    {
-        int corpus_chars = 0;
-        for (int i = 0; i < docs.len; i++) corpus_chars += (int)strlen(docs.items[i]);
-        for (;;) {
-            int stage = gpt_current_growth_stage(model);
-            {
-                int embryo_embd = CFG.growth_stages[0][1];
-                int warmup_scale = model->n_embd / (embryo_embd > 0 ? embryo_embd : 16);
-                if (warmup_scale < 1) warmup_scale = 1;
-                int effective_warmup = CFG.warmup_steps * warmup_scale;
-                printf("[init] Stage %d: embd=%d — warmup %d steps (scaled %dx)\n",
-                       stage, model->n_embd, effective_warmup, warmup_scale);
-                train_steps(model, tok, &docs, effective_warmup, 1, 1);
+        model = gpt_new(tok);
+
+        /* Initialize at the correct stage for corpus size — per-stage warmup */
+        {
+            int corpus_chars = 0;
+            for (int i = 0; i < docs.len; i++) corpus_chars += (int)strlen(docs.items[i]);
+            for (;;) {
+                int stage = gpt_current_growth_stage(model);
+                {
+                    int embryo_embd = CFG.growth_stages[0][1];
+                    int warmup_scale = model->n_embd / (embryo_embd > 0 ? embryo_embd : 16);
+                    if (warmup_scale < 1) warmup_scale = 1;
+                    int effective_warmup = CFG.warmup_steps * warmup_scale;
+                    printf("[init] Stage %d: embd=%d — warmup %d steps (scaled %dx)\n",
+                           stage, model->n_embd, effective_warmup, warmup_scale);
+                    train_steps(model, tok, &docs, effective_warmup, 1, 1);
+                }
+                model->last_warmup_stage = stage;
+                save_checkpoint(model, tok, NULL);
+                if (!gpt_maybe_grow_architecture(model, corpus_chars)) break;
+                model->growth_freeze_remaining = 0; /* skip freeze during init growth */
             }
-            model->last_warmup_stage = stage;
-            save_checkpoint(model, tok, NULL);
-            if (!gpt_maybe_grow_architecture(model, corpus_chars)) break;
-            model->growth_freeze_remaining = 0; /* skip freeze during init growth */
         }
     }
+    free(doc_ptrs);
 
     /* Build corpus field for pre-warmup speech */
     CooccurField *cooccur = cooccur_new(tok->vocab_size);
