@@ -9,7 +9,7 @@
 
 # molequla | by Arianna Method
 
-> *A GPT organism reproduced in Python, Go, C, and JavaScript. Async, continually-learning, with hybrid attention, native personality, and mathematical self-reasoning.*
+> *A GPT organism reproduced in Python, Go, C, JavaScript, and Rust. Async, continually-learning, with hybrid attention, native personality, mathematical self-reasoning, and distributed cognition.*
 >
 --- 
 
@@ -17,8 +17,9 @@
 
 ```
 THIS IS:
-- Four implementations: Python, Go, C, JavaScript — same architecture
-- One dependency in Python (numpy) — zero in Go, C, and JS
+- Five implementations: Python, Go, C, JavaScript, Rust — same architecture
+- Rust is the Fifth Element: full organism + distributed cognition metabolism
+- One dependency in Python (numpy), one in Go/Rust (SQLite) — zero in C and JS
 - Runs in the browser: molequla.js, zero npm, zero webpack, one <script> tag
 - Custom autograd engine (vectors, not scalar confetti)
 - RoPE position encoding (GPT-3/4 inspired)
@@ -95,6 +96,15 @@ python3 -m http.server 8000
 ```
 
 That's it. One `<script>` tag. The organism creates its own UI, opens IndexedDB for memory, fetches `nonames.txt` for corpus (or uses built-in seed), and starts training in the background via cooperative `setTimeout` multitasking. Close the tab, reopen — it remembers everything.
+
+### Rust — The Fifth Element (molequla.rs)
+
+```bash
+# Requires: Rust toolchain (rustup)
+cargo run --release
+```
+
+Same organism as the other four, plus **distributed cognition metabolism**: a 5→8→5 Hebbian MLP that coordinates all running instances. The Rust version reads `mesh.db` to discover peers, collects their gamma/entropy/syntropy metrics, and computes blend weights for consensus. It's both organism *and* orchestrator — the grey cardinal of the swarm.
 
 ```
 molequla is alive. Type and press Enter. Ctrl+C to exit.
@@ -718,6 +728,6 @@ GNU GPLv3 — Because freedom matters.
 
 - [ariannamethod.ai](https://github.com/ariannamethod/ariannamethod.ai) — Arianna Method Language
 
-- **molequla** — Single-File Continual GPT (Python, Go, C, JavaScript)
+- **molequla** — Single-File Continual GPT (Python, Go, C, JavaScript, Rust)
 
-*Patterns over parameters. Emergence over engineering. The organism continues.*
+*Five elements. One mind. Patterns over parameters. Emergence over engineering. The organism continues.*

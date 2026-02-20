@@ -1,0 +1,2192 @@
+// molequla.rs
+// The Fifth Element: a GPT organism + distributed cognition metabolism.
+// Rust port — full feature parity with Go/C/Python/JS + mesh coordinator.
+// In the beginning there was nonames.txt. And Rust said, "hold my borrow checker."
+
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::fs;
+use std::io::{self, BufRead, Write as IoWrite};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
+use rand::Rng;
+use rand::seq::SliceRandom;
+use rusqlite::{Connection, params};
+use serde::{Serialize, Deserialize};
+
+thread_local! { static GRAD_ENABLED: Cell<bool> = Cell::new(true); }
+fn grad_on() -> bool { GRAD_ENABLED.with(|g| g.get()) }
+fn set_grad(v: bool) { GRAD_ENABLED.with(|g| g.set(v)); }
+fn now_secs() -> f64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64() }
+
+// ============================================================
+// 0) CONFIG
+// ============================================================
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Config {
+    corpus_path: String, db_path: String, ckpt_path: String,
+    max_corpus_lines: usize, max_line_chars: usize, min_new_chars: usize,
+    tie_embeddings: bool,
+    n_layer: usize, n_embd: usize, n_head: usize, block_size: usize,
+    growth_stages: Vec<[usize; 4]>, freeze_after_growth_steps: usize,
+    warmup_steps: usize, micro_steps: usize,
+    learning_rate: f64, beta1: f64, beta2: f64, eps_adam: f64, grad_clip: f64,
+    freeze_base_after_warmup: bool, batch_size: usize,
+    lr_min: f64, max_total_steps: usize, cosine_warmup_steps: usize, accum_steps: usize,
+    delta_rank: usize, max_delta_modules: usize, delta_grow_prob: f64,
+    temperature: f64, top_k: usize, top_p: f64, min_p: f64, typical_p: f64,
+    max_gen_tokens: usize, min_gen_tokens: usize, repetition_guard: usize,
+    enable_bpe_after_chars: usize, bpe_num_merges: usize, bpe_retrain_every_chars: usize,
+    train_tick_seconds: f64,
+    head_types: Vec<String>, hybrid_alpha_init: f64,
+    gamma_sparsity_threshold: f64, noise_drift_threshold: f64, gamma_min_magnitude: f64,
+    entropy_low: f64, entropy_high: f64, entropy_temp_boost: f64, entropy_temp_focus: f64,
+    corpus_gen_max_tokens: usize, corpus_fade_k: f64, corpus_fade_threshold: f64,
+    qb_min_bytes: usize, qb_min_novelty: f64, qb_cooldown_seconds: f64,
+    syntropy_window: usize, field_deviation_ceiling: f64, field_deviation_floor: f64,
+    syntropy_lr_boost: f64, syntropy_lr_dampen: f64, syntropy_delta_grow_boost: f64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            corpus_path: "nonames.txt".into(), db_path: "memory.sqlite3".into(),
+            ckpt_path: "molequla_ckpt.json".into(),
+            max_corpus_lines: 8000, max_line_chars: 240, min_new_chars: 480,
+            tie_embeddings: true, n_layer: 1, n_embd: 16, n_head: 1, block_size: 96,
+            growth_stages: vec![[0,16,1,1],[20000,32,1,2],[50000,64,2,4],[200000,128,4,4],[500000,256,6,8]],
+            freeze_after_growth_steps: 200, warmup_steps: 1200, micro_steps: 32,
+            learning_rate: 0.01, beta1: 0.9, beta2: 0.99, eps_adam: 1e-8, grad_clip: 1.0,
+            freeze_base_after_warmup: true, batch_size: 4,
+            lr_min: 0.001, max_total_steps: 50000, cosine_warmup_steps: 200, accum_steps: 1,
+            delta_rank: 8, max_delta_modules: 12, delta_grow_prob: 0.08,
+            temperature: 0.85, top_k: 40, top_p: 0.92, min_p: 0.06, typical_p: 0.95,
+            max_gen_tokens: 180, min_gen_tokens: 16, repetition_guard: 4,
+            enable_bpe_after_chars: 20000, bpe_num_merges: 384, bpe_retrain_every_chars: 4000,
+            train_tick_seconds: 0.25,
+            head_types: vec!["content".into()], hybrid_alpha_init: 0.5,
+            gamma_sparsity_threshold: 0.01, noise_drift_threshold: -0.1, gamma_min_magnitude: 1e-6,
+            entropy_low: 0.5, entropy_high: 1.5, entropy_temp_boost: 1.2, entropy_temp_focus: 0.8,
+            corpus_gen_max_tokens: 120, corpus_fade_k: 3.0, corpus_fade_threshold: 1.5,
+            qb_min_bytes: 1024, qb_min_novelty: 0.15, qb_cooldown_seconds: 60.0,
+            syntropy_window: 8, field_deviation_ceiling: 12.0, field_deviation_floor: 0.1,
+            syntropy_lr_boost: 1.3, syntropy_lr_dampen: 0.6, syntropy_delta_grow_boost: 0.15,
+        }
+    }
+}
+
+fn head_types_for(n: usize) -> Vec<String> {
+    if n <= 1 { return vec!["content".into()]; }
+    if n == 2 { return vec!["content".into(), "hybrid".into()]; }
+    let half = n / 2;
+    let mut t: Vec<String> = (0..half).map(|_| "content".into()).collect();
+    t.extend((half..n).map(|_| "hybrid".into()));
+    t
+}
+
+// ============================================================
+// 1) AUTOGRAD TAPE — index-based computation graph
+// ============================================================
+
+type NodeId = usize;
+
+#[derive(Clone)]
+enum MatRef {
+    Base(String),
+    DeltaA(usize, String),
+    DeltaB(usize, String),
+}
+
+#[derive(Clone)]
+enum Op {
+    Leaf,
+    Add(NodeId, NodeId),
+    Sub(NodeId, NodeId),
+    Mul(NodeId, NodeId),
+    Scale(NodeId, f64),
+    AddScalar(NodeId, f64),
+    Neg(NodeId),
+    ReLU(NodeId),
+    SiLU(NodeId),
+    Dot(NodeId, NodeId),
+    MeanSq(NodeId),
+    Element(NodeId, usize),
+    Slice(NodeId, usize, usize),
+    Concat(Vec<(NodeId, usize)>),
+    MatVec { mat: MatRef, x: NodeId },
+    EmbedLookup { mat: MatRef, row: usize },
+    RMSNorm(NodeId),
+    CrossEntropy { logits: NodeId, target: usize },
+    SoftmaxAttn { logits: Vec<NodeId>, values: Vec<NodeId> },
+    RoPE { input: NodeId, pos: usize, head_dim: usize },
+    ScalarAdd(NodeId, NodeId),
+    ScalarMul(NodeId, NodeId),
+    ScalarMulF(NodeId, f64),
+    ScalarAddF(NodeId, f64),
+    Sigmoid(NodeId),
+}
+
+struct TapeNode {
+    data: Vec<f64>,
+    grad: Vec<f64>,
+    op: Op,
+    aux: Vec<f64>,
+}
+
+struct Tape {
+    nodes: Vec<TapeNode>,
+}
+
+impl Tape {
+    fn new() -> Self { Tape { nodes: Vec::with_capacity(4096) } }
+
+    fn push(&mut self, data: Vec<f64>, op: Op, aux: Vec<f64>) -> NodeId {
+        let n = data.len();
+        let grad = vec![0.0; n];
+        let id = self.nodes.len();
+        self.nodes.push(TapeNode { data, grad, op, aux });
+        id
+    }
+
+    fn leaf(&mut self, data: &[f64]) -> NodeId {
+        self.push(data.to_vec(), Op::Leaf, vec![])
+    }
+
+    fn scalar_leaf(&mut self, v: f64) -> NodeId {
+        self.push(vec![v], Op::Leaf, vec![])
+    }
+
+    fn data(&self, id: NodeId) -> &[f64] { &self.nodes[id].data }
+
+    fn embed_lookup(&mut self, mat: MatRef, row: usize, row_data: &[f64]) -> NodeId {
+        let op = if grad_on() { Op::EmbedLookup { mat, row } } else { Op::Leaf };
+        self.push(row_data.to_vec(), op, vec![])
+    }
+
+    fn add(&mut self, a: NodeId, b: NodeId) -> NodeId {
+        let n = self.nodes[a].data.len();
+        let mut d = vec![0.0; n];
+        for i in 0..n { d[i] = self.nodes[a].data[i] + self.nodes[b].data[i]; }
+        let op = if grad_on() { Op::Add(a, b) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn sub(&mut self, a: NodeId, b: NodeId) -> NodeId {
+        let n = self.nodes[a].data.len();
+        let mut d = vec![0.0; n];
+        for i in 0..n { d[i] = self.nodes[a].data[i] - self.nodes[b].data[i]; }
+        let op = if grad_on() { Op::Sub(a, b) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn mul(&mut self, a: NodeId, b: NodeId) -> NodeId {
+        let n = self.nodes[a].data.len();
+        let mut d = vec![0.0; n];
+        for i in 0..n { d[i] = self.nodes[a].data[i] * self.nodes[b].data[i]; }
+        let op = if grad_on() { Op::Mul(a, b) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn scale(&mut self, a: NodeId, s: f64) -> NodeId {
+        let d: Vec<f64> = self.nodes[a].data.iter().map(|&x| x * s).collect();
+        let op = if grad_on() { Op::Scale(a, s) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn neg(&mut self, a: NodeId) -> NodeId {
+        let d: Vec<f64> = self.nodes[a].data.iter().map(|&x| -x).collect();
+        let op = if grad_on() { Op::Neg(a) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn relu(&mut self, a: NodeId) -> NodeId {
+        let d: Vec<f64> = self.nodes[a].data.iter().map(|&x| x.max(0.0)).collect();
+        let op = if grad_on() { Op::ReLU(a) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn silu(&mut self, a: NodeId) -> NodeId {
+        let n = self.nodes[a].data.len();
+        let mut sig = vec![0.0; n];
+        let mut d = vec![0.0; n];
+        for i in 0..n {
+            sig[i] = 1.0 / (1.0 + (-self.nodes[a].data[i]).exp());
+            d[i] = self.nodes[a].data[i] * sig[i];
+        }
+        let op = if grad_on() { Op::SiLU(a) } else { Op::Leaf };
+        self.push(d, op, sig)
+    }
+
+    fn dot(&mut self, a: NodeId, b: NodeId) -> NodeId {
+        let n = self.nodes[a].data.len();
+        let mut val = 0.0;
+        for i in 0..n { val += self.nodes[a].data[i] * self.nodes[b].data[i]; }
+        let op = if grad_on() { Op::Dot(a, b) } else { Op::Leaf };
+        self.push(vec![val], op, vec![])
+    }
+
+    fn element(&mut self, a: NodeId, idx: usize) -> NodeId {
+        let val = self.nodes[a].data[idx];
+        let op = if grad_on() { Op::Element(a, idx) } else { Op::Leaf };
+        self.push(vec![val], op, vec![])
+    }
+
+    fn slice(&mut self, a: NodeId, start: usize, end: usize) -> NodeId {
+        let d = self.nodes[a].data[start..end].to_vec();
+        let op = if grad_on() { Op::Slice(a, start, end) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn concat(&mut self, parts: &[NodeId]) -> NodeId {
+        let mut d = Vec::new();
+        let mut info = Vec::new();
+        for &p in parts {
+            let len = self.nodes[p].data.len();
+            d.extend_from_slice(&self.nodes[p].data);
+            info.push((p, len));
+        }
+        let op = if grad_on() { Op::Concat(info) } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn matvec(&mut self, mat: MatRef, mat_data: &[Vec<f64>], x: NodeId) -> NodeId {
+        let nout = mat_data.len();
+        let nin = if nout > 0 { mat_data[0].len() } else { 0 };
+        let x_data = &self.nodes[x].data;
+        let mut d = vec![0.0; nout];
+        for i in 0..nout {
+            let mut s = 0.0;
+            for j in 0..nin { s += mat_data[i][j] * x_data[j]; }
+            d[i] = s;
+        }
+        let op = if grad_on() { Op::MatVec { mat, x } } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn rmsnorm(&mut self, a: NodeId) -> NodeId {
+        let x = &self.nodes[a].data;
+        let n = x.len();
+        let nf = n as f64;
+        let mut ms = 0.0;
+        for &v in x.iter() { ms += v * v; }
+        ms /= nf;
+        let rms = (ms + 1e-5).sqrt();
+        let inv = 1.0 / rms;
+        let d: Vec<f64> = x.iter().map(|&v| v * inv).collect();
+        let mut aux = vec![inv, ms];
+        aux.extend_from_slice(x);
+        let op = if grad_on() { Op::RMSNorm(a) } else { Op::Leaf };
+        self.push(d, op, aux)
+    }
+
+    fn cross_entropy(&mut self, logits: NodeId, target: usize) -> NodeId {
+        let x = &self.nodes[logits].data;
+        let max_v = x.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let mut exps: Vec<f64> = x.iter().map(|&v| (v - max_v).exp()).collect();
+        let sum_exp: f64 = exps.iter().sum();
+        for v in exps.iter_mut() { *v /= sum_exp; }
+        let loss = -(exps[target].max(1e-12)).ln();
+        let op = if grad_on() { Op::CrossEntropy { logits, target } } else { Op::Leaf };
+        self.push(vec![loss], op, exps)
+    }
+
+    fn softmax_attn(&mut self, logits: &[NodeId], values: &[NodeId]) -> NodeId {
+        let t = logits.len();
+        let dim = if t > 0 { self.nodes[values[0]].data.len() } else { 0 };
+        // softmax over logit scalars
+        let raw: Vec<f64> = logits.iter().map(|&l| self.nodes[l].data[0]).collect();
+        let max_v = raw.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let mut probs: Vec<f64> = raw.iter().map(|&v| (v - max_v).exp()).collect();
+        let sum_p: f64 = probs.iter().sum();
+        for p in probs.iter_mut() { *p /= sum_p; }
+        // weighted sum of values
+        let mut d = vec![0.0; dim];
+        for i in 0..t {
+            for j in 0..dim { d[j] += probs[i] * self.nodes[values[i]].data[j]; }
+        }
+        let op = if grad_on() {
+            Op::SoftmaxAttn { logits: logits.to_vec(), values: values.to_vec() }
+        } else { Op::Leaf };
+        self.push(d, op, probs)
+    }
+
+    fn rope(&mut self, input: NodeId, pos: usize, head_dim: usize) -> NodeId {
+        let x = &self.nodes[input].data;
+        let half = head_dim / 2;
+        let mut d = vec![0.0; head_dim];
+        for j in 0..half {
+            let theta = (pos as f64) / (10000.0_f64).powf(2.0 * j as f64 / head_dim as f64);
+            let (sin_t, cos_t) = theta.sin_cos();
+            d[2*j]   = x[2*j] * cos_t - x[2*j+1] * sin_t;
+            d[2*j+1] = x[2*j] * sin_t + x[2*j+1] * cos_t;
+        }
+        let op = if grad_on() { Op::RoPE { input, pos, head_dim } } else { Op::Leaf };
+        self.push(d, op, vec![])
+    }
+
+    fn scalar_add(&mut self, a: NodeId, b: NodeId) -> NodeId {
+        let v = self.nodes[a].data[0] + self.nodes[b].data[0];
+        let op = if grad_on() { Op::ScalarAdd(a, b) } else { Op::Leaf };
+        self.push(vec![v], op, vec![])
+    }
+
+    fn scalar_mul(&mut self, a: NodeId, b: NodeId) -> NodeId {
+        let v = self.nodes[a].data[0] * self.nodes[b].data[0];
+        let op = if grad_on() { Op::ScalarMul(a, b) } else { Op::Leaf };
+        self.push(vec![v], op, vec![])
+    }
+
+    fn scalar_mulf(&mut self, a: NodeId, f: f64) -> NodeId {
+        let v = self.nodes[a].data[0] * f;
+        let op = if grad_on() { Op::ScalarMulF(a, f) } else { Op::Leaf };
+        self.push(vec![v], op, vec![])
+    }
+
+    fn scalar_addf(&mut self, a: NodeId, f: f64) -> NodeId {
+        let v = self.nodes[a].data[0] + f;
+        let op = if grad_on() { Op::ScalarAddF(a, f) } else { Op::Leaf };
+        self.push(vec![v], op, vec![])
+    }
+
+    fn sigmoid(&mut self, a: NodeId) -> NodeId {
+        let v = 1.0 / (1.0 + (-self.nodes[a].data[0]).exp());
+        let op = if grad_on() { Op::Sigmoid(a) } else { Op::Leaf };
+        self.push(vec![v], op, vec![])
+    }
+
+    // ---- BACKWARD ----
+    fn backward(&mut self, root: NodeId, model: &mut GPT) {
+        self.nodes[root].grad[0] = 1.0;
+        for i in (0..=root).rev() {
+            let grad = self.nodes[i].grad.clone();
+            if grad.iter().all(|&g| g == 0.0) { continue; }
+            let op = self.nodes[i].op.clone();
+            let aux = self.nodes[i].aux.clone();
+            match op {
+                Op::Leaf => {},
+                Op::Add(a, b) => {
+                    for j in 0..grad.len() {
+                        self.nodes[a].grad[j] += grad[j];
+                        self.nodes[b].grad[j] += grad[j];
+                    }
+                },
+                Op::Sub(a, b) => {
+                    for j in 0..grad.len() {
+                        self.nodes[a].grad[j] += grad[j];
+                        self.nodes[b].grad[j] -= grad[j];
+                    }
+                },
+                Op::Mul(a, b) => {
+                    let ad = self.nodes[a].data.clone();
+                    let bd = self.nodes[b].data.clone();
+                    for j in 0..grad.len() {
+                        self.nodes[a].grad[j] += bd[j] * grad[j];
+                        self.nodes[b].grad[j] += ad[j] * grad[j];
+                    }
+                },
+                Op::Scale(a, s) => {
+                    for j in 0..grad.len() { self.nodes[a].grad[j] += s * grad[j]; }
+                },
+                Op::AddScalar(a, _) => {
+                    for j in 0..grad.len() { self.nodes[a].grad[j] += grad[j]; }
+                },
+                Op::Neg(a) => {
+                    for j in 0..grad.len() { self.nodes[a].grad[j] -= grad[j]; }
+                },
+                Op::ReLU(a) => {
+                    let ad = self.nodes[a].data.clone();
+                    for j in 0..grad.len() {
+                        if ad[j] > 0.0 { self.nodes[a].grad[j] += grad[j]; }
+                    }
+                },
+                Op::SiLU(a) => {
+                    let ad = self.nodes[a].data.clone();
+                    for j in 0..grad.len() {
+                        let sig = aux[j];
+                        self.nodes[a].grad[j] += (sig * (1.0 + ad[j] * (1.0 - sig))) * grad[j];
+                    }
+                },
+                Op::Dot(a, b) => {
+                    let ad = self.nodes[a].data.clone();
+                    let bd = self.nodes[b].data.clone();
+                    for j in 0..ad.len() {
+                        self.nodes[a].grad[j] += bd[j] * grad[0];
+                        self.nodes[b].grad[j] += ad[j] * grad[0];
+                    }
+                },
+                Op::MeanSq(a) => {
+                    let ad = self.nodes[a].data.clone();
+                    let nf = ad.len() as f64;
+                    for j in 0..ad.len() {
+                        self.nodes[a].grad[j] += (2.0 * ad[j] / nf) * grad[0];
+                    }
+                },
+                Op::Element(a, idx) => {
+                    self.nodes[a].grad[idx] += grad[0];
+                },
+                Op::Slice(a, start, _end) => {
+                    for j in 0..grad.len() {
+                        self.nodes[a].grad[start + j] += grad[j];
+                    }
+                },
+                Op::Concat(parts) => {
+                    let mut off = 0;
+                    for (nid, len) in parts {
+                        for j in 0..len { self.nodes[nid].grad[j] += grad[off + j]; }
+                        off += len;
+                    }
+                },
+                Op::MatVec { mat, x } => {
+                    let x_data = self.nodes[x].data.clone();
+                    let nout = grad.len();
+                    let nin = x_data.len();
+                    let mat_data = model.get_mat_data(&mat);
+                    // grad for x
+                    for r in 0..nout {
+                        for c in 0..nin {
+                            self.nodes[x].grad[c] += mat_data[r][c] * grad[r];
+                        }
+                    }
+                    // grad for matrix
+                    let mat_grad = model.get_mat_grad_mut(&mat);
+                    for r in 0..nout {
+                        for c in 0..nin {
+                            mat_grad[r][c] += x_data[c] * grad[r];
+                        }
+                    }
+                },
+                Op::EmbedLookup { mat, row } => {
+                    let mat_grad = model.get_mat_grad_mut(&mat);
+                    for j in 0..grad.len() { mat_grad[row][j] += grad[j]; }
+                },
+                Op::RMSNorm(a) => {
+                    let inv_rms = aux[0];
+                    let ms = aux[1];
+                    let orig_x = &aux[2..];
+                    let n = orig_x.len();
+                    let nf = n as f64;
+                    let mut dot_grad = 0.0;
+                    for j in 0..n { dot_grad += grad[j] * orig_x[j]; }
+                    let scale = dot_grad / (nf * (ms + 1e-5));
+                    for j in 0..n {
+                        self.nodes[a].grad[j] += inv_rms * grad[j] - scale * orig_x[j];
+                    }
+                },
+                Op::CrossEntropy { logits, target } => {
+                    let probs = &aux;
+                    for j in 0..probs.len() {
+                        let indicator = if j == target { 1.0 } else { 0.0 };
+                        self.nodes[logits].grad[j] += (probs[j] - indicator) * grad[0];
+                    }
+                },
+                Op::SoftmaxAttn { logits, values } => {
+                    let probs = &aux;
+                    let t = logits.len();
+                    let dim = grad.len();
+                    // grad for values
+                    for ti in 0..t {
+                        for j in 0..dim {
+                            self.nodes[values[ti]].grad[j] += probs[ti] * grad[j];
+                        }
+                    }
+                    // grad for logits via softmax jacobian
+                    let mut d_probs = vec![0.0; t];
+                    for ti in 0..t {
+                        let vd = &self.nodes[values[ti]].data;
+                        for j in 0..dim { d_probs[ti] += vd[j] * grad[j]; }
+                    }
+                    let sum_dp: f64 = (0..t).map(|ti| probs[ti] * d_probs[ti]).sum();
+                    for ti in 0..t {
+                        self.nodes[logits[ti]].grad[0] += probs[ti] * (d_probs[ti] - sum_dp);
+                    }
+                },
+                Op::RoPE { input, pos, head_dim } => {
+                    let half = head_dim / 2;
+                    for j in 0..half {
+                        let theta = (pos as f64) / (10000.0_f64).powf(2.0 * j as f64 / head_dim as f64);
+                        let (sin_t, cos_t) = theta.sin_cos();
+                        self.nodes[input].grad[2*j]   += grad[2*j] * cos_t + grad[2*j+1] * sin_t;
+                        self.nodes[input].grad[2*j+1] += -grad[2*j] * sin_t + grad[2*j+1] * cos_t;
+                    }
+                },
+                Op::ScalarAdd(a, b) => {
+                    self.nodes[a].grad[0] += grad[0];
+                    self.nodes[b].grad[0] += grad[0];
+                },
+                Op::ScalarMul(a, b) => {
+                    let av = self.nodes[a].data[0];
+                    let bv = self.nodes[b].data[0];
+                    self.nodes[a].grad[0] += bv * grad[0];
+                    self.nodes[b].grad[0] += av * grad[0];
+                },
+                Op::ScalarMulF(a, f) => {
+                    self.nodes[a].grad[0] += f * grad[0];
+                },
+                Op::ScalarAddF(a, _) => {
+                    self.nodes[a].grad[0] += grad[0];
+                },
+                Op::Sigmoid(a) => {
+                    let out = self.nodes[i].data[0];
+                    self.nodes[a].grad[0] += out * (1.0 - out) * grad[0];
+                },
+            }
+        }
+    }
+}
+
+// ============================================================
+// 2) MATRIX PARAM
+// ============================================================
+
+#[derive(Clone, Serialize, Deserialize)]
+struct MatrixParam {
+    data: Vec<Vec<f64>>,
+    #[serde(skip)]
+    grad: Vec<Vec<f64>>,
+    nout: usize,
+    nin: usize,
+}
+
+impl MatrixParam {
+    fn new(nout: usize, nin: usize, std: f64) -> Self {
+        let mut rng = rand::thread_rng();
+        let data: Vec<Vec<f64>> = (0..nout)
+            .map(|_| (0..nin).map(|_| rng.gen::<f64>() * std * 2.0 - std).collect())
+            .collect();
+        let grad = vec![vec![0.0; nin]; nout];
+        MatrixParam { data, grad, nout, nin }
+    }
+
+    fn zeros(nout: usize, nin: usize) -> Self {
+        MatrixParam {
+            data: vec![vec![0.0; nin]; nout],
+            grad: vec![vec![0.0; nin]; nout],
+            nout, nin,
+        }
+    }
+
+    fn row(&self, i: usize) -> &[f64] { &self.data[i] }
+
+    fn matvec_raw(&self, x: &[f64]) -> Vec<f64> {
+        let mut out = vec![0.0; self.nout];
+        for i in 0..self.nout {
+            let mut s = 0.0;
+            for j in 0..self.nin { s += self.data[i][j] * x[j]; }
+            out[i] = s;
+        }
+        out
+    }
+
+    fn grow_rows(&mut self, new_nout: usize, std: f64) {
+        let mut rng = rand::thread_rng();
+        while self.data.len() < new_nout {
+            self.data.push((0..self.nin).map(|_| rng.gen::<f64>() * std * 2.0 - std).collect());
+            self.grad.push(vec![0.0; self.nin]);
+        }
+        self.nout = new_nout;
+    }
+
+    fn grow_cols(&mut self, new_nin: usize, std: f64) {
+        let mut rng = rand::thread_rng();
+        for i in 0..self.nout {
+            while self.data[i].len() < new_nin {
+                self.data[i].push(rng.gen::<f64>() * std * 2.0 - std);
+                self.grad[i].push(0.0);
+            }
+        }
+        self.nin = new_nin;
+    }
+
+    fn zero_grad(&mut self) {
+        for row in self.grad.iter_mut() {
+            for v in row.iter_mut() { *v = 0.0; }
+        }
+    }
+
+    fn clip_grad(&mut self, clip: f64) {
+        let mut sq_sum = 0.0;
+        for row in &self.grad {
+            for &v in row { sq_sum += v * v; }
+        }
+        let norm = sq_sum.sqrt();
+        if norm > clip {
+            let scale = clip / norm;
+            for row in self.grad.iter_mut() {
+                for v in row.iter_mut() { *v *= scale; }
+            }
+        }
+    }
+
+    fn ensure_grad(&mut self) {
+        if self.grad.len() != self.nout {
+            self.grad = vec![vec![0.0; self.nin]; self.nout];
+        }
+    }
+}
+
+// ============================================================
+// 3) BPE TOKENIZER
+// ============================================================
+
+#[derive(Clone, Serialize, Deserialize)]
+struct MergePair { a: String, b: String }
+
+#[derive(Clone, Serialize, Deserialize)]
+struct EvolvingTokenizer {
+    tokens: Vec<String>,
+    stoi: HashMap<String, usize>,
+    vocab_size: usize,
+    bos: String, eos: String, pad: String,
+    bos_id: usize, eos_id: usize, pad_id: usize,
+    bpe_enabled: bool,
+    merges: Vec<MergePair>,
+    trained_chars: usize,
+}
+
+fn unicode_category(c: char) -> u8 {
+    if c.is_alphabetic() || c == '\'' { 0 } // L
+    else if c.is_numeric() { 1 } // N
+    else if c.is_whitespace() { 2 } // Z
+    else { 3 } // P
+}
+
+fn unicode_segment(text: &str) -> Vec<Vec<u8>> {
+    let mut segments = Vec::new();
+    let mut current = Vec::new();
+    let mut last_cat: Option<u8> = None;
+    for c in text.chars() {
+        let cat = unicode_category(c);
+        if last_cat.is_some() && last_cat != Some(cat) {
+            if !current.is_empty() { segments.push(current.clone()); current.clear(); }
+        }
+        let mut buf = [0u8; 4];
+        let s = c.encode_utf8(&mut buf);
+        current.extend_from_slice(s.as_bytes());
+        last_cat = Some(cat);
+    }
+    if !current.is_empty() { segments.push(current); }
+    segments
+}
+
+fn byte_to_token(b: u8) -> String { format!("0x{:02x}", b) }
+
+fn token_to_bytes(tok: &str) -> Vec<u8> {
+    if tok.starts_with("0x") {
+        tok.split('+').filter_map(|part| {
+            u8::from_str_radix(part.trim_start_matches("0x"), 16).ok()
+        }).collect()
+    } else {
+        vec![]
+    }
+}
+
+impl EvolvingTokenizer {
+    fn new(_docs: &[String]) -> Self {
+        let mut tokens: Vec<String> = (0..=255u8).map(|b| byte_to_token(b)).collect();
+        let bos = "<BOS>".to_string(); let eos = "<EOS>".to_string(); let pad = "<PAD>".to_string();
+        tokens.push(bos.clone()); tokens.push(eos.clone()); tokens.push(pad.clone());
+        let mut stoi = HashMap::new();
+        for (i, t) in tokens.iter().enumerate() { stoi.insert(t.clone(), i); }
+        let vocab_size = tokens.len();
+        EvolvingTokenizer {
+            bos_id: vocab_size - 3, eos_id: vocab_size - 2, pad_id: vocab_size - 1,
+            tokens, stoi, vocab_size,
+            bos, eos, pad,
+            bpe_enabled: false, merges: Vec::new(), trained_chars: 0,
+        }
+    }
+
+    fn add_token(&mut self, tok: String) -> usize {
+        if let Some(&id) = self.stoi.get(&tok) { return id; }
+        let id = self.tokens.len();
+        self.stoi.insert(tok.clone(), id);
+        self.tokens.push(tok);
+        self.vocab_size = self.tokens.len();
+        id
+    }
+
+    fn train_bpe(&mut self, docs: &[String], num_merges: usize) {
+        let all_text: String = docs.join(" ");
+        let segments = unicode_segment(&all_text);
+        // Build word list: each word = list of byte tokens
+        let mut words: Vec<Vec<String>> = segments.iter().map(|seg| {
+            seg.iter().map(|&b| byte_to_token(b)).collect()
+        }).collect();
+        // Merge loop
+        for _ in 0..num_merges {
+            let mut pair_counts: HashMap<(String, String), usize> = HashMap::new();
+            for word in &words {
+                for w in word.windows(2) {
+                    *pair_counts.entry((w[0].clone(), w[1].clone())).or_insert(0) += 1;
+                }
+            }
+            if pair_counts.is_empty() { break; }
+            let best = pair_counts.into_iter().max_by_key(|&(_, c)| c).unwrap().0;
+            let new_tok = format!("{}+{}", best.0, best.1);
+            self.add_token(new_tok.clone());
+            self.merges.push(MergePair { a: best.0.clone(), b: best.1.clone() });
+            // Apply merge to all words
+            for word in words.iter_mut() {
+                let mut i = 0;
+                while i + 1 < word.len() {
+                    if word[i] == best.0 && word[i+1] == best.1 {
+                        word[i] = new_tok.clone();
+                        word.remove(i + 1);
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+        }
+        self.bpe_enabled = true;
+    }
+
+    fn apply_bpe(&self, tokens: &[String]) -> Vec<String> {
+        if self.merges.is_empty() { return tokens.to_vec(); }
+        let rank: HashMap<(String,String), usize> = self.merges.iter().enumerate()
+            .map(|(i, m)| ((m.a.clone(), m.b.clone()), i)).collect();
+        let mut syms = tokens.to_vec();
+        loop {
+            if syms.len() < 2 { break; }
+            let mut best_rank = usize::MAX;
+            let mut best_i = 0;
+            for i in 0..syms.len()-1 {
+                if let Some(&r) = rank.get(&(syms[i].clone(), syms[i+1].clone())) {
+                    if r < best_rank { best_rank = r; best_i = i; }
+                }
+            }
+            if best_rank == usize::MAX { break; }
+            let merged = format!("{}+{}", syms[best_i], syms[best_i+1]);
+            syms[best_i] = merged;
+            syms.remove(best_i + 1);
+        }
+        syms
+    }
+
+    fn maybe_enable_bpe(&mut self, docs: &[String], cfg: &Config) -> bool {
+        let total_chars: usize = docs.iter().map(|d| d.len()).sum();
+        if !self.bpe_enabled && total_chars >= cfg.enable_bpe_after_chars {
+            self.train_bpe(docs, cfg.bpe_num_merges);
+            self.trained_chars = total_chars;
+            return true;
+        }
+        if self.bpe_enabled && total_chars >= self.trained_chars + cfg.bpe_retrain_every_chars {
+            self.train_bpe(docs, cfg.bpe_num_merges);
+            self.trained_chars = total_chars;
+            return true;
+        }
+        false
+    }
+
+    fn encode(&self, s: &str) -> Vec<usize> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() { return vec![self.bos_id, self.eos_id]; }
+        let segments = unicode_segment(trimmed);
+        let mut ids = vec![self.bos_id];
+        for seg in &segments {
+            let byte_toks: Vec<String> = seg.iter().map(|&b| byte_to_token(b)).collect();
+            let toks = if self.bpe_enabled { self.apply_bpe(&byte_toks) } else { byte_toks };
+            for t in &toks {
+                if let Some(&id) = self.stoi.get(t) { ids.push(id); }
+            }
+        }
+        ids.push(self.eos_id);
+        ids
+    }
+
+    fn decode(&self, ids: &[usize]) -> String {
+        let mut bytes = Vec::new();
+        for &id in ids {
+            if id == self.bos_id || id == self.pad_id { continue; }
+            if id == self.eos_id { break; }
+            if id < self.tokens.len() {
+                bytes.extend(token_to_bytes(&self.tokens[id]));
+            }
+        }
+        String::from_utf8_lossy(&bytes).trim().to_string()
+    }
+}
+
+// ============================================================
+// 4) DELTA ADAPTERS (LoRA)
+// ============================================================
+
+#[derive(Clone, Serialize, Deserialize)]
+struct DeltaAdapter {
+    a: MatrixParam,  // nout x rank
+    b: MatrixParam,  // rank x nin
+}
+
+impl DeltaAdapter {
+    fn new(nout: usize, nin: usize, rank: usize, std: f64) -> Self {
+        DeltaAdapter { a: MatrixParam::new(nout, rank, std), b: MatrixParam::new(rank, nin, std) }
+    }
+
+    fn apply_raw(&self, x: &[f64]) -> Vec<f64> {
+        let bx = self.b.matvec_raw(x);
+        self.a.matvec_raw(&bx)
+    }
+
+    fn grow_dims(&mut self, new_nout: usize, new_nin: usize) {
+        self.a.grow_rows(new_nout, 0.01);
+        self.b.grow_cols(new_nin, 0.01);
+    }
+}
+
+type DeltaModule = HashMap<String, DeltaAdapter>;
+
+// ============================================================
+// 5) GPT MODEL
+// ============================================================
+
+struct AdamState {
+    m: Vec<Vec<f64>>,
+    v: Vec<Vec<f64>>,
+    t: usize,
+}
+
+impl AdamState {
+    fn new(nout: usize, nin: usize) -> Self {
+        AdamState { m: vec![vec![0.0; nin]; nout], v: vec![vec![0.0; nin]; nout], t: 0 }
+    }
+}
+
+struct GPT {
+    cfg: Config,
+    tok: EvolvingTokenizer,
+    n_layer: usize, n_embd: usize, n_head: usize, head_dim: usize, block_size: usize,
+    base: HashMap<String, MatrixParam>,
+    deltas: Vec<DeltaModule>,
+    active_alpha: Vec<f64>,
+    adam_base: HashMap<String, AdamState>,
+    adam_delta: Vec<HashMap<String, (AdamState, AdamState)>>, // per delta: name -> (adam_A, adam_B)
+    init_embed_snapshot: Vec<Vec<f64>>,
+    residual_alpha: f64,
+    global_step: usize,
+    syntropy_temp_offset: f64,
+    growth_freeze_remaining: i32,
+    head_types: Vec<String>,
+}
+
+impl GPT {
+    fn new(tok: EvolvingTokenizer, cfg: &Config) -> Self {
+        let ne = cfg.n_embd;
+        let nl = cfg.n_layer;
+        let nh = cfg.n_head;
+        let hd = ne / nh;
+        let bs = cfg.block_size;
+        let vs = tok.vocab_size;
+        let std_e = 0.02;
+        let std_l = 0.02 / (nl as f64).sqrt().max(1.0);
+
+        let mut base = HashMap::new();
+        base.insert("wte".into(), MatrixParam::new(vs, ne, std_e));
+        base.insert("wpe".into(), MatrixParam::new(bs, ne, std_e));
+        if !cfg.tie_embeddings {
+            base.insert("lm_head".into(), MatrixParam::new(vs, ne, std_l));
+        }
+        let htypes = head_types_for(nh);
+        for li in 0..nl {
+            let p = format!("l{}", li);
+            base.insert(format!("{}.wq", p), MatrixParam::new(ne, ne, std_l));
+            base.insert(format!("{}.wk", p), MatrixParam::new(ne, ne, std_l));
+            base.insert(format!("{}.wv", p), MatrixParam::new(ne, ne, std_l));
+            base.insert(format!("{}.wo", p), MatrixParam::new(ne, ne, std_l));
+            base.insert(format!("{}.fc_g", p), MatrixParam::new(4*ne, ne, std_l));
+            base.insert(format!("{}.fc_v", p), MatrixParam::new(4*ne, ne, std_l));
+            base.insert(format!("{}.fc2", p), MatrixParam::new(ne, 4*ne, std_l));
+            for hi in 0..nh {
+                if htypes[hi] == "hybrid" || htypes[hi] == "rrpram" {
+                    base.insert(format!("{}.h{}.w_pattern", p, hi), MatrixParam::new(bs, hd, std_l));
+                    let mut alpha_mat = MatrixParam::zeros(1, 1);
+                    alpha_mat.data[0][0] = cfg.hybrid_alpha_init;
+                    base.insert(format!("{}.h{}.alpha", p, hi), alpha_mat);
+                }
+            }
+        }
+        let snapshot: Vec<Vec<f64>> = base["wte"].data.clone();
+
+        let mut gpt = GPT {
+            cfg: cfg.clone(), tok, n_layer: nl, n_embd: ne, n_head: nh,
+            head_dim: hd, block_size: bs, base,
+            deltas: Vec::new(), active_alpha: Vec::new(),
+            adam_base: HashMap::new(),
+            adam_delta: Vec::new(),
+            init_embed_snapshot: snapshot,
+            residual_alpha: 1.0 / (nl as f64).sqrt().max(1.0),
+            global_step: 0, syntropy_temp_offset: 0.0,
+            growth_freeze_remaining: 0, head_types: htypes,
+        };
+        gpt.add_delta_module(1.0);
+        gpt
+    }
+
+    fn lm_head_name(&self) -> String {
+        if self.cfg.tie_embeddings { "wte".into() } else { "lm_head".into() }
+    }
+
+    fn get_mat_data(&self, r: &MatRef) -> &Vec<Vec<f64>> {
+        match r {
+            MatRef::Base(name) => &self.base[name].data,
+            MatRef::DeltaA(di, name) => &self.deltas[*di][name].a.data,
+            MatRef::DeltaB(di, name) => &self.deltas[*di][name].b.data,
+        }
+    }
+
+    fn get_mat_grad_mut(&mut self, r: &MatRef) -> &mut Vec<Vec<f64>> {
+        match r {
+            MatRef::Base(name) => &mut self.base.get_mut(name).unwrap().grad,
+            MatRef::DeltaA(di, name) => &mut self.deltas[*di].get_mut(name).unwrap().a.grad,
+            MatRef::DeltaB(di, name) => &mut self.deltas[*di].get_mut(name).unwrap().b.grad,
+        }
+    }
+
+    fn add_delta_module(&mut self, alpha: f64) {
+        if self.deltas.len() >= self.cfg.max_delta_modules { return; }
+        let ne = self.n_embd;
+        let r = self.cfg.delta_rank;
+        let std = 0.01;
+        let mut dm = DeltaModule::new();
+        for li in 0..self.n_layer {
+            let p = format!("l{}", li);
+            for suffix in &["wq", "wk", "wv", "wo"] {
+                dm.insert(format!("{}.{}", p, suffix), DeltaAdapter::new(ne, ne, r, std));
+            }
+            dm.insert(format!("{}.fc_g", p), DeltaAdapter::new(4*ne, ne, r, std));
+            dm.insert(format!("{}.fc_v", p), DeltaAdapter::new(4*ne, ne, r, std));
+            dm.insert(format!("{}.fc2", p), DeltaAdapter::new(ne, 4*ne, r, std));
+        }
+        dm.insert("lm_head".into(), DeltaAdapter::new(self.tok.vocab_size, ne, r, std));
+        self.deltas.push(dm);
+        self.active_alpha.push(alpha);
+        self.adam_delta.push(HashMap::new());
+    }
+
+    fn apply_with_deltas_raw(&self, name: &str, x: &[f64]) -> Vec<f64> {
+        let base_name = if name == "lm_head" { self.lm_head_name() } else { name.to_string() };
+        let mut out = self.base[&base_name].matvec_raw(x);
+        for (di, dm) in self.deltas.iter().enumerate() {
+            if let Some(adapter) = dm.get(name) {
+                let delta_out = adapter.apply_raw(x);
+                let alpha = self.active_alpha[di];
+                for j in 0..out.len() { out[j] += alpha * delta_out[j]; }
+            }
+        }
+        out
+    }
+
+    fn apply_with_deltas_tape(&self, tape: &mut Tape, name: &str, x: NodeId) -> NodeId {
+        let base_name = if name == "lm_head" { self.lm_head_name() } else { name.to_string() };
+        let mut out = tape.matvec(MatRef::Base(base_name), &self.base[&if name == "lm_head" { self.lm_head_name() } else { name.to_string() }].data, x);
+        for (di, dm) in self.deltas.iter().enumerate() {
+            if let Some(adapter) = dm.get(name) {
+                let bx = tape.matvec(MatRef::DeltaB(di, name.to_string()), &adapter.b.data, x);
+                let abx = tape.matvec(MatRef::DeltaA(di, name.to_string()), &adapter.a.data, bx);
+                let scaled = tape.scale(abx, self.active_alpha[di]);
+                out = tape.add(out, scaled);
+            }
+        }
+        out
+    }
+
+    // Forward step for inference (no KV cache version — full sequence)
+    fn forward_infer(&self, token_ids: &[usize]) -> Vec<Vec<f64>> {
+        let seq_len = token_ids.len();
+        let ne = self.n_embd;
+        let nh = self.n_head;
+        let hd = self.head_dim;
+        let ra = self.residual_alpha;
+
+        // Embed all tokens
+        let mut xs: Vec<Vec<f64>> = token_ids.iter().enumerate().map(|(pos, &tid)| {
+            let wte = self.base["wte"].row(tid);
+            let wpe = self.base["wpe"].row(pos % self.block_size);
+            let mut x = vec![0.0; ne];
+            for j in 0..ne { x[j] = wte[j] + wpe[j]; }
+            x
+        }).collect();
+
+        for li in 0..self.n_layer {
+            let p = format!("l{}", li);
+            // Pre-attention RMSNorm + QKV
+            let mut qs = Vec::with_capacity(seq_len);
+            let mut ks = Vec::with_capacity(seq_len);
+            let mut vs = Vec::with_capacity(seq_len);
+            let x_residuals: Vec<Vec<f64>> = xs.clone();
+
+            for t in 0..seq_len {
+                let xn = rmsnorm_raw(&xs[t]);
+                qs.push(self.apply_with_deltas_raw(&format!("{}.wq", p), &xn));
+                ks.push(self.apply_with_deltas_raw(&format!("{}.wk", p), &xn));
+                vs.push(self.apply_with_deltas_raw(&format!("{}.wv", p), &xn));
+            }
+
+            // Attention per head
+            let mut attn_outs: Vec<Vec<f64>> = vec![vec![0.0; ne]; seq_len];
+            for h in 0..nh {
+                let hs = h * hd;
+                let he = hs + hd;
+                for t in 0..seq_len {
+                    // Compute attention weights for position t
+                    let qh = rope_raw(&qs[t][hs..he], t, hd);
+                    let mut logits = Vec::with_capacity(t + 1);
+                    for s in 0..=t {
+                        let kh = rope_raw(&ks[s][hs..he], s, hd);
+                        let mut dot = 0.0;
+                        for j in 0..hd { dot += qh[j] * kh[j]; }
+                        logits.push(dot / (hd as f64).sqrt());
+                    }
+                    // Softmax
+                    let probs = softmax_raw(&logits);
+                    // Weighted sum of values
+                    let mut head_out = vec![0.0; hd];
+                    for s in 0..=t {
+                        for j in 0..hd { head_out[j] += probs[s] * vs[s][hs + j]; }
+                    }
+                    for j in 0..hd { attn_outs[t][hs + j] = head_out[j]; }
+                }
+            }
+
+            // Apply wo + residual
+            for t in 0..seq_len {
+                let wo_out = self.apply_with_deltas_raw(&format!("{}.wo", p), &attn_outs[t]);
+                for j in 0..ne { xs[t] = x_residuals[t].clone(); xs[t][j] += ra * wo_out[j]; }
+            }
+
+            // MLP: SwiGLU
+            let x_residuals2: Vec<Vec<f64>> = xs.clone();
+            for t in 0..seq_len {
+                let xn = rmsnorm_raw(&xs[t]);
+                let gate = self.apply_with_deltas_raw(&format!("{}.fc_g", p), &xn);
+                let val = self.apply_with_deltas_raw(&format!("{}.fc_v", p), &xn);
+                let mut gated = vec![0.0; gate.len()];
+                for j in 0..gate.len() {
+                    let sig = 1.0 / (1.0 + (-gate[j]).exp());
+                    gated[j] = (gate[j] * sig) * val[j]; // SiLU(gate) * val
+                }
+                let mlp_out = self.apply_with_deltas_raw(&format!("{}.fc2", p), &gated);
+                xs[t] = x_residuals2[t].clone();
+                for j in 0..ne { xs[t][j] += ra * mlp_out[j]; }
+            }
+        }
+
+        // Final RMSNorm + LM head
+        let mut all_logits = Vec::with_capacity(seq_len);
+        for t in 0..seq_len {
+            let xn = rmsnorm_raw(&xs[t]);
+            all_logits.push(self.apply_with_deltas_raw("lm_head", &xn));
+        }
+        all_logits
+    }
+
+    // Forward step for training (tape-based, single sequence)
+    fn loss_on_sequence(&self, tape: &mut Tape, ids: &[usize]) -> NodeId {
+        let len = ids.len() - 1;
+        let ne = self.n_embd;
+        let nh = self.n_head;
+        let hd = self.head_dim;
+        let ra = self.residual_alpha;
+
+        // Embed
+        let mut x_nodes: Vec<NodeId> = ids[..len].iter().enumerate().map(|(pos, &tid)| {
+            let te = tape.embed_lookup(MatRef::Base("wte".into()), tid, self.base["wte"].row(tid));
+            let pe = tape.embed_lookup(MatRef::Base("wpe".into()), pos % self.block_size,
+                                        self.base["wpe"].row(pos % self.block_size));
+            tape.add(te, pe)
+        }).collect();
+
+        for li in 0..self.n_layer {
+            let p = format!("l{}", li);
+            let x_res: Vec<NodeId> = x_nodes.clone();
+
+            // RMSNorm + QKV for all positions
+            let mut qs = Vec::with_capacity(len);
+            let mut ks = Vec::with_capacity(len);
+            let mut vs_n = Vec::with_capacity(len);
+            for t in 0..len {
+                let xn = tape.rmsnorm(x_nodes[t]);
+                qs.push(self.apply_with_deltas_tape(tape, &format!("{}.wq", p), xn));
+                ks.push(self.apply_with_deltas_tape(tape, &format!("{}.wk", p), xn));
+                vs_n.push(self.apply_with_deltas_tape(tape, &format!("{}.wv", p), xn));
+            }
+
+            // Attention per head
+            let mut head_concat = vec![Vec::new(); len];
+            for h in 0..nh {
+                let hs = h * hd;
+                let he = hs + hd;
+                for t in 0..len {
+                    let qh = tape.slice(qs[t], hs, he);
+                    let qh_r = tape.rope(qh, t, hd);
+                    let mut logit_nodes = Vec::with_capacity(t + 1);
+                    let mut val_nodes = Vec::with_capacity(t + 1);
+                    for s in 0..=t {
+                        let kh = tape.slice(ks[s], hs, he);
+                        let kh_r = tape.rope(kh, s, hd);
+                        let dot_val = tape.dot(qh_r, kh_r);
+                        let scaled = tape.scalar_mulf(dot_val, 1.0 / (hd as f64).sqrt());
+                        logit_nodes.push(scaled);
+                        val_nodes.push(tape.slice(vs_n[s], hs, he));
+                    }
+                    let attn_out = tape.softmax_attn(&logit_nodes, &val_nodes);
+                    head_concat[t].push(attn_out);
+                }
+            }
+
+            // Concat heads + wo + residual
+            for t in 0..len {
+                let cat = tape.concat(&head_concat[t]);
+                let wo = self.apply_with_deltas_tape(tape, &format!("{}.wo", p), cat);
+                let wo_scaled = tape.scale(wo, ra);
+                x_nodes[t] = tape.add(x_res[t], wo_scaled);
+            }
+
+            // MLP
+            let x_res2: Vec<NodeId> = x_nodes.clone();
+            for t in 0..len {
+                let xn = tape.rmsnorm(x_nodes[t]);
+                let gate = self.apply_with_deltas_tape(tape, &format!("{}.fc_g", p), xn);
+                let gate_act = tape.silu(gate);
+                let val = self.apply_with_deltas_tape(tape, &format!("{}.fc_v", p), xn);
+                let gated = tape.mul(gate_act, val);
+                let mlp = self.apply_with_deltas_tape(tape, &format!("{}.fc2", p), gated);
+                let mlp_scaled = tape.scale(mlp, ra);
+                x_nodes[t] = tape.add(x_res2[t], mlp_scaled);
+            }
+        }
+
+        // Loss
+        let mut total_loss = tape.scalar_leaf(0.0);
+        for t in 0..len {
+            let xn = tape.rmsnorm(x_nodes[t]);
+            let logits = self.apply_with_deltas_tape(tape, "lm_head", xn);
+            let loss = tape.cross_entropy(logits, ids[t + 1]);
+            total_loss = tape.scalar_add(total_loss, loss);
+        }
+        tape.scalar_mulf(total_loss, 1.0 / len as f64)
+    }
+
+    fn maybe_expand_vocab(&mut self, new_vocab: usize) {
+        let old = self.base["wte"].nout;
+        if new_vocab <= old { return; }
+        let std = 0.02;
+        self.base.get_mut("wte").unwrap().grow_rows(new_vocab, std);
+        if !self.cfg.tie_embeddings {
+            self.base.get_mut("lm_head").unwrap().grow_rows(new_vocab, std);
+        }
+        for dm in &mut self.deltas {
+            if let Some(a) = dm.get_mut("lm_head") {
+                a.a.grow_rows(new_vocab, 0.01);
+            }
+        }
+        // Extend snapshot
+        while self.init_embed_snapshot.len() < new_vocab {
+            self.init_embed_snapshot.push(vec![0.0; self.n_embd]);
+        }
+    }
+
+    fn compute_gamma(&self) -> Vec<Vec<f64>> {
+        let wte = &self.base["wte"];
+        let n = wte.nout.min(self.init_embed_snapshot.len());
+        (0..n).map(|i| {
+            let ne = wte.nin;
+            (0..ne).map(|j| wte.data[i][j] - self.init_embed_snapshot[i][j]).collect()
+        }).collect()
+    }
+
+    fn gamma_contrastive_projection(&self) -> (Vec<f64>, f64) {
+        let gamma = self.compute_gamma();
+        if gamma.is_empty() { return (vec![], 0.0); }
+        let ne = self.n_embd;
+        let mut avg = vec![0.0; ne];
+        let mut count = 0;
+        for row in &gamma {
+            let norm: f64 = row.iter().map(|&v| v * v).sum::<f64>().sqrt();
+            if norm > 1e-10 {
+                for j in 0..ne { avg[j] += row[j] / norm; }
+                count += 1;
+            }
+        }
+        if count == 0 { return (vec![0.0; ne], 0.0); }
+        for v in avg.iter_mut() { *v /= count as f64; }
+        let mag: f64 = avg.iter().map(|&v| v * v).sum::<f64>().sqrt();
+        if mag > 1e-10 { for v in avg.iter_mut() { *v /= mag; } }
+        (avg, mag)
+    }
+
+    fn zero_all_grads(&mut self) {
+        for mat in self.base.values_mut() { mat.zero_grad(); }
+        for dm in &mut self.deltas {
+            for adapter in dm.values_mut() {
+                adapter.a.zero_grad();
+                adapter.b.zero_grad();
+            }
+        }
+    }
+
+    fn quick_loss(&self, docs: &[String], n: usize) -> f64 {
+        set_grad(false);
+        let mut rng = rand::thread_rng();
+        let mut total = 0.0;
+        let mut count = 0;
+        for _ in 0..n {
+            if docs.is_empty() { break; }
+            let doc = &docs[rng.gen_range(0..docs.len())];
+            let ids = self.tok.encode(doc);
+            if ids.len() < 3 { continue; }
+            let logits_seq = self.forward_infer(&ids[..ids.len()-1]);
+            for (t, logits) in logits_seq.iter().enumerate() {
+                let target = ids[t + 1];
+                let max_v = logits.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                let exps: Vec<f64> = logits.iter().map(|&v| (v - max_v).exp()).collect();
+                let sum_exp: f64 = exps.iter().sum();
+                total += -(exps[target] / sum_exp).max(1e-12).ln();
+            }
+            count += logits_seq.len();
+        }
+        set_grad(true);
+        if count > 0 { total / count as f64 } else { 10.0 }
+    }
+}
+
+// ============================================================
+// 6) RAW MATH HELPERS (no autograd)
+// ============================================================
+
+fn rmsnorm_raw(x: &[f64]) -> Vec<f64> {
+    let n = x.len() as f64;
+    let ms: f64 = x.iter().map(|&v| v * v).sum::<f64>() / n;
+    let inv = 1.0 / (ms + 1e-5).sqrt();
+    x.iter().map(|&v| v * inv).collect()
+}
+
+fn rope_raw(x: &[f64], pos: usize, head_dim: usize) -> Vec<f64> {
+    let half = head_dim / 2;
+    let mut out = vec![0.0; head_dim];
+    for j in 0..half {
+        let theta = (pos as f64) / (10000.0_f64).powf(2.0 * j as f64 / head_dim as f64);
+        let (sin_t, cos_t) = theta.sin_cos();
+        out[2*j]   = x[2*j] * cos_t - x[2*j+1] * sin_t;
+        out[2*j+1] = x[2*j] * sin_t + x[2*j+1] * cos_t;
+    }
+    out
+}
+
+fn softmax_raw(x: &[f64]) -> Vec<f64> {
+    let max_v = x.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let mut exps: Vec<f64> = x.iter().map(|&v| (v - max_v).exp()).collect();
+    let sum: f64 = exps.iter().sum();
+    for v in exps.iter_mut() { *v /= sum; }
+    exps
+}
+
+fn top_k_top_p_sample(probs: &[f64], k: usize, p: f64, min_p: f64, typical_p: f64) -> usize {
+    let n = probs.len();
+    let mut idx: Vec<usize> = (0..n).collect();
+    idx.sort_by(|&a, &b| probs[b].partial_cmp(&probs[a]).unwrap());
+    // Top-K
+    let k = k.min(n);
+    let mut idx = idx[..k].to_vec();
+    // Min-P
+    let max_prob = probs[idx[0]];
+    idx.retain(|&i| probs[i] >= min_p * max_prob);
+    if idx.is_empty() { return 0; }
+    // Typical-P
+    if typical_p < 1.0 && idx.len() > 1 {
+        let entropy: f64 = idx.iter().map(|&i| {
+            if probs[i] > 1e-12 { -probs[i] * probs[i].ln() } else { 0.0 }
+        }).sum();
+        let mut devs: Vec<(usize, f64)> = idx.iter().map(|&i| {
+            let info = if probs[i] > 1e-12 { -probs[i].ln() } else { 20.0 };
+            (i, (info - entropy).abs())
+        }).collect();
+        devs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let mut cum = 0.0;
+        let mut keep = Vec::new();
+        for (i, _) in &devs {
+            keep.push(*i);
+            cum += probs[*i];
+            if cum >= typical_p { break; }
+        }
+        idx = keep;
+    }
+    // Top-P (nucleus)
+    idx.sort_by(|&a, &b| probs[b].partial_cmp(&probs[a]).unwrap());
+    let mut cum = 0.0;
+    let mut nucleus = Vec::new();
+    for &i in &idx {
+        nucleus.push(i);
+        cum += probs[i];
+        if cum >= p { break; }
+    }
+    // Sample
+    let total: f64 = nucleus.iter().map(|&i| probs[i]).sum();
+    let mut rng = rand::thread_rng();
+    let mut r = rng.gen::<f64>() * total;
+    for &i in &nucleus {
+        r -= probs[i];
+        if r <= 0.0 { return i; }
+    }
+    *nucleus.last().unwrap_or(&0)
+}
+
+// ============================================================
+// 7) GENERATION
+// ============================================================
+
+impl GPT {
+    fn generate_sentence(&self, prompt: &str, corpus_field: Option<&CooccurField>, docs: &[String]) -> String {
+        set_grad(false);
+        let mut ids = self.tok.encode(prompt);
+        if ids.len() > self.block_size { ids = ids[ids.len()-self.block_size..].to_vec(); }
+        let cfg = &self.cfg;
+        let mut generated = Vec::new();
+        let mut recent: Vec<usize> = Vec::new();
+
+        for step in 0..cfg.max_gen_tokens {
+            let start = if ids.len() > self.block_size { ids.len() - self.block_size } else { 0 };
+            let window = &ids[start..];
+            let all_logits = self.forward_infer(window);
+            let logits = all_logits.last().unwrap();
+
+            // Entropy-adaptive temperature
+            let base_temp = cfg.temperature + self.syntropy_temp_offset;
+            let mut probs = softmax_raw(&logits.iter().map(|&v| v / base_temp).collect::<Vec<_>>());
+            let entropy: f64 = probs.iter().map(|&p| if p > 1e-12 { -p * p.ln() } else { 0.0 }).sum();
+            let mut t_mul = 1.0;
+            if entropy < cfg.entropy_low { t_mul = cfg.entropy_temp_boost; }
+            if entropy > cfg.entropy_high { t_mul = cfg.entropy_temp_focus; }
+            if (t_mul - 1.0).abs() > 0.001 {
+                probs = softmax_raw(&logits.iter().map(|&v| v / (base_temp * t_mul)).collect::<Vec<_>>());
+            }
+
+            // Corpus field blend
+            if let Some(field) = corpus_field {
+                let model_alpha = 1.0 / (1.0 + (-cfg.corpus_fade_k * (cfg.corpus_fade_threshold - entropy)).exp());
+                if model_alpha < 0.99 {
+                    let context: Vec<usize> = ids[ids.len().saturating_sub(3)..].to_vec();
+                    let corpus_probs = field.sample_distribution(&context, self.tok.vocab_size);
+                    let n = probs.len().min(corpus_probs.len());
+                    for j in 0..n {
+                        probs[j] = model_alpha * probs[j] + (1.0 - model_alpha) * corpus_probs[j];
+                    }
+                    let sum: f64 = probs.iter().sum();
+                    if sum > 0.0 { for p in probs.iter_mut() { *p /= sum; } }
+                }
+            }
+
+            let nxt = top_k_top_p_sample(&probs, cfg.top_k, cfg.top_p, cfg.min_p, cfg.typical_p);
+            if nxt == self.tok.eos_id && step >= cfg.min_gen_tokens { break; }
+            if nxt == self.tok.eos_id { continue; }
+
+            ids.push(nxt);
+            generated.push(nxt);
+            recent.push(nxt);
+
+            // Repetition guard
+            if recent.len() > cfg.repetition_guard * 2 {
+                let rg = cfg.repetition_guard;
+                let tail = &recent[recent.len()-rg*2..];
+                if tail[..rg] == tail[rg..] { break; }
+            }
+
+            // Sentence boundary
+            if step >= cfg.min_gen_tokens {
+                let decoded = self.tok.decode(&[nxt]);
+                if let Some(last_ch) = decoded.chars().last() {
+                    if last_ch == '.' || last_ch == '!' || last_ch == '?' { break; }
+                }
+            }
+        }
+        set_grad(true);
+        self.tok.decode(&generated)
+    }
+}
+
+// ============================================================
+// 8) TRAINING — Adam, cosine LR, train_steps
+// ============================================================
+
+fn cosine_lr(step: usize, cfg: &Config) -> f64 {
+    if step < cfg.cosine_warmup_steps {
+        cfg.lr_min + (cfg.learning_rate - cfg.lr_min) * (step as f64 / cfg.cosine_warmup_steps as f64)
+    } else {
+        let progress = (step as f64 / cfg.max_total_steps as f64).min(1.0);
+        cfg.lr_min + 0.5 * (cfg.learning_rate - cfg.lr_min) * (1.0 + (std::f64::consts::PI * progress).cos())
+    }
+}
+
+fn adam_step(mat: &mut MatrixParam, adam: &mut AdamState, lr: f64, cfg: &Config) {
+    mat.clip_grad(cfg.grad_clip);
+    adam.t += 1;
+    let b1c = 1.0 - cfg.beta1.powi(adam.t as i32);
+    let b2c = 1.0 - cfg.beta2.powi(adam.t as i32);
+    for i in 0..mat.nout {
+        for j in 0..mat.nin {
+            let g = mat.grad[i][j];
+            adam.m[i][j] = cfg.beta1 * adam.m[i][j] + (1.0 - cfg.beta1) * g;
+            adam.v[i][j] = cfg.beta2 * adam.v[i][j] + (1.0 - cfg.beta2) * g * g;
+            let mhat = adam.m[i][j] / b1c;
+            let vhat = adam.v[i][j] / b2c;
+            mat.data[i][j] -= lr * mhat / (vhat.sqrt() + cfg.eps_adam);
+            mat.grad[i][j] = 0.0;
+        }
+    }
+}
+
+fn train_steps(model: &mut GPT, docs: &[String], steps: usize, train_base: bool, train_delta: bool) {
+    let cfg = model.cfg.clone();
+    let mut rng = rand::thread_rng();
+    for step in 0..steps {
+        let mut tape = Tape::new();
+        // Batch loss with gradient accumulation
+        let mut batch_loss = 0.0;
+        for _micro in 0..cfg.accum_steps {
+            let mut seq_loss_sum = 0.0;
+            for _ in 0..cfg.batch_size {
+                if docs.is_empty() { continue; }
+                let doc = &docs[rng.gen_range(0..docs.len())];
+                let ids = model.tok.encode(doc);
+                if ids.len() < 3 { continue; }
+                let loss_node = model.loss_on_sequence(&mut tape, &ids);
+                let accum_scale = 1.0 / (cfg.accum_steps * cfg.batch_size) as f64;
+                let scaled = tape.scalar_mulf(loss_node, accum_scale);
+                tape.backward(scaled, model);
+                seq_loss_sum += tape.nodes[loss_node].data[0];
+                tape = Tape::new(); // reset tape, grads stay in MatrixParam
+            }
+            batch_loss = seq_loss_sum / cfg.batch_size as f64;
+        }
+
+        let lr = cosine_lr(model.global_step, &cfg);
+        model.global_step += 1;
+
+        // Adam step for base parameters
+        if train_base && model.growth_freeze_remaining <= 0 {
+            let base_names: Vec<String> = model.base.keys().cloned().collect();
+            for name in &base_names {
+                let mat = model.base.get_mut(name).unwrap();
+                let adam = model.adam_base.entry(name.clone())
+                    .or_insert_with(|| AdamState::new(mat.nout, mat.nin));
+                if adam.m.len() != mat.nout || (adam.m.len() > 0 && adam.m[0].len() != mat.nin) {
+                    *adam = AdamState::new(mat.nout, mat.nin);
+                }
+                adam_step(mat, adam, lr, &cfg);
+            }
+        }
+
+        // Adam step for delta parameters
+        if train_delta {
+            for di in 0..model.deltas.len() {
+                let adapter_names: Vec<String> = model.deltas[di].keys().cloned().collect();
+                for aname in &adapter_names {
+                    let adapter = model.deltas[di].get_mut(&*aname).unwrap();
+                    let adam_entry = model.adam_delta[di].entry(aname.clone())
+                        .or_insert_with(|| {
+                            (AdamState::new(adapter.a.nout, adapter.a.nin),
+                             AdamState::new(adapter.b.nout, adapter.b.nin))
+                        });
+                    adam_step(&mut adapter.a, &mut adam_entry.0, lr, &cfg);
+                    adam_step(&mut adapter.b, &mut adam_entry.1, lr, &cfg);
+                }
+            }
+        }
+
+        if model.growth_freeze_remaining > 0 { model.growth_freeze_remaining -= 1; }
+
+        if step % 100 == 0 {
+            eprintln!("[step {}/{}] loss={:.4} lr={:.6}", model.global_step, steps, batch_loss, lr);
+        }
+    }
+}
+
+// ============================================================
+// 9) CORPUS FIELD — cooccurrence statistics
+// ============================================================
+
+struct CooccurField {
+    unigram: HashMap<usize, f64>,
+    bigram: HashMap<usize, HashMap<usize, f64>>,
+    trigram: HashMap<(usize, usize), HashMap<usize, f64>>,
+    built: bool,
+}
+
+impl CooccurField {
+    fn new() -> Self {
+        CooccurField { unigram: HashMap::new(), bigram: HashMap::new(), trigram: HashMap::new(), built: false }
+    }
+
+    fn build(&mut self, tok: &EvolvingTokenizer, docs: &[String]) {
+        self.unigram.clear(); self.bigram.clear(); self.trigram.clear();
+        for doc in docs {
+            let ids = tok.encode(doc);
+            for (i, &id) in ids.iter().enumerate() {
+                *self.unigram.entry(id).or_insert(0.0) += 1.0;
+                if i > 0 {
+                    self.bigram.entry(ids[i-1]).or_default().entry(id).or_insert(0.0);
+                    *self.bigram.get_mut(&ids[i-1]).unwrap().get_mut(&id).unwrap() += 1.0;
+                }
+                if i > 1 {
+                    self.trigram.entry((ids[i-2], ids[i-1])).or_default().entry(id).or_insert(0.0);
+                    *self.trigram.get_mut(&(ids[i-2], ids[i-1])).unwrap().get_mut(&id).unwrap() += 1.0;
+                }
+            }
+        }
+        self.built = true;
+    }
+
+    fn sample_distribution(&self, context: &[usize], vocab_size: usize) -> Vec<f64> {
+        let mut dist = vec![0.0; vocab_size];
+        let len = context.len();
+        // Try trigram first
+        if len >= 2 {
+            let key = (context[len-2], context[len-1]);
+            if let Some(counts) = self.trigram.get(&key) {
+                let total: f64 = counts.values().sum();
+                if total > 0.0 {
+                    for (&tok, &c) in counts { if tok < vocab_size { dist[tok] = c / total; } }
+                    return dist;
+                }
+            }
+        }
+        // Bigram fallback
+        if len >= 1 {
+            if let Some(counts) = self.bigram.get(&context[len-1]) {
+                let total: f64 = counts.values().sum();
+                if total > 0.0 {
+                    for (&tok, &c) in counts { if tok < vocab_size { dist[tok] = c / total; } }
+                    return dist;
+                }
+            }
+        }
+        // Unigram fallback
+        let total: f64 = self.unigram.values().sum();
+        if total > 0.0 {
+            for (&tok, &c) in &self.unigram { if tok < vocab_size { dist[tok] = c / total; } }
+        }
+        dist
+    }
+}
+
+// ============================================================
+// 10) QUANTUM BUFFER
+// ============================================================
+
+struct QuantumBuffer {
+    accumulated_bytes: usize,
+    unique_tokens: HashMap<usize, bool>,
+    total_tokens: usize,
+    last_burst_time: f64,
+}
+
+impl QuantumBuffer {
+    fn new() -> Self {
+        QuantumBuffer { accumulated_bytes: 0, unique_tokens: HashMap::new(), total_tokens: 0, last_burst_time: 0.0 }
+    }
+    fn feed(&mut self, text: &str, tok: &EvolvingTokenizer) {
+        self.accumulated_bytes += text.len();
+        let ids = tok.encode(text);
+        for id in ids { self.unique_tokens.insert(id, true); self.total_tokens += 1; }
+    }
+    fn novelty(&self) -> f64 {
+        if self.total_tokens == 0 { 0.0 } else { self.unique_tokens.len() as f64 / self.total_tokens as f64 }
+    }
+    fn should_trigger(&self, cfg: &Config) -> bool {
+        let bytes_ok = self.accumulated_bytes >= cfg.qb_min_bytes;
+        let novelty_ok = self.novelty() >= cfg.qb_min_novelty;
+        let cooldown_ok = (now_secs() - self.last_burst_time) >= cfg.qb_cooldown_seconds;
+        (bytes_ok || novelty_ok) && cooldown_ok
+    }
+    fn reset(&mut self) {
+        self.accumulated_bytes = 0;
+        self.unique_tokens.clear();
+        self.total_tokens = 0;
+        self.last_burst_time = now_secs();
+    }
+}
+
+// ============================================================
+// 11) SYNTROPY TRACKER
+// ============================================================
+
+#[derive(Clone)]
+struct BurstRecord { action: String, loss_before: f64, loss_after: f64 }
+
+struct SyntropyTracker {
+    entropy_history: Vec<f64>,
+    syntropy_trend: f64,
+    field_deviation: f64,
+    last_action: String,
+    burst_history: Vec<BurstRecord>,
+}
+
+struct SyntropyDecision {
+    lr_multiplier: f64,
+    temp_offset: f64,
+    accum_override: usize,
+    delta_grow_override: Option<f64>,
+    action: String,
+}
+
+impl SyntropyTracker {
+    fn new() -> Self {
+        SyntropyTracker {
+            entropy_history: Vec::new(), syntropy_trend: 0.0, field_deviation: 0.0,
+            last_action: "steady".into(), burst_history: Vec::new(),
+        }
+    }
+
+    fn record_burst(&mut self, action: &str, loss_before: f64, loss_after: f64) {
+        self.burst_history.push(BurstRecord { action: action.into(), loss_before, loss_after });
+        if self.burst_history.len() > 16 { self.burst_history.remove(0); }
+    }
+
+    fn measure(&mut self, model: &GPT, docs: &[String], cfg: &Config) {
+        let entropy = model.quick_loss(docs, 8);
+        self.entropy_history.push(entropy);
+        if self.entropy_history.len() > cfg.syntropy_window {
+            self.entropy_history.remove(0);
+        }
+        // Compute trend via linear regression
+        let n = self.entropy_history.len();
+        if n >= 2 {
+            let mean_x = (n - 1) as f64 / 2.0;
+            let mean_y: f64 = self.entropy_history.iter().sum::<f64>() / n as f64;
+            let mut num = 0.0; let mut den = 0.0;
+            for (i, &y) in self.entropy_history.iter().enumerate() {
+                let dx = i as f64 - mean_x;
+                num += dx * (y - mean_y);
+                den += dx * dx;
+            }
+            self.syntropy_trend = if den > 0.0 { -num / den } else { 0.0 }; // negative slope = improving
+        }
+    }
+
+    fn decide(&self, cfg: &Config) -> SyntropyDecision {
+        let mut d = SyntropyDecision {
+            lr_multiplier: 1.0, temp_offset: 0.0, accum_override: 0,
+            delta_grow_override: None, action: "steady".into(),
+        };
+        let trend = self.syntropy_trend;
+        let dev = self.field_deviation;
+
+        if trend > 0.01 && dev > cfg.field_deviation_floor && dev < cfg.field_deviation_ceiling {
+            d.lr_multiplier = cfg.syntropy_lr_boost;
+            d.temp_offset = -0.05;
+            d.action = "boost".into();
+        } else if trend < -0.01 {
+            d.lr_multiplier = cfg.syntropy_lr_dampen;
+            d.temp_offset = 0.05;
+            d.action = "dampen".into();
+        } else if dev > cfg.field_deviation_ceiling {
+            d.lr_multiplier = 0.6;
+            d.temp_offset = -0.05;
+            d.action = "ground".into();
+        } else if dev < cfg.field_deviation_floor {
+            d.lr_multiplier = 1.3;
+            d.temp_offset = 0.05;
+            d.action = "explore".into();
+        }
+        d
+    }
+}
+
+// ============================================================
+// 12) SQLITE MEMORY
+// ============================================================
+
+fn init_db(path: &str) -> Connection {
+    let conn = Connection::open(path).expect("Failed to open SQLite");
+    conn.execute_batch("
+        PRAGMA journal_mode=WAL;
+        PRAGMA synchronous=NORMAL;
+        CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, role TEXT, text TEXT);
+        CREATE TABLE IF NOT EXISTS corpus_events(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, added_chars INTEGER, note TEXT);
+        CREATE TABLE IF NOT EXISTS growth(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, step INTEGER, vocab_size INTEGER, n_params INTEGER, n_deltas INTEGER, corpus_chars INTEGER, loss REAL, gamma_sparsity REAL, gamma_magnitude REAL, note TEXT);
+        CREATE TABLE IF NOT EXISTS syntropy_log(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, entropy_before REAL, entropy_after REAL, syntropy_delta REAL, field_deviation REAL, purpose_magnitude REAL, purpose_alignment REAL, action_taken TEXT, note TEXT);
+    ").expect("Failed to create tables");
+    conn
+}
+
+fn db_add_message(conn: &Connection, role: &str, text: &str) {
+    conn.execute("INSERT INTO messages(ts,role,text) VALUES(?1,?2,?3)",
+        params![now_secs(), role, text]).ok();
+}
+
+fn db_recent_messages(conn: &Connection, limit: usize) -> Vec<(String, String)> {
+    let mut stmt = conn.prepare("SELECT role, text FROM messages ORDER BY id DESC LIMIT ?1").unwrap();
+    let rows: Vec<(String, String)> = stmt.query_map(params![limit], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    }).unwrap().filter_map(|r| r.ok()).collect();
+    rows.into_iter().rev().collect()
+}
+
+fn build_prompt(conn: &Connection, user_text: &str) -> String {
+    let msgs = db_recent_messages(conn, 14);
+    let mut prompt = String::new();
+    for (role, text) in &msgs {
+        let tag = if role == "user" { "H" } else { "A" };
+        prompt.push_str(&format!("{}: {}\n", tag, text));
+    }
+    prompt.push_str(&format!("H: {}\nA:", user_text));
+    prompt
+}
+
+// ============================================================
+// 13) SWARM REGISTRY
+// ============================================================
+
+struct SwarmRegistry {
+    organism_id: String,
+    swarm_dir: String,
+    mesh_db: Option<Connection>,
+}
+
+impl SwarmRegistry {
+    fn new(id: &str) -> Self {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let dir = format!("{}/.molequla/swarm", home);
+        SwarmRegistry { organism_id: id.into(), swarm_dir: dir, mesh_db: None }
+    }
+
+    fn register(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        fs::create_dir_all(&self.swarm_dir)?;
+        let db_path = format!("{}/mesh.db", self.swarm_dir);
+        let conn = Connection::open(&db_path)?;
+        conn.execute_batch("
+            PRAGMA journal_mode=WAL;
+            CREATE TABLE IF NOT EXISTS organisms(id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, parent_id TEXT, status TEXT DEFAULT 'alive', gamma_direction BLOB, gamma_magnitude REAL, rrpram_signature BLOB);
+            CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT, to_id TEXT, type TEXT, payload TEXT, ts REAL);
+        ")?;
+        let pid = std::process::id();
+        conn.execute("INSERT OR REPLACE INTO organisms(id,pid,status,last_heartbeat) VALUES(?1,?2,'alive',?3)",
+            params![self.organism_id, pid, now_secs()])?;
+        self.mesh_db = Some(conn);
+        Ok(())
+    }
+
+    fn heartbeat(&self, stage: usize, n_params: usize, syntropy: f64, entropy: f64,
+                 gamma_dir: Option<&[u8]>, gamma_mag: f64) {
+        if let Some(ref db) = self.mesh_db {
+            db.execute("UPDATE organisms SET stage=?1,n_params=?2,syntropy=?3,entropy=?4,last_heartbeat=?5,gamma_magnitude=?6 WHERE id=?7",
+                params![stage, n_params, syntropy, entropy, now_secs(), gamma_mag, self.organism_id]).ok();
+        }
+    }
+
+    fn discover_peers(&self) -> Vec<(String, f64, f64)> {
+        let mut peers = Vec::new();
+        if let Some(ref db) = self.mesh_db {
+            if let Ok(mut stmt) = db.prepare("SELECT id,syntropy,entropy FROM organisms WHERE status='alive' AND id!=?1 AND last_heartbeat>?2") {
+                let cutoff = now_secs() - 120.0;
+                let rows = stmt.query_map(params![self.organism_id, cutoff], |row| {
+                    Ok((row.get::<_,String>(0)?, row.get::<_,f64>(1)?, row.get::<_,f64>(2)?))
+                });
+                if let Ok(rows) = rows { for r in rows { if let Ok(p) = r { peers.push(p); } } }
+            }
+        }
+        peers
+    }
+
+    fn unregister(&self) {
+        if let Some(ref db) = self.mesh_db {
+            db.execute("UPDATE organisms SET status='dead' WHERE id=?1", params![self.organism_id]).ok();
+        }
+    }
+}
+
+// ============================================================
+// 14) METABOLISM — Distributed Cognition Coordinator (RUST-ONLY)
+// ============================================================
+
+struct MetabolismMLP {
+    w1: Vec<Vec<f64>>,  // hidden x input (8 x 5)
+    w2: Vec<Vec<f64>>,  // output x hidden (5 x 8)
+    lr: f64,
+}
+
+impl MetabolismMLP {
+    fn new(n_elements: usize) -> Self {
+        let mut rng = rand::thread_rng();
+        let hidden = 8;
+        let w1: Vec<Vec<f64>> = (0..hidden).map(|_| (0..n_elements).map(|_| rng.gen::<f64>() * 0.1 - 0.05).collect()).collect();
+        let w2: Vec<Vec<f64>> = (0..n_elements).map(|_| (0..hidden).map(|_| rng.gen::<f64>() * 0.1 - 0.05).collect()).collect();
+        MetabolismMLP { w1, w2, lr: 0.01 }
+    }
+
+    fn forward(&self, inputs: &[f64]) -> Vec<f64> {
+        // Hidden layer with tanh
+        let hidden: Vec<f64> = self.w1.iter().map(|row| {
+            let s: f64 = row.iter().zip(inputs).map(|(w, x)| w * x).sum();
+            s.tanh()
+        }).collect();
+        // Output layer with softmax
+        let raw: Vec<f64> = self.w2.iter().map(|row| {
+            row.iter().zip(&hidden).map(|(w, h)| w * h).sum()
+        }).collect();
+        softmax_raw(&raw)
+    }
+
+    fn hebbian_update(&mut self, inputs: &[f64], outputs: &[f64]) {
+        // Hebbian: dw = lr * output * input (correlation)
+        let hidden: Vec<f64> = self.w1.iter().map(|row| {
+            let s: f64 = row.iter().zip(inputs).map(|(w, x)| w * x).sum();
+            s.tanh()
+        }).collect();
+        for i in 0..self.w1.len() {
+            for j in 0..inputs.len() {
+                self.w1[i][j] += self.lr * hidden[i] * inputs[j];
+            }
+        }
+        for i in 0..self.w2.len() {
+            for j in 0..hidden.len() {
+                self.w2[i][j] += self.lr * outputs[i] * hidden[j];
+            }
+        }
+    }
+}
+
+struct Metabolism {
+    mlp: MetabolismMLP,
+    n_elements: usize,
+}
+
+impl Metabolism {
+    fn new(n_elements: usize) -> Self {
+        Metabolism { mlp: MetabolismMLP::new(n_elements), n_elements }
+    }
+
+    fn compute_blend_weights(&self, peer_entropies: &[f64]) -> Vec<f64> {
+        if peer_entropies.is_empty() { return vec![]; }
+        // Normalize inputs to [0,1]
+        let max_e = peer_entropies.iter().cloned().fold(f64::NEG_INFINITY, f64::max).max(0.01);
+        let inputs: Vec<f64> = peer_entropies.iter().map(|&e| e / max_e).collect();
+        self.mlp.forward(&inputs)
+    }
+
+    fn learn_from_consensus(&mut self, inputs: &[f64], chosen_weights: &[f64]) {
+        self.mlp.hebbian_update(inputs, chosen_weights);
+    }
+}
+
+// ============================================================
+// 15) CHECKPOINT SAVE/LOAD
+// ============================================================
+
+#[derive(Serialize, Deserialize)]
+struct CheckpointData {
+    cfg: Config,
+    tokenizer: EvolvingTokenizer,
+    base: HashMap<String, Vec<Vec<f64>>>,
+    alpha: Vec<f64>,
+    deltas: Vec<HashMap<String, (Vec<Vec<f64>>, Vec<Vec<f64>>)>>, // name -> (A_data, B_data)
+    init_embed_snapshot: Vec<Vec<f64>>,
+    global_step: usize,
+}
+
+fn save_checkpoint(model: &GPT, path: &str) -> std::io::Result<()> {
+    let mut base_data = HashMap::new();
+    for (name, mat) in &model.base {
+        base_data.insert(name.clone(), mat.data.clone());
+    }
+    let mut deltas_data = Vec::new();
+    for dm in &model.deltas {
+        let mut dm_data = HashMap::new();
+        for (name, adapter) in dm {
+            dm_data.insert(name.clone(), (adapter.a.data.clone(), adapter.b.data.clone()));
+        }
+        deltas_data.push(dm_data);
+    }
+    let ckpt = CheckpointData {
+        cfg: model.cfg.clone(), tokenizer: model.tok.clone(),
+        base: base_data, alpha: model.active_alpha.clone(),
+        deltas: deltas_data, init_embed_snapshot: model.init_embed_snapshot.clone(),
+        global_step: model.global_step,
+    };
+    let json = serde_json::to_string(&ckpt).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    fs::write(path, json)
+}
+
+fn load_checkpoint(path: &str) -> Result<GPT, Box<dyn std::error::Error>> {
+    let json = fs::read_to_string(path)?;
+    let ckpt: CheckpointData = serde_json::from_str(&json)?;
+    let tok = ckpt.tokenizer;
+    let cfg = ckpt.cfg;
+    let ne = cfg.n_embd;
+    let mut gpt = GPT::new(tok.clone(), &cfg);
+    // Restore base weights
+    for (name, data) in &ckpt.base {
+        if let Some(mat) = gpt.base.get_mut(name) {
+            mat.data = data.clone();
+            mat.nout = data.len();
+            mat.nin = if data.is_empty() { 0 } else { data[0].len() };
+            mat.grad = vec![vec![0.0; mat.nin]; mat.nout];
+        }
+    }
+    // Restore deltas
+    gpt.deltas.clear();
+    gpt.active_alpha = ckpt.alpha;
+    for dm_data in &ckpt.deltas {
+        let mut dm = DeltaModule::new();
+        for (name, (a_data, b_data)) in dm_data {
+            let mut a = MatrixParam { data: a_data.clone(), grad: vec![vec![0.0; a_data[0].len()]; a_data.len()], nout: a_data.len(), nin: a_data[0].len() };
+            let mut b = MatrixParam { data: b_data.clone(), grad: vec![vec![0.0; b_data[0].len()]; b_data.len()], nout: b_data.len(), nin: b_data[0].len() };
+            a.ensure_grad(); b.ensure_grad();
+            dm.insert(name.clone(), DeltaAdapter { a, b });
+        }
+        gpt.deltas.push(dm);
+    }
+    gpt.adam_delta = (0..gpt.deltas.len()).map(|_| HashMap::new()).collect();
+    gpt.init_embed_snapshot = ckpt.init_embed_snapshot;
+    gpt.global_step = ckpt.global_step;
+    Ok(gpt)
+}
+
+// ============================================================
+// 16) CORPUS MANAGEMENT
+// ============================================================
+
+fn load_corpus(path: &str, max_lines: usize, max_chars: usize) -> Vec<String> {
+    match fs::read_to_string(path) {
+        Ok(content) => content.lines()
+            .take(max_lines)
+            .map(|l| if l.len() > max_chars { l[..max_chars].to_string() } else { l.to_string() })
+            .filter(|l| !l.trim().is_empty())
+            .collect(),
+        Err(_) => vec!["Hello.".into(), "I exist.".into(), "Speak.".into()],
+    }
+}
+
+fn save_corpus(path: &str, lines: &[String]) {
+    let content = lines.join("\n");
+    fs::write(path, content).ok();
+}
+
+fn extract_sentences(msgs: &[(String, String)]) -> Vec<String> {
+    let mut sents = Vec::new();
+    for (role, text) in msgs {
+        let tag = if role == "user" { "H" } else { "A" };
+        for sent in text.split(|c: char| c == '.' || c == '!' || c == '?') {
+            let s = sent.trim();
+            if s.len() > 10 { sents.push(format!("{}: {}.", tag, s)); }
+        }
+    }
+    sents
+}
+
+// ============================================================
+// 17) BACKGROUND TRAINER
+// ============================================================
+
+fn background_trainer(
+    model: Arc<Mutex<GPT>>,
+    db: Arc<Mutex<Connection>>,
+    qbuf: Arc<Mutex<QuantumBuffer>>,
+    swarm: Arc<Mutex<SwarmRegistry>>,
+    stop: Arc<AtomicBool>,
+) {
+    let cfg = model.lock().unwrap().cfg.clone();
+    let mut syntracker = SyntropyTracker::new();
+    let mut tick = 0u64;
+
+    // Load corpus
+    let mut docs = load_corpus(&cfg.corpus_path, cfg.max_corpus_lines, cfg.max_line_chars);
+
+    // Enable BPE if ready
+    {
+        let mut m = model.lock().unwrap();
+        if m.tok.maybe_enable_bpe(&docs, &cfg) {
+            let vs = m.tok.vocab_size;
+            m.maybe_expand_vocab(vs);
+            eprintln!("[molequla.rs] BPE enabled, vocab={}", vs);
+        }
+    }
+
+    // Warmup
+    eprintln!("[molequla.rs] Warmup: {} steps...", cfg.warmup_steps);
+    {
+        let mut m = model.lock().unwrap();
+        train_steps(&mut m, &docs, cfg.warmup_steps, true, true);
+    }
+    eprintln!("[molequla.rs] Warmup complete. Entering quantum burst loop.");
+
+    // Burst loop
+    while !stop.load(Ordering::Relaxed) {
+        thread::sleep(std::time::Duration::from_secs_f64(cfg.train_tick_seconds));
+        tick += 1;
+
+        let should_burst = qbuf.lock().unwrap().should_trigger(&cfg);
+        if !should_burst { continue; }
+
+        // Reload corpus
+        docs = load_corpus(&cfg.corpus_path, cfg.max_corpus_lines, cfg.max_line_chars);
+
+        let mut m = model.lock().unwrap();
+
+        // Syntropy measure + decide
+        syntracker.measure(&m, &docs, &cfg);
+        let decision = syntracker.decide(&cfg);
+        m.syntropy_temp_offset = decision.temp_offset;
+
+        // Immune system: snapshot gamma direction
+        let (pre_dir, pre_mag) = m.gamma_contrastive_projection();
+
+        // Train micro-burst
+        let steps = cfg.micro_steps;
+        train_steps(&mut m, &docs, steps, !cfg.freeze_base_after_warmup, true);
+
+        // Immune check
+        if pre_mag > cfg.gamma_min_magnitude {
+            let (post_dir, _) = m.gamma_contrastive_projection();
+            let cos_sim = if pre_dir.len() == post_dir.len() && !pre_dir.is_empty() {
+                let dot: f64 = pre_dir.iter().zip(&post_dir).map(|(a, b)| a * b).sum();
+                dot
+            } else { 1.0 };
+            if cos_sim < cfg.noise_drift_threshold {
+                eprintln!("[immune] noise rejected (cos={:.4})", cos_sim);
+                syntracker.record_burst("noise_rejected", 0.0, 0.0);
+            } else {
+                syntracker.record_burst(&decision.action, 0.0, 0.0);
+            }
+        }
+
+        // Delta grow chance
+        let grow_prob = cfg.delta_grow_prob;
+        if rand::thread_rng().gen::<f64>() < grow_prob {
+            m.add_delta_module(1.0);
+            eprintln!("[molequla.rs] Delta module added, total={}", m.deltas.len());
+        }
+
+        qbuf.lock().unwrap().reset();
+
+        // Heartbeat
+        if tick % 10 == 0 {
+            if let Ok(sw) = swarm.lock() {
+                let (_, mag) = m.gamma_contrastive_projection();
+                sw.heartbeat(0, 0, syntracker.syntropy_trend, 0.0, None, mag);
+            }
+        }
+
+        // Save checkpoint periodically
+        if tick % 50 == 0 {
+            save_checkpoint(&m, &cfg.ckpt_path).ok();
+            eprintln!("[molequla.rs] Checkpoint saved.");
+        }
+    }
+
+    // Final save
+    let m = model.lock().unwrap();
+    save_checkpoint(&m, &cfg.ckpt_path).ok();
+    eprintln!("[molequla.rs] Final checkpoint saved.");
+}
+
+// ============================================================
+// 18) MAIN
+// ============================================================
+
+fn main() {
+    eprintln!("╔══════════════════════════════════════════════════╗");
+    eprintln!("║  MOLEQULA.RS — The Fifth Element                ║");
+    eprintln!("║  GPT organism + distributed cognition metabolism ║");
+    eprintln!("╚══════════════════════════════════════════════════╝");
+
+    let cfg = Config::default();
+
+    // Init SQLite
+    let db = Arc::new(Mutex::new(init_db(&cfg.db_path)));
+
+    // Load corpus
+    let docs = load_corpus(&cfg.corpus_path, cfg.max_corpus_lines, cfg.max_line_chars);
+    eprintln!("[init] Corpus: {} lines, {} chars", docs.len(),
+        docs.iter().map(|d| d.len()).sum::<usize>());
+
+    // Try loading checkpoint, else create new
+    let model = if std::path::Path::new(&cfg.ckpt_path).exists() {
+        match load_checkpoint(&cfg.ckpt_path) {
+            Ok(m) => { eprintln!("[init] Loaded checkpoint, step={}", m.global_step); m },
+            Err(e) => { eprintln!("[init] Checkpoint load failed: {}, starting fresh", e);
+                        let tok = EvolvingTokenizer::new(&docs);
+                        GPT::new(tok, &cfg) },
+        }
+    } else {
+        let tok = EvolvingTokenizer::new(&docs);
+        GPT::new(tok, &cfg)
+    };
+    let model = Arc::new(Mutex::new(model));
+
+    // Build corpus field
+    let mut corpus_field = CooccurField::new();
+    {
+        let m = model.lock().unwrap();
+        corpus_field.build(&m.tok, &docs);
+    }
+
+    // Swarm
+    let organism_id = format!("rust-{}", std::process::id());
+    let swarm = Arc::new(Mutex::new(SwarmRegistry::new(&organism_id)));
+    swarm.lock().unwrap().register().ok();
+    eprintln!("[swarm] Registered as {}", organism_id);
+
+    // Quantum buffer
+    let qbuf = Arc::new(Mutex::new(QuantumBuffer::new()));
+
+    // Background trainer
+    let stop = Arc::new(AtomicBool::new(false));
+    let trainer_handle = {
+        let m = Arc::clone(&model);
+        let d = Arc::clone(&db);
+        let q = Arc::clone(&qbuf);
+        let s = Arc::clone(&swarm);
+        let st = Arc::clone(&stop);
+        thread::spawn(move || background_trainer(m, d, q, s, st))
+    };
+
+    // Metabolism
+    let mut metabolism = Metabolism::new(5);
+    eprintln!("[metabolism] 4.C MLP initialized (5 elements, Hebbian)");
+
+    // Chat loop
+    eprintln!("[chat] Ready. Type something.");
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        let line = match line { Ok(l) => l, Err(_) => break };
+        let text = line.trim().to_string();
+        if text.is_empty() { continue; }
+        if text == "/quit" || text == "/exit" { break; }
+
+        // Store user message
+        db_add_message(&db.lock().unwrap(), "user", &text);
+
+        // Feed quantum buffer
+        { let m = model.lock().unwrap(); qbuf.lock().unwrap().feed(&text, &m.tok); }
+
+        // Generate response
+        let prompt = build_prompt(&db.lock().unwrap(), &text);
+        let answer = {
+            let m = model.lock().unwrap();
+            m.generate_sentence(&prompt, Some(&corpus_field), &docs)
+        };
+
+        println!("{}", answer);
+        db_add_message(&db.lock().unwrap(), "assistant", &answer);
+
+        // Check mesh peers for metabolism
+        if let Ok(sw) = swarm.lock() {
+            let peers = sw.discover_peers();
+            if !peers.is_empty() {
+                let entropies: Vec<f64> = peers.iter().map(|p| p.2).collect();
+                let weights = metabolism.compute_blend_weights(&entropies);
+                eprintln!("[metabolism] {} peers, blend: {:?}", peers.len(),
+                    weights.iter().map(|w| format!("{:.2}", w)).collect::<Vec<_>>());
+            }
+        }
+    }
+
+    // Shutdown
+    eprintln!("[shutdown] Saving...");
+    stop.store(true, Ordering::Relaxed);
+    trainer_handle.join().ok();
+    swarm.lock().unwrap().unregister();
+    eprintln!("[shutdown] Done. The fifth element rests.");
+}

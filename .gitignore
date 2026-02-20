@@ -52,15 +52,21 @@ ENV/
 env.bak/
 venv.bak/
 
-# molecule specific
+# molequla specific
 memory.sqlite3
-molecule_ckpt.json
+memory.sqlite3-shm
+memory.sqlite3-wal
+molequla_ckpt.json
 *.pkl
 *.npz
 
 # Go build artifacts
-molecule_bin
-/molecule
+macrogpt_bin
+/molequla
+
+# Rust build artifacts
+/target/
+Cargo.lock
 
 # IDE
 .idea/
