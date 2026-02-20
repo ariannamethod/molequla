@@ -5108,7 +5108,7 @@ func main() {
 		gradEnabled = true
 		model.mu.Unlock()
 
-		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, 0.5)
+		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, 1.0)
 		if answer == "" {
 			answer = "..."
 		}
