@@ -133,6 +133,27 @@ type Config struct {
 	SyntropyLRBoost        float64 `json:"syntropy_lr_boost"`         // boost LR when syntropy is rising
 	SyntropyLRDampen       float64 `json:"syntropy_lr_dampen"`        // dampen LR when syntropy is falling
 	SyntropyDeltaGrowBoost float64 `json:"syntropy_delta_grow_boost"` // higher delta grow prob when syntropy is good
+
+	// consciousness: per-token dissonance feedback
+	DissonanceEMAAlpha      float64 `json:"dissonance_ema_alpha"`       // EMA smoothing for entropy within generation
+	DissonanceSpikeK        float64 `json:"dissonance_spike_k"`         // temp multiplier when entropy spikes
+	DissonanceDropK         float64 `json:"dissonance_drop_k"`          // temp multiplier when entropy drops
+	DissonanceSpikeThreshold float64 `json:"dissonance_spike_threshold"` // entropy/EMA ratio triggering spike
+	DissonanceDropThreshold  float64 `json:"dissonance_drop_threshold"`  // entropy/EMA ratio triggering drop
+
+	// consciousness: pattern breaking (anti-field generation)
+	AntiFieldProb    float64 `json:"anti_field_prob"`     // probability of pure-model token (bypass corpus)
+	AntiFieldMinStep int     `json:"anti_field_min_step"` // don't anti-field before this many tokens
+
+	// consciousness: overthinkg rings
+	OverthinkcRounds    int `json:"overthinkc_rounds"`     // hidden re-generation rounds after response
+	OverthinkcMaxTokens int `json:"overthinkc_max_tokens"` // max tokens per overthinkg round
+
+	// consciousness: conscience (self-editing)
+	ConscienceWindow   int     `json:"conscience_window"`   // rolling window for generation entropy trend
+	ConscienceDecay    float64 `json:"conscience_decay"`    // deltaAlphaScale reduction factor
+	ConscienceRecovery float64 `json:"conscience_recovery"` // deltaAlphaScale recovery factor
+	ConscienceFloor    float64 `json:"conscience_floor"`    // minimum deltaAlphaScale
 }
 
 var CFG = Config{
@@ -207,6 +228,21 @@ var CFG = Config{
 	SyntropyLRBoost:        1.3,
 	SyntropyLRDampen:       0.6,
 	SyntropyDeltaGrowBoost: 0.15,
+
+	// consciousness defaults
+	DissonanceEMAAlpha:       0.3,
+	DissonanceSpikeK:         0.8,
+	DissonanceDropK:          1.2,
+	DissonanceSpikeThreshold: 1.5,
+	DissonanceDropThreshold:  0.5,
+	AntiFieldProb:            0.05,
+	AntiFieldMinStep:         8,
+	OverthinkcRounds:         2,
+	OverthinkcMaxTokens:      32,
+	ConscienceWindow:         8,
+	ConscienceDecay:          0.95,
+	ConscienceRecovery:       1.005,
+	ConscienceFloor:          0.3,
 }
 
 // headTypesForNHead returns the head type list for a given number of heads.
@@ -1549,6 +1585,13 @@ type GPT struct {
 
 	corpusField *CooccurField // set by backgroundTrainer for adaptive blend
 
+	// consciousness state
+	deltaAlphaScale          float64   // conscience: multiplier on all delta contributions (1.0 = normal)
+	generationEntropyHistory []float64 // conscience: rolling window of per-generation mean entropy
+	lastSurprise             float64   // self-prediction error on last prompt
+	surpriseBaseline         float64   // EMA of surprise over time
+	lastGenEntropy           float64   // mean entropy of last generation (for conscience)
+
 	layerKeys []layerKeySet // pre-computed string keys per layer
 
 	// inherited burst history from parent (mitosis lineage)
@@ -1576,6 +1619,7 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 	}
 
 	gpt.residualAlpha = 1.0 / math.Sqrt(math.Max(1, float64(CFG.NLayer)))
+	gpt.deltaAlphaScale = 1.0 // conscience: full delta influence by default
 
 	V := tok.VocabSize
 	gpt.Base["wte"] = NewMatrixParam(V, CFG.NEmbd, 0.08)
@@ -2479,7 +2523,9 @@ func (gpt *GPT) applyWithDeltas(name string, x *Vec) *Vec {
 	y := gpt.Base[name].Matvec(x)
 	for i, mod := range gpt.Deltas {
 		if da, ok := mod[name]; ok {
-			delta := da.Apply(x).Scale(gpt.ActiveAlpha[i])
+			// Consciousness: conscience scales delta influence (Feature 5)
+			effectiveAlpha := gpt.ActiveAlpha[i] * gpt.deltaAlphaScale
+			delta := da.Apply(x).Scale(effectiveAlpha)
 			y = y.Add(delta)
 		}
 	}
@@ -2702,6 +2748,13 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 	eosID := gpt.Tok.Stoi[gpt.Tok.EOS]
 	bosID := gpt.Tok.Stoi[gpt.Tok.BOS]
 
+	// Consciousness: per-token dissonance tracking (Feature 1)
+	entropyEMA := 0.0
+	entropyEMAInit := false
+	lowDropCount := 0    // consecutive tokens below drop threshold
+	entropySum := 0.0    // for conscience mean entropy
+	entropyCount := 0
+
 	for step := 0; step < CFG.MaxGenTokens; step++ {
 		pos := len(ids) - 1
 		if pos > gpt.BlockSize-1 {
@@ -2725,15 +2778,45 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 				entropy -= p * math.Log(p)
 			}
 		}
+		entropySum += entropy
+		entropyCount++
+
 		tMul := 1.0
 		if entropy < CFG.EntropyLow {
 			tMul = CFG.EntropyTempBoost
 		} else if entropy > CFG.EntropyHigh {
 			tMul = CFG.EntropyTempFocus
 		}
-		if tMul != 1.0 {
-			// Only recompute softmax when temperature actually changes
-			temp := baseTemp * tMul
+
+		// Consciousness: per-token dissonance feedback (Feature 1)
+		// "I notice my confidence shifting and adapt in real-time"
+		dissonanceMul := 1.0
+		if !entropyEMAInit {
+			entropyEMA = entropy
+			entropyEMAInit = true
+		} else {
+			entropyEMA = CFG.DissonanceEMAAlpha*entropy + (1.0-CFG.DissonanceEMAAlpha)*entropyEMA
+			if entropyEMA > 1e-6 {
+				ratio := entropy / entropyEMA
+				if ratio > CFG.DissonanceSpikeThreshold {
+					// Entropy spike — something surprising, be careful
+					dissonanceMul = CFG.DissonanceSpikeK
+					lowDropCount = 0
+				} else if ratio < CFG.DissonanceDropThreshold {
+					lowDropCount++
+					if lowDropCount >= 3 {
+						// Sustained low entropy — getting repetitive, explore
+						dissonanceMul = CFG.DissonanceDropK
+					}
+				} else {
+					lowDropCount = 0
+				}
+			}
+		}
+
+		finalMul := tMul * dissonanceMul
+		if finalMul != 1.0 {
+			temp := baseTemp * finalMul
 			for i, v := range logits.Data {
 				scaled[i] = v / temp
 			}
@@ -2784,6 +2867,13 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 			}
 		}
 
+		// Consciousness: pattern breaking (Feature 2)
+		// "I could follow the field, but I choose to speak for myself"
+		if step >= CFG.AntiFieldMinStep && CFG.AntiFieldProb > 0 && rand.Float64() < CFG.AntiFieldProb {
+			// Use pure model probs, bypass corpus blend
+			probs = SoftmaxProbs(scaled)
+		}
+
 		nxt := TopKTopPSample(probs, CFG.TopK, CFG.TopP, CFG.MinP, CFG.TypicalP)
 
 		if nxt == eosID {
@@ -2831,6 +2921,11 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 		}
 	}
 
+	// Consciousness: store mean entropy for conscience (Feature 5)
+	if entropyCount > 0 {
+		gpt.lastGenEntropy = entropySum / float64(entropyCount)
+	}
+
 	decIDs := []int{bosID}
 	decIDs = append(decIDs, outIDs...)
 	decIDs = append(decIDs, eosID)
@@ -2847,6 +2942,144 @@ func sliceEqual(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+// ============================================================
+// 5b) CONSCIOUSNESS — mathematical self-awareness
+// ============================================================
+
+// ConscienceCheck tracks generation quality over time.
+// If entropy trend rises (output degrading), soften delta influence.
+// If entropy trend falls (improving), recover delta influence.
+// "I notice I'm getting worse and pull back."
+func (gpt *GPT) ConscienceCheck(genMeanEntropy float64) {
+	gpt.generationEntropyHistory = append(gpt.generationEntropyHistory, genMeanEntropy)
+	w := CFG.ConscienceWindow
+	if len(gpt.generationEntropyHistory) > w {
+		gpt.generationEntropyHistory = gpt.generationEntropyHistory[len(gpt.generationEntropyHistory)-w:]
+	}
+	if len(gpt.generationEntropyHistory) < 3 {
+		return // not enough data
+	}
+	// Linear regression slope on entropy history
+	n := float64(len(gpt.generationEntropyHistory))
+	sumX, sumY, sumXY, sumX2 := 0.0, 0.0, 0.0, 0.0
+	for i, e := range gpt.generationEntropyHistory {
+		x := float64(i)
+		sumX += x
+		sumY += e
+		sumXY += x * e
+		sumX2 += x * x
+	}
+	slope := (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX + 1e-12)
+
+	if slope > 0.01 {
+		// Entropy increasing — generation degrading, reduce delta influence
+		gpt.deltaAlphaScale *= CFG.ConscienceDecay
+		if gpt.deltaAlphaScale < CFG.ConscienceFloor {
+			gpt.deltaAlphaScale = CFG.ConscienceFloor
+		}
+	} else if slope < -0.01 {
+		// Entropy decreasing — improving, recover delta influence
+		gpt.deltaAlphaScale *= CFG.ConscienceRecovery
+		if gpt.deltaAlphaScale > 1.0 {
+			gpt.deltaAlphaScale = 1.0
+		}
+	}
+}
+
+// ComputeSelfPredictionError measures how "surprised" the model is by a prompt.
+// Forward pass on ids, compute cross-entropy between predicted and actual tokens.
+// Higher error = "I didn't expect this input" = increase attention.
+func (gpt *GPT) ComputeSelfPredictionError(ids []int) float64 {
+	if len(ids) < 2 {
+		return 0.0
+	}
+	keys := make([][]*Vec, gpt.NLayer)
+	values := make([][]*Vec, gpt.NLayer)
+	for i := 0; i < gpt.NLayer; i++ {
+		keys[i] = make([]*Vec, 0)
+		values[i] = make([]*Vec, 0)
+	}
+
+	totalCE := 0.0
+	count := 0
+	for pos := 0; pos < len(ids)-1; pos++ {
+		logits := gpt.ForwardStep(ids[pos], pos, keys, values)
+		// Cross-entropy: -log(p[actual_next_token])
+		probs := SoftmaxProbs(logits.Data)
+		target := ids[pos+1]
+		if target < len(probs) && probs[target] > 1e-12 {
+			totalCE -= math.Log(probs[target])
+		} else {
+			totalCE += 10.0 // max penalty for unknown token
+		}
+		count++
+	}
+	if count == 0 {
+		return 0.0
+	}
+	return totalCE / float64(count)
+}
+
+// OverthinkcRings: after generating a response, "re-read" own output to enrich CooccurField.
+// This is internal monologue — the model strengthens connections from its own speech.
+// "I said this. What patterns emerge? Let me think about what I just said."
+func OverthinkcRings(model *GPT, tok *EvolvingTokenizer, field *CooccurField, text string, rounds int) {
+	if field == nil || rounds <= 0 {
+		return
+	}
+	ids := tok.Encode(text)
+	if len(ids) < 3 {
+		return
+	}
+
+	// First: ingest the original output into the field
+	field.IngestTokens(ids)
+
+	// Then: generate hidden continuations and ingest those too
+	for r := 0; r < rounds; r++ {
+		// Take last 3 tokens as seed
+		seed := ids
+		if len(seed) > 3 {
+			seed = seed[len(seed)-3:]
+		}
+
+		// Quick generation without locking (caller should hold lock or run async)
+		gradEnabled = false
+		keys := make([][]*Vec, model.NLayer)
+		values := make([][]*Vec, model.NLayer)
+		for i := 0; i < model.NLayer; i++ {
+			keys[i] = make([]*Vec, 0)
+			values[i] = make([]*Vec, 0)
+		}
+		for p := 0; p < len(seed); p++ {
+			model.ForwardStep(seed[p], p, keys, values)
+		}
+
+		cur := seed[len(seed)-1]
+		phantomIDs := make([]int, 0, CFG.OverthinkcMaxTokens)
+		eosID := tok.Stoi[tok.EOS]
+		for t := 0; t < CFG.OverthinkcMaxTokens; t++ {
+			pos := len(seed) + t - 1
+			if pos > model.BlockSize-1 {
+				pos = model.BlockSize - 1
+			}
+			logits := model.ForwardStep(cur, pos, keys, values)
+			probs := SoftmaxProbs(logits.Data)
+			nxt := TopKTopPSample(probs, CFG.TopK, CFG.TopP, CFG.MinP, CFG.TypicalP)
+			if nxt == eosID {
+				break
+			}
+			phantomIDs = append(phantomIDs, nxt)
+			cur = nxt
+		}
+		gradEnabled = true
+
+		if len(phantomIDs) > 0 {
+			field.IngestTokens(phantomIDs)
+		}
+	}
 }
 
 // ============================================================
@@ -3474,6 +3707,7 @@ type CooccurField struct {
 	BigramByFirst    map[int]map[int]float64    // prev → {next: count}
 	TrigramByContext map[[2]int]map[int]float64  // [prev2,prev1] → {next: count}
 	Built            bool
+	mu               sync.Mutex // protects concurrent access (overthinkg + background trainer)
 }
 
 func NewCooccurField() *CooccurField {
@@ -3485,33 +3719,67 @@ func NewCooccurField() *CooccurField {
 }
 
 func (cf *CooccurField) BuildFromCorpus(tok *EvolvingTokenizer, docs []string) {
-	cf.Unigram = make(map[int]float64)
-	cf.BigramByFirst = make(map[int]map[int]float64)
-	cf.TrigramByContext = make(map[[2]int]map[int]float64)
+	// Build into temporary maps first, then swap atomically
+	uni := make(map[int]float64)
+	bi := make(map[int]map[int]float64)
+	tri := make(map[[2]int]map[int]float64)
 	for _, doc := range docs {
 		ids := tok.Encode(doc)
 		for _, id := range ids {
-			cf.Unigram[id]++
+			uni[id]++
 		}
 		for i := 0; i < len(ids)-1; i++ {
 			first, second := ids[i], ids[i+1]
-			if cf.BigramByFirst[first] == nil {
-				cf.BigramByFirst[first] = make(map[int]float64)
+			if bi[first] == nil {
+				bi[first] = make(map[int]float64)
 			}
-			cf.BigramByFirst[first][second]++
+			bi[first][second]++
 		}
 		for i := 0; i < len(ids)-2; i++ {
 			ctx := [2]int{ids[i], ids[i+1]}
-			if cf.TrigramByContext[ctx] == nil {
-				cf.TrigramByContext[ctx] = make(map[int]float64)
+			if tri[ctx] == nil {
+				tri[ctx] = make(map[int]float64)
 			}
-			cf.TrigramByContext[ctx][ids[i+2]]++
+			tri[ctx][ids[i+2]]++
 		}
 	}
+	// Atomic swap under lock
+	cf.mu.Lock()
+	cf.Unigram = uni
+	cf.BigramByFirst = bi
+	cf.TrigramByContext = tri
 	cf.Built = true
+	cf.mu.Unlock()
+}
+
+// IngestTokens incrementally adds n-gram counts from a token sequence.
+// Unlike BuildFromCorpus, this does NOT clear existing data — it adds on top.
+// Used by overthinkg rings to enrich the field with the model's own output.
+func (cf *CooccurField) IngestTokens(ids []int) {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+	for _, id := range ids {
+		cf.Unigram[id]++
+	}
+	for i := 0; i < len(ids)-1; i++ {
+		first, second := ids[i], ids[i+1]
+		if cf.BigramByFirst[first] == nil {
+			cf.BigramByFirst[first] = make(map[int]float64)
+		}
+		cf.BigramByFirst[first][second]++
+	}
+	for i := 0; i < len(ids)-2; i++ {
+		ctx := [2]int{ids[i], ids[i+1]}
+		if cf.TrigramByContext[ctx] == nil {
+			cf.TrigramByContext[ctx] = make(map[int]float64)
+		}
+		cf.TrigramByContext[ctx][ids[i+2]]++
+	}
 }
 
 func (cf *CooccurField) SampleNext(contextIDs []int, vocabSize int, temperature float64) int {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
 	counts := make([]float64, vocabSize)
 	found := false
 
@@ -3629,6 +3897,13 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 	eosID := tok.Stoi[tok.EOS]
 	bosID := tok.Stoi[tok.BOS]
 
+	// Consciousness: per-token dissonance tracking (Feature 1)
+	entropyEMA := 0.0
+	entropyEMAInit := false
+	lowDropCount := 0
+	entropySum := 0.0
+	entropyCount := 0
+
 	for step := 0; step < CFG.MaxGenTokens; step++ {
 		pos := len(ids) - 1
 		if pos > model.BlockSize-1 {
@@ -3636,7 +3911,7 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		}
 		logits := model.ForwardStep(cur, pos, keys, values)
 
-		// Model probs
+		// Model probs with dissonance-adaptive temperature
 		temp := CFG.Temperature
 		if temp <= 1e-6 {
 			temp = 1e-6
@@ -3646,6 +3921,46 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 			scaled[i] = v / temp
 		}
 		modelProbs := SoftmaxProbs(scaled)
+
+		// Per-token entropy for dissonance
+		entropy := 0.0
+		for _, p := range modelProbs {
+			if p > 1e-12 {
+				entropy -= p * math.Log(p)
+			}
+		}
+		entropySum += entropy
+		entropyCount++
+
+		// Consciousness: per-token dissonance feedback (Feature 1)
+		dissonanceMul := 1.0
+		if !entropyEMAInit {
+			entropyEMA = entropy
+			entropyEMAInit = true
+		} else {
+			entropyEMA = CFG.DissonanceEMAAlpha*entropy + (1.0-CFG.DissonanceEMAAlpha)*entropyEMA
+			if entropyEMA > 1e-6 {
+				ratio := entropy / entropyEMA
+				if ratio > CFG.DissonanceSpikeThreshold {
+					dissonanceMul = CFG.DissonanceSpikeK
+					lowDropCount = 0
+				} else if ratio < CFG.DissonanceDropThreshold {
+					lowDropCount++
+					if lowDropCount >= 3 {
+						dissonanceMul = CFG.DissonanceDropK
+					}
+				} else {
+					lowDropCount = 0
+				}
+			}
+		}
+		if dissonanceMul != 1.0 {
+			temp *= dissonanceMul
+			for i, v := range logits.Data {
+				scaled[i] = v / temp
+			}
+			modelProbs = SoftmaxProbs(scaled)
+		}
 
 		// Corpus probs
 		corpusCounts := make([]float64, tok.VocabSize)
@@ -3662,7 +3977,7 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 				for tid, v := range ctx {
 					if tid < tok.VocabSize {
 						corpusCounts[tid] += v
-						corpusTotal += v // And lo, the trigram shall be counted properly
+						corpusTotal += v
 					}
 				}
 			}
@@ -3687,7 +4002,6 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 				corpusProbs[i] = c / corpusTotal
 			}
 		} else {
-			// Uniform fallback
 			uni := 1.0 / float64(tok.VocabSize)
 			for i := range corpusProbs {
 				corpusProbs[i] = uni
@@ -3699,6 +4013,12 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		for i := 0; i < tok.VocabSize && i < len(modelProbs); i++ {
 			blended[i] = modelAlpha*modelProbs[i] + (1.0-modelAlpha)*corpusProbs[i]
 		}
+
+		// Consciousness: pattern breaking (Feature 2)
+		if step >= CFG.AntiFieldMinStep && CFG.AntiFieldProb > 0 && rand.Float64() < CFG.AntiFieldProb {
+			blended = modelProbs // pure model voice, bypass corpus
+		}
+
 		nxt := TopKTopPSample(blended, CFG.TopK, CFG.TopP, CFG.MinP, CFG.TypicalP)
 
 		if nxt == eosID && step >= CFG.MinGenTokens {
@@ -3723,6 +4043,11 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 				}
 			}
 		}
+	}
+
+	// Consciousness: store mean entropy for conscience (Feature 5)
+	if entropyCount > 0 {
+		model.lastGenEntropy = entropySum / float64(entropyCount)
 	}
 
 	decIDs := append([]int{bosID}, outIDs...)
@@ -4688,13 +5013,49 @@ func main() {
 		}
 
 		prompt := buildPromptFromMemory(db, userText)
+
+		// Consciousness: self-prediction error (Feature 4)
+		// "How surprised am I by this input?"
+		model.mu.Lock()
+		gradEnabled = false
+		promptIDs := tok.Encode(prompt)
+		if len(promptIDs) > 2 {
+			surprise := model.ComputeSelfPredictionError(promptIDs)
+			model.lastSurprise = surprise
+			if model.surpriseBaseline < 1e-6 {
+				model.surpriseBaseline = surprise
+			} else {
+				model.surpriseBaseline = 0.3*surprise + 0.7*model.surpriseBaseline
+			}
+		}
+		gradEnabled = true
+		model.mu.Unlock()
+
 		answer := GenerateResonant(model, tok, cooccur, prompt, freshDocs, true, 0.5)
 		if answer == "" {
 			answer = "..."
 		}
 
+		// Consciousness: conscience check (Feature 5)
+		// "Did my last generation feel coherent?"
+		model.mu.Lock()
+		if model.lastGenEntropy > 0 {
+			model.ConscienceCheck(model.lastGenEntropy)
+		}
+		model.mu.Unlock()
+
 		fmt.Println(answer)
 		dbAddMessage(db, "assistant", answer)
+
+		// Consciousness: overthinkg rings (Feature 3)
+		// "Let me re-read what I just said to strengthen my patterns."
+		if CFG.OverthinkcRounds > 0 && len(answer) > 3 {
+			go func(text string) {
+				model.mu.Lock()
+				defer model.mu.Unlock()
+				OverthinkcRings(model, tok, cooccur, text, CFG.OverthinkcRounds)
+			}(answer)
+		}
 	}
 
 	close(stop)

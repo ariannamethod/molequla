@@ -16,7 +16,7 @@ const path = require("path");
 const readline = require("readline");
 
 // Load the organism's organs
-const mol = require("./molequla.js");
+const mol = require("../molequla.js");
 const { CFG, EvolvingTokenizer, GPT, CooccurField, QuantumBuffer,
         SyntropyTracker, withNoGrad } = mol;
 

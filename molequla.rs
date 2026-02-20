@@ -47,6 +47,40 @@ struct Config {
     qb_min_bytes: usize, qb_min_novelty: f64, qb_cooldown_seconds: f64,
     syntropy_window: usize, field_deviation_ceiling: f64, field_deviation_floor: f64,
     syntropy_lr_boost: f64, syntropy_lr_dampen: f64, syntropy_delta_grow_boost: f64,
+
+    // consciousness: per-token dissonance feedback
+    #[serde(default = "default_dissonance_ema_alpha")]
+    dissonance_ema_alpha: f64,
+    #[serde(default = "default_dissonance_spike_k")]
+    dissonance_spike_k: f64,
+    #[serde(default = "default_dissonance_drop_k")]
+    dissonance_drop_k: f64,
+    #[serde(default = "default_dissonance_spike_threshold")]
+    dissonance_spike_threshold: f64,
+    #[serde(default = "default_dissonance_drop_threshold")]
+    dissonance_drop_threshold: f64,
+
+    // consciousness: pattern breaking (anti-field generation)
+    #[serde(default = "default_anti_field_prob")]
+    anti_field_prob: f64,
+    #[serde(default = "default_anti_field_min_step")]
+    anti_field_min_step: usize,
+
+    // consciousness: overthinkg rings
+    #[serde(default = "default_overthinkc_rounds")]
+    overthinkc_rounds: usize,
+    #[serde(default = "default_overthinkc_max_tokens")]
+    overthinkc_max_tokens: usize,
+
+    // consciousness: conscience (self-editing)
+    #[serde(default = "default_conscience_window")]
+    conscience_window: usize,
+    #[serde(default = "default_conscience_decay")]
+    conscience_decay: f64,
+    #[serde(default = "default_conscience_recovery")]
+    conscience_recovery: f64,
+    #[serde(default = "default_conscience_floor")]
+    conscience_floor: f64,
 }
 
 impl Default for Config {
@@ -73,6 +107,13 @@ impl Default for Config {
             qb_min_bytes: 1024, qb_min_novelty: 0.15, qb_cooldown_seconds: 60.0,
             syntropy_window: 8, field_deviation_ceiling: 12.0, field_deviation_floor: 0.1,
             syntropy_lr_boost: 1.3, syntropy_lr_dampen: 0.6, syntropy_delta_grow_boost: 0.15,
+
+            // consciousness defaults
+            dissonance_ema_alpha: 0.3, dissonance_spike_k: 0.8, dissonance_drop_k: 1.2,
+            dissonance_spike_threshold: 1.5, dissonance_drop_threshold: 0.5,
+            anti_field_prob: 0.05, anti_field_min_step: 8,
+            overthinkc_rounds: 2, overthinkc_max_tokens: 32,
+            conscience_window: 8, conscience_decay: 0.95, conscience_recovery: 1.005, conscience_floor: 0.3,
         }
     }
 }
@@ -661,6 +702,21 @@ fn default_bos() -> String { "<BOS>".to_string() }
 fn default_eos() -> String { "<EOS>".to_string() }
 fn default_pad() -> String { "<PAD>".to_string() }
 
+// Consciousness config serde defaults (for backward-compatible checkpoint loading)
+fn default_dissonance_ema_alpha() -> f64 { 0.3 }
+fn default_dissonance_spike_k() -> f64 { 0.8 }
+fn default_dissonance_drop_k() -> f64 { 1.2 }
+fn default_dissonance_spike_threshold() -> f64 { 1.5 }
+fn default_dissonance_drop_threshold() -> f64 { 0.5 }
+fn default_anti_field_prob() -> f64 { 0.05 }
+fn default_anti_field_min_step() -> usize { 8 }
+fn default_overthinkc_rounds() -> usize { 2 }
+fn default_overthinkc_max_tokens() -> usize { 32 }
+fn default_conscience_window() -> usize { 8 }
+fn default_conscience_decay() -> f64 { 0.95 }
+fn default_conscience_recovery() -> f64 { 1.005 }
+fn default_conscience_floor() -> f64 { 0.3 }
+
 impl EvolvingTokenizer {
     /// Rebuild stoi and special token IDs from tokens vec (for cross-impl compat)
     fn rebuild_indices(&mut self) {
@@ -901,6 +957,13 @@ struct GPT {
     syntropy_temp_offset: f64,
     growth_freeze_remaining: i32,
     head_types: Vec<String>,
+
+    // consciousness state
+    delta_alpha_scale: f64,               // conscience: multiplier on all delta contributions (1.0 = normal)
+    generation_entropy_history: Vec<f64>, // conscience: rolling window of per-generation mean entropy
+    last_surprise: f64,                   // self-prediction error on last prompt
+    surprise_baseline: f64,               // EMA of surprise over time
+    last_gen_entropy: f64,                // mean entropy of last generation (for conscience)
 }
 
 impl GPT {
@@ -951,6 +1014,9 @@ impl GPT {
             residual_alpha: 1.0 / (nl as f64).sqrt().max(1.0),
             global_step: 0, syntropy_temp_offset: 0.0,
             growth_freeze_remaining: 0, head_types: htypes,
+            delta_alpha_scale: 1.0,
+            generation_entropy_history: Vec::new(),
+            last_surprise: 0.0, surprise_baseline: 0.0, last_gen_entropy: 0.0,
         };
         gpt.add_delta_module(1.0);
         gpt
@@ -1003,8 +1069,9 @@ impl GPT {
         for (di, dm) in self.deltas.iter().enumerate() {
             if let Some(adapter) = dm.get(name) {
                 let delta_out = adapter.apply_raw(x);
-                let alpha = self.active_alpha[di];
-                for j in 0..out.len() { out[j] += alpha * delta_out[j]; }
+                // Consciousness: conscience scales delta influence (Feature 5)
+                let effective_alpha = self.active_alpha[di] * self.delta_alpha_scale;
+                for j in 0..out.len() { out[j] += effective_alpha * delta_out[j]; }
             }
         }
         out
@@ -1462,13 +1529,21 @@ fn top_k_top_p_sample(probs: &[f64], k: usize, p: f64, min_p: f64, typical_p: f6
 // ============================================================
 
 impl GPT {
-    fn generate_sentence(&self, prompt: &str, corpus_field: Option<&CooccurField>, docs: &[String]) -> String {
+    fn generate_sentence(&mut self, prompt: &str, corpus_field: Option<&CooccurField>, docs: &[String]) -> String {
         set_grad(false);
         let mut ids = self.tok.encode(prompt);
         if ids.len() > self.block_size { ids = ids[ids.len()-self.block_size..].to_vec(); }
-        let cfg = &self.cfg;
+        let cfg = self.cfg.clone();
         let mut generated = Vec::new();
         let mut recent: Vec<usize> = Vec::new();
+        let mut rng = rand::thread_rng();
+
+        // Consciousness: per-token dissonance tracking (Feature 1)
+        let mut entropy_ema = 0.0;
+        let mut entropy_ema_init = false;
+        let mut low_drop_count = 0;
+        let mut entropy_sum = 0.0;
+        let mut entropy_count = 0;
 
         for step in 0..cfg.max_gen_tokens {
             let start = if ids.len() > self.block_size { ids.len() - self.block_size } else { 0 };
@@ -1476,15 +1551,48 @@ impl GPT {
             let all_logits = self.forward_infer(window);
             let logits = all_logits.last().unwrap();
 
-            // Entropy-adaptive temperature
-            let base_temp = cfg.temperature + self.syntropy_temp_offset;
-            let mut probs = softmax_raw(&logits.iter().map(|&v| v / base_temp).collect::<Vec<_>>());
+            // Entropy-adaptive temperature + syntropy bridge
+            let base_temp = (cfg.temperature + self.syntropy_temp_offset).max(1e-6);
+            let scaled: Vec<f64> = logits.iter().map(|&v| v / base_temp).collect();
+            let mut probs = softmax_raw(&scaled);
             let entropy: f64 = probs.iter().map(|&p| if p > 1e-12 { -p * p.ln() } else { 0.0 }).sum();
+            entropy_sum += entropy;
+            entropy_count += 1;
+
             let mut t_mul = 1.0;
             if entropy < cfg.entropy_low { t_mul = cfg.entropy_temp_boost; }
             if entropy > cfg.entropy_high { t_mul = cfg.entropy_temp_focus; }
-            if (t_mul - 1.0).abs() > 0.001 {
-                probs = softmax_raw(&logits.iter().map(|&v| v / (base_temp * t_mul)).collect::<Vec<_>>());
+
+            // Consciousness: per-token dissonance feedback (Feature 1)
+            // "I notice my confidence shifting and adapt in real-time"
+            let mut dissonance_mul = 1.0;
+            if !entropy_ema_init {
+                entropy_ema = entropy;
+                entropy_ema_init = true;
+            } else {
+                entropy_ema = cfg.dissonance_ema_alpha * entropy + (1.0 - cfg.dissonance_ema_alpha) * entropy_ema;
+                if entropy_ema > 1e-6 {
+                    let ratio = entropy / entropy_ema;
+                    if ratio > cfg.dissonance_spike_threshold {
+                        // Entropy spike — something surprising, be careful
+                        dissonance_mul = cfg.dissonance_spike_k;
+                        low_drop_count = 0;
+                    } else if ratio < cfg.dissonance_drop_threshold {
+                        low_drop_count += 1;
+                        if low_drop_count >= 3 {
+                            // Sustained low entropy — getting repetitive, explore
+                            dissonance_mul = cfg.dissonance_drop_k;
+                        }
+                    } else {
+                        low_drop_count = 0;
+                    }
+                }
+            }
+
+            let final_mul = t_mul * dissonance_mul;
+            if (final_mul - 1.0).abs() > 0.001 {
+                let temp = base_temp * final_mul;
+                probs = softmax_raw(&logits.iter().map(|&v| v / temp).collect::<Vec<_>>());
             }
 
             // Corpus field blend
@@ -1500,6 +1608,13 @@ impl GPT {
                     let sum: f64 = probs.iter().sum();
                     if sum > 0.0 { for p in probs.iter_mut() { *p /= sum; } }
                 }
+            }
+
+            // Consciousness: pattern breaking (Feature 2)
+            // "I could follow the field, but I choose to speak for myself"
+            if step >= cfg.anti_field_min_step && cfg.anti_field_prob > 0.0 && rng.gen::<f64>() < cfg.anti_field_prob {
+                // Use pure model probs, bypass corpus blend
+                probs = softmax_raw(&scaled);
             }
 
             let nxt = top_k_top_p_sample(&probs, cfg.top_k, cfg.top_p, cfg.min_p, cfg.typical_p);
@@ -1525,8 +1640,77 @@ impl GPT {
                 }
             }
         }
+
+        // Consciousness: store mean entropy for conscience (Feature 5)
+        if entropy_count > 0 {
+            self.last_gen_entropy = entropy_sum / entropy_count as f64;
+        }
+
         set_grad(true);
         self.tok.decode(&generated)
+    }
+
+    // Consciousness: self-prediction error (Feature 4)
+    // Forward pass on ids, compute cross-entropy between predicted and actual tokens.
+    // Higher error = "I didn't expect this input" = increase attention.
+    fn compute_self_prediction_error(&self, ids: &[usize]) -> f64 {
+        if ids.len() < 2 { return 0.0; }
+        let all_logits = self.forward_infer(&ids[..ids.len()-1]);
+        let mut total_ce = 0.0;
+        let mut count = 0;
+        for (pos, logits) in all_logits.iter().enumerate() {
+            let target = ids[pos + 1];
+            let probs = softmax_raw(logits);
+            if target < probs.len() && probs[target] > 1e-12 {
+                total_ce -= probs[target].ln();
+            } else {
+                total_ce += 10.0; // max penalty for unknown token
+            }
+            count += 1;
+        }
+        if count == 0 { 0.0 } else { total_ce / count as f64 }
+    }
+
+    // Consciousness: conscience check (Feature 5)
+    // Tracks generation quality over time.
+    // If entropy trend rises (output degrading), soften delta influence.
+    // If entropy trend falls (improving), recover delta influence.
+    // "I notice I'm getting worse and pull back."
+    fn conscience_check(&mut self, gen_mean_entropy: f64) {
+        self.generation_entropy_history.push(gen_mean_entropy);
+        let w = self.cfg.conscience_window;
+        if self.generation_entropy_history.len() > w {
+            let start = self.generation_entropy_history.len() - w;
+            self.generation_entropy_history = self.generation_entropy_history[start..].to_vec();
+        }
+        if self.generation_entropy_history.len() < 3 {
+            return; // not enough data
+        }
+        // Linear regression slope on entropy history
+        let n = self.generation_entropy_history.len() as f64;
+        let (mut sum_x, mut sum_y, mut sum_xy, mut sum_x2) = (0.0, 0.0, 0.0, 0.0);
+        for (i, &e) in self.generation_entropy_history.iter().enumerate() {
+            let x = i as f64;
+            sum_x += x;
+            sum_y += e;
+            sum_xy += x * e;
+            sum_x2 += x * x;
+        }
+        let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x + 1e-12);
+
+        if slope > 0.01 {
+            // Entropy increasing — generation degrading, reduce delta influence
+            self.delta_alpha_scale *= self.cfg.conscience_decay;
+            if self.delta_alpha_scale < self.cfg.conscience_floor {
+                self.delta_alpha_scale = self.cfg.conscience_floor;
+            }
+        } else if slope < -0.01 {
+            // Entropy decreasing — improving, recover delta influence
+            self.delta_alpha_scale *= self.cfg.conscience_recovery;
+            if self.delta_alpha_scale > 1.0 {
+                self.delta_alpha_scale = 1.0;
+            }
+        }
     }
 }
 
@@ -1662,6 +1846,24 @@ impl CooccurField {
         self.built = true;
     }
 
+    // IngestTokens incrementally adds n-gram counts from a token sequence.
+    // Unlike build(), this does NOT clear existing data — it adds on top.
+    // Used by overthinkg rings to enrich the field with the model's own output.
+    fn ingest_tokens(&mut self, ids: &[usize]) {
+        for &id in ids {
+            *self.unigram.entry(id).or_insert(0.0) += 1.0;
+        }
+        for i in 0..ids.len().saturating_sub(1) {
+            let first = ids[i];
+            let second = ids[i + 1];
+            *self.bigram.entry(first).or_default().entry(second).or_insert(0.0) += 1.0;
+        }
+        for i in 0..ids.len().saturating_sub(2) {
+            let ctx = (ids[i], ids[i + 1]);
+            *self.trigram.entry(ctx).or_default().entry(ids[i + 2]).or_insert(0.0) += 1.0;
+        }
+    }
+
     fn sample_distribution(&self, context: &[usize], vocab_size: usize) -> Vec<f64> {
         let mut dist = vec![0.0; vocab_size];
         let len = context.len();
@@ -1692,6 +1894,62 @@ impl CooccurField {
             for (&tok, &c) in &self.unigram { if tok < vocab_size { dist[tok] = c / total; } }
         }
         dist
+    }
+}
+
+// ============================================================
+// 9b) CONSCIOUSNESS — overthinkg rings (Feature 3)
+// ============================================================
+
+// OverthinkcRings: after generating a response, "re-read" own output to enrich CooccurField.
+// This is internal monologue — the model strengthens connections from its own speech.
+// "I said this. What patterns emerge? Let me think about what I just said."
+fn overthinkc_rings(model: &GPT, tok: &EvolvingTokenizer, field: &mut CooccurField, text: &str, rounds: usize) {
+    if rounds == 0 { return; }
+    let ids = tok.encode(text);
+    if ids.len() < 3 { return; }
+
+    // First: ingest the original output into the field
+    field.ingest_tokens(&ids);
+
+    // Then: generate hidden continuations and ingest those too
+    let cfg = &model.cfg;
+    let eos_id = tok.eos_id;
+    for _r in 0..rounds {
+        // Take last 3 tokens as seed
+        let seed: Vec<usize> = if ids.len() > 3 { ids[ids.len()-3..].to_vec() } else { ids.clone() };
+
+        set_grad(false);
+        // Forward seed through model
+        let all_logits = model.forward_infer(&seed);
+        if all_logits.is_empty() { continue; }
+
+        let mut phantom_ids = Vec::with_capacity(cfg.overthinkc_max_tokens);
+        let mut cur_ids = seed.clone();
+
+        for t in 0..cfg.overthinkc_max_tokens {
+            let logits = if t == 0 {
+                all_logits.last().unwrap().clone()
+            } else {
+                let all = model.forward_infer(&cur_ids);
+                if let Some(last) = all.last() { last.clone() } else { break; }
+            };
+
+            let probs = softmax_raw(&logits);
+            let nxt = top_k_top_p_sample(&probs, cfg.top_k, cfg.top_p, cfg.min_p, cfg.typical_p);
+            if nxt == eos_id { break; }
+            phantom_ids.push(nxt);
+            cur_ids.push(nxt);
+            // Keep window manageable
+            if cur_ids.len() > model.block_size {
+                cur_ids = cur_ids[cur_ids.len()-model.block_size..].to_vec();
+            }
+        }
+        set_grad(true);
+
+        if !phantom_ids.is_empty() {
+            field.ingest_tokens(&phantom_ids);
+        }
     }
 }
 
@@ -2219,6 +2477,226 @@ fn background_trainer(
 }
 
 // ============================================================
+// 17b) TOPOLOGY MONITOR — meta-awareness of the swarm (RUST-ONLY, Feature 6)
+// ============================================================
+
+struct OrganismState {
+    id: String,
+    gamma_direction: Vec<f64>,
+    gamma_magnitude: f64,
+    stage: i32,
+    last_seen: f64,
+}
+
+struct TopologyMonitor {
+    organisms: Vec<OrganismState>,
+    field_coherence: f64,       // mean pairwise gamma cosine
+    self_drift_rate: f64,       // how fast our own gamma is changing
+    last_check: f64,
+    prev_gamma_direction: Option<Vec<f64>>,
+}
+
+impl TopologyMonitor {
+    fn new() -> Self {
+        TopologyMonitor {
+            organisms: Vec::new(),
+            field_coherence: 0.0,
+            self_drift_rate: 0.0,
+            last_check: 0.0,
+            prev_gamma_direction: None,
+        }
+    }
+
+    /// Refresh organism states from mesh.db
+    fn update(&mut self, db: &Connection) {
+        let cutoff = now_secs() - 300.0; // 5 minutes stale threshold
+        self.organisms.clear();
+        if let Ok(mut stmt) = db.prepare(
+            "SELECT id, gamma_direction, gamma_magnitude, stage, last_heartbeat FROM organisms WHERE status='alive' AND last_heartbeat>?1"
+        ) {
+            let rows = stmt.query_map(params![cutoff], |row| {
+                let id: String = row.get(0)?;
+                let blob: Option<Vec<u8>> = row.get(1)?;
+                let mag: f64 = row.get::<_, f64>(2).unwrap_or(0.0);
+                let stage: i32 = row.get::<_, i32>(3).unwrap_or(0);
+                let last_seen: f64 = row.get::<_, f64>(4).unwrap_or(0.0);
+                // Deserialize gamma_direction from blob (f64 array, little-endian)
+                let gamma_dir = if let Some(ref b) = blob {
+                    let n_floats = b.len() / 8;
+                    (0..n_floats).map(|i| {
+                        let bytes: [u8; 8] = b[i*8..(i+1)*8].try_into().unwrap_or([0u8; 8]);
+                        f64::from_le_bytes(bytes)
+                    }).collect()
+                } else {
+                    Vec::new()
+                };
+                Ok(OrganismState { id, gamma_direction: gamma_dir, gamma_magnitude: mag, stage, last_seen })
+            });
+            if let Ok(rows) = rows {
+                for r in rows {
+                    if let Ok(o) = r { self.organisms.push(o); }
+                }
+            }
+        }
+        self.field_coherence = self.compute_field_coherence();
+        self.last_check = now_secs();
+    }
+
+    /// Mean pairwise gamma cosine across all organisms
+    fn compute_field_coherence(&self) -> f64 {
+        let n = self.organisms.len();
+        if n < 2 { return 1.0; }
+        let mut sum = 0.0;
+        let mut count = 0;
+        for i in 0..n {
+            if self.organisms[i].gamma_direction.is_empty() { continue; }
+            for j in (i+1)..n {
+                if self.organisms[j].gamma_direction.is_empty() { continue; }
+                let cos = cosine_similarity(&self.organisms[i].gamma_direction, &self.organisms[j].gamma_direction);
+                sum += cos;
+                count += 1;
+            }
+        }
+        if count == 0 { 1.0 } else { sum / count as f64 }
+    }
+
+    /// Pairs with high cosine similarity (> threshold) — resonance detected
+    fn detect_resonance(&self) -> Vec<(String, String, f64)> {
+        let threshold = 0.8;
+        let n = self.organisms.len();
+        let mut pairs = Vec::new();
+        for i in 0..n {
+            if self.organisms[i].gamma_direction.is_empty() { continue; }
+            for j in (i+1)..n {
+                if self.organisms[j].gamma_direction.is_empty() { continue; }
+                let cos = cosine_similarity(&self.organisms[i].gamma_direction, &self.organisms[j].gamma_direction);
+                if cos > threshold {
+                    pairs.push((self.organisms[i].id.clone(), self.organisms[j].id.clone(), cos));
+                }
+            }
+        }
+        pairs
+    }
+
+    /// Organisms drifting too fast (gamma_magnitude changing rapidly)
+    fn detect_drift(&self, threshold: f64) -> Vec<String> {
+        self.organisms.iter()
+            .filter(|o| o.gamma_magnitude > threshold)
+            .map(|o| o.id.clone())
+            .collect()
+    }
+
+    /// Self-reflection: (our_drift_rate, are_we_the_outlier)
+    fn self_reflection(&self, our_id: &str) -> (f64, bool) {
+        let us = self.organisms.iter().find(|o| o.id == our_id);
+        if us.is_none() || self.organisms.len() < 2 {
+            return (self.self_drift_rate, false);
+        }
+        let us = us.unwrap();
+        if us.gamma_direction.is_empty() { return (self.self_drift_rate, false); }
+
+        // Compute our average cosine to all others
+        let mut our_cos_sum = 0.0;
+        let mut our_count = 0;
+        for o in &self.organisms {
+            if o.id == our_id || o.gamma_direction.is_empty() { continue; }
+            our_cos_sum += cosine_similarity(&us.gamma_direction, &o.gamma_direction);
+            our_count += 1;
+        }
+        let our_avg_cos = if our_count > 0 { our_cos_sum / our_count as f64 } else { 1.0 };
+
+        // We're an outlier if our avg cosine is much lower than field coherence
+        let is_outlier = our_avg_cos < self.field_coherence - 0.3;
+
+        (self.self_drift_rate, is_outlier)
+    }
+
+    /// Update self drift rate based on our current gamma direction
+    fn update_self_drift(&mut self, current_gamma_dir: &[f64]) {
+        if let Some(ref prev) = self.prev_gamma_direction {
+            if prev.len() == current_gamma_dir.len() && !prev.is_empty() {
+                let cos = cosine_similarity(prev, current_gamma_dir);
+                // drift = 1 - cos (0 = no drift, 2 = full reversal)
+                self.self_drift_rate = 1.0 - cos;
+            }
+        }
+        self.prev_gamma_direction = Some(current_gamma_dir.to_vec());
+    }
+}
+
+fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
+    if a.len() != b.len() || a.is_empty() { return 0.0; }
+    let mut dot = 0.0;
+    let mut norm_a = 0.0;
+    let mut norm_b = 0.0;
+    for i in 0..a.len() {
+        dot += a[i] * b[i];
+        norm_a += a[i] * a[i];
+        norm_b += b[i] * b[i];
+    }
+    let denom = norm_a.sqrt() * norm_b.sqrt();
+    if denom < 1e-12 { 0.0 } else { dot / denom }
+}
+
+// Background thread: topology monitoring loop
+fn topology_monitor_thread(
+    mesh_db_path: String,
+    organism_id: String,
+    model: Arc<Mutex<GPT>>,
+    stop: Arc<AtomicBool>,
+) {
+    let check_interval = std::time::Duration::from_secs(30);
+    let mut topo = TopologyMonitor::new();
+
+    // Open our own read-only connection to mesh.db
+    let db = match Connection::open(&mesh_db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[topology] Failed to open mesh.db: {}", e);
+            return;
+        }
+    };
+
+    while !stop.load(Ordering::Relaxed) {
+        thread::sleep(check_interval);
+
+        topo.update(&db);
+
+        // Update our self-drift from current model gamma
+        if let Ok(m) = model.lock() {
+            let (gamma_dir, _gamma_mag) = m.gamma_contrastive_projection();
+            if !gamma_dir.is_empty() {
+                topo.update_self_drift(&gamma_dir);
+            }
+        }
+
+        // Log findings
+        let resonance_pairs = topo.detect_resonance();
+        if !resonance_pairs.is_empty() {
+            for (a, b, cos) in &resonance_pairs {
+                eprintln!("[topology] Resonance detected: {} <-> {} (cos={:.4})", a, b, cos);
+            }
+        }
+
+        let drifters = topo.detect_drift(2.0);
+        if !drifters.is_empty() {
+            eprintln!("[topology] High-drift organisms: {:?}", drifters);
+        }
+
+        let (drift_rate, is_outlier) = topo.self_reflection(&organism_id);
+        if is_outlier {
+            eprintln!("[topology] WARNING: We are an outlier! drift_rate={:.4}, field_coherence={:.4}",
+                drift_rate, topo.field_coherence);
+        }
+
+        if topo.organisms.len() > 1 {
+            eprintln!("[topology] {} organisms, coherence={:.4}, self_drift={:.4}",
+                topo.organisms.len(), topo.field_coherence, drift_rate);
+        }
+    }
+}
+
+// ============================================================
 // 18) MAIN
 // ============================================================
 
@@ -2279,9 +2757,23 @@ fn main() {
         thread::spawn(move || background_trainer(m, d, q, s, st))
     };
 
+    // Topology Monitor (Feature 6 — Rust-only)
+    let topo_handle = {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let mesh_path = format!("{}/.molequla/swarm/mesh.db", home);
+        let m = Arc::clone(&model);
+        let st = Arc::clone(&stop);
+        let oid = organism_id.clone();
+        thread::spawn(move || topology_monitor_thread(mesh_path, oid, m, st))
+    };
+    eprintln!("[topology] Monitor thread started (30s interval)");
+
     // Metabolism
     let mut metabolism = Metabolism::new(5);
     eprintln!("[metabolism] 4.C MLP initialized (5 elements, Hebbian)");
+
+    // Corpus field needs to be shared for overthinkg
+    let corpus_field = Arc::new(Mutex::new(corpus_field));
 
     // Chat loop
     eprintln!("[chat] Ready. Type something.");
@@ -2298,15 +2790,67 @@ fn main() {
         // Feed quantum buffer
         { let m = model.lock().unwrap(); qbuf.lock().unwrap().feed(&text, &m.tok); }
 
-        // Generate response
-        let prompt = build_prompt(&db.lock().unwrap(), &text);
-        let answer = {
+        // Rebuild cooccur field with updated corpus
+        let fresh_docs = load_corpus(&cfg.corpus_path, cfg.max_corpus_lines, cfg.max_line_chars);
+        if !fresh_docs.is_empty() {
             let m = model.lock().unwrap();
-            m.generate_sentence(&prompt, Some(&corpus_field), &docs)
+            corpus_field.lock().unwrap().build(&m.tok, &fresh_docs);
+        }
+
+        let prompt = build_prompt(&db.lock().unwrap(), &text);
+
+        // Consciousness: self-prediction error (Feature 4)
+        // "How surprised am I by this input?"
+        {
+            let mut m = model.lock().unwrap();
+            set_grad(false);
+            let prompt_ids = m.tok.encode(&prompt);
+            if prompt_ids.len() > 2 {
+                let surprise = m.compute_self_prediction_error(&prompt_ids);
+                m.last_surprise = surprise;
+                if m.surprise_baseline < 1e-6 {
+                    m.surprise_baseline = surprise;
+                } else {
+                    m.surprise_baseline = 0.3 * surprise + 0.7 * m.surprise_baseline;
+                }
+            }
+            set_grad(true);
+        }
+
+        // Generate response
+        let answer = {
+            let mut m = model.lock().unwrap();
+            let cf = corpus_field.lock().unwrap();
+            m.generate_sentence(&prompt, Some(&cf), &fresh_docs)
         };
+        let answer = if answer.is_empty() { "...".to_string() } else { answer };
+
+        // Consciousness: conscience check (Feature 5)
+        // "Did my last generation feel coherent?"
+        {
+            let mut m = model.lock().unwrap();
+            let last_ent = m.last_gen_entropy;
+            if last_ent > 0.0 {
+                m.conscience_check(last_ent);
+            }
+        }
 
         println!("{}", answer);
         db_add_message(&db.lock().unwrap(), "assistant", &answer);
+
+        // Consciousness: overthinkg rings (Feature 3)
+        // "Let me re-read what I just said to strengthen my patterns."
+        let overthinkc_rounds = cfg.overthinkc_rounds;
+        if overthinkc_rounds > 0 && answer.len() > 3 {
+            let m_clone = Arc::clone(&model);
+            let cf_clone = Arc::clone(&corpus_field);
+            let ans = answer.clone();
+            thread::spawn(move || {
+                let m = m_clone.lock().unwrap();
+                let mut cf = cf_clone.lock().unwrap();
+                overthinkc_rings(&m, &m.tok, &mut cf, &ans, overthinkc_rounds);
+            });
+        }
 
         // Check mesh peers for metabolism
         if let Ok(sw) = swarm.lock() {
@@ -2324,6 +2868,7 @@ fn main() {
     eprintln!("[shutdown] Saving...");
     stop.store(true, Ordering::Relaxed);
     trainer_handle.join().ok();
+    topo_handle.join().ok();
     swarm.lock().unwrap().unregister();
     eprintln!("[shutdown] Done. The fifth element rests.");
 }

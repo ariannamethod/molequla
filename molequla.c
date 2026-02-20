@@ -115,6 +115,27 @@ typedef struct {
     int growth_stages[5][4];
     int n_growth_stages;
     int freeze_after_growth_steps;
+
+    /* consciousness: per-token dissonance feedback */
+    double dissonance_ema_alpha;       /* EMA smoothing for entropy within generation */
+    double dissonance_spike_k;         /* temp multiplier when entropy spikes */
+    double dissonance_drop_k;          /* temp multiplier when entropy drops */
+    double dissonance_spike_threshold; /* entropy/EMA ratio triggering spike */
+    double dissonance_drop_threshold;  /* entropy/EMA ratio triggering drop */
+
+    /* consciousness: pattern breaking (anti-field generation) */
+    double anti_field_prob;     /* probability of pure-model token (bypass corpus) */
+    int anti_field_min_step;    /* don't anti-field before this many tokens */
+
+    /* consciousness: overthinkg rings */
+    int overthinkc_rounds;      /* hidden re-generation rounds after response */
+    int overthinkc_max_tokens;  /* max tokens per overthinkg round */
+
+    /* consciousness: conscience (self-editing) */
+    int conscience_window;      /* rolling window for generation entropy trend */
+    double conscience_decay;    /* deltaAlphaScale reduction factor */
+    double conscience_recovery; /* deltaAlphaScale recovery factor */
+    double conscience_floor;    /* minimum deltaAlphaScale */
 } Config;
 
 static Config CFG = {
@@ -186,6 +207,21 @@ static Config CFG = {
     },
     .n_growth_stages = 5,
     .freeze_after_growth_steps = 200,
+
+    /* consciousness defaults */
+    .dissonance_ema_alpha = 0.3,
+    .dissonance_spike_k = 0.8,
+    .dissonance_drop_k = 1.2,
+    .dissonance_spike_threshold = 1.5,
+    .dissonance_drop_threshold = 0.5,
+    .anti_field_prob = 0.05,
+    .anti_field_min_step = 8,
+    .overthinkc_rounds = 2,
+    .overthinkc_max_tokens = 32,
+    .conscience_window = 8,
+    .conscience_decay = 0.95,
+    .conscience_recovery = 1.005,
+    .conscience_floor = 0.3,
 };
 
 /* Head types helper: compute head_types array for a given number of heads.
@@ -1812,6 +1848,7 @@ typedef struct {
     int *trigram_head;  /* [COOCCUR_HASH_SIZE] -> first index in trigrams[], or -1 */
     int *trigram_next;  /* [trigram_cap] -> next index with same hash, or -1 */
     int built;
+    pthread_mutex_t mu; /* thread safety for ingest/build/sample */
 } CooccurField;
 
 /* Hash functions for cooccur lookup (needed before gpt_generate) */
@@ -1858,6 +1895,14 @@ typedef struct {
 
     /* Adaptive corpus blend: set by background_trainer */
     CooccurField *corpus_field;
+
+    /* consciousness state */
+    double delta_alpha_scale;             /* conscience: multiplier on all delta contributions (1.0 = normal) */
+    double generation_entropy_history[16]; /* conscience: rolling window of per-generation mean entropy */
+    int gen_entropy_count;                 /* how many entries in generation_entropy_history */
+    double last_surprise;                  /* self-prediction error on last prompt */
+    double surprise_baseline;              /* EMA of surprise over time */
+    double last_gen_entropy;               /* mean entropy of last generation (for conscience) */
 
     pthread_mutex_t mu;
 } GPT;
@@ -1927,6 +1972,11 @@ static GPT *gpt_new(EvolvingTokenizer *tok) {
     g->global_step = 0;
     g->syntropy_temp_offset = 0.0;
     g->growth_freeze_remaining = 0;
+    g->delta_alpha_scale = 1.0; /* conscience: full delta influence by default */
+    g->gen_entropy_count = 0;
+    g->last_surprise = 0.0;
+    g->surprise_baseline = 0.0;
+    g->last_gen_entropy = 0.0;
     pthread_mutex_init(&g->mu, NULL);
 
     int V = tok->vocab_size;
@@ -2252,7 +2302,9 @@ static Node *gpt_apply(GPT *g, const char *name, Node *x) {
         DeltaAdapter *da = dmod_get(g->deltas[d], name);
         if (da) {
             Node *dy = delta_apply(da, x);
-            dy = vec_scale(dy, g->active_alpha[d]);
+            /* Consciousness: conscience scales delta influence (Feature 5) */
+            double effective_alpha = g->active_alpha[d] * g->delta_alpha_scale;
+            dy = vec_scale(dy, effective_alpha);
             y = vec_add(y, dy);
         }
     }
@@ -2491,6 +2543,13 @@ static char *gpt_generate(GPT *g, const char *prompt) {
     double *probs_buf = malloc(sizeof(double) * max_vocab);
     double *scaled = malloc(sizeof(double) * max_vocab);
 
+    /* Consciousness: per-token dissonance tracking (Feature 1) */
+    double entropy_ema = 0.0;
+    int entropy_ema_init = 0;
+    int low_drop_count = 0;    /* consecutive tokens below drop threshold */
+    double entropy_sum = 0.0;  /* for conscience mean entropy */
+    int entropy_count = 0;
+
     for (int step = 0; step < CFG.max_gen_tokens; step++) {
         arena_reset(&G_arena);
         int pos = ids.len - 1;
@@ -2506,12 +2565,46 @@ static char *gpt_generate(GPT *g, const char *prompt) {
         double entropy = 0;
         for (int i = 0; i < V; i++)
             if (probs_buf[i] > 1e-12) entropy -= probs_buf[i] * log(probs_buf[i]);
+        entropy_sum += entropy;
+        entropy_count++;
+
         double tmul = 1.0;
         if (entropy < CFG.entropy_low) tmul = CFG.entropy_temp_boost;
         else if (entropy > CFG.entropy_high) tmul = CFG.entropy_temp_focus;
-        double temp = base_temp * tmul;
-        for (int i = 0; i < V; i++) scaled[i] = logits->data[i] / temp;
-        softmax_probs(scaled, V, probs_buf);
+
+        /* Consciousness: per-token dissonance feedback (Feature 1) */
+        /* "I notice my confidence shifting and adapt in real-time" */
+        double dissonance_mul = 1.0;
+        if (!entropy_ema_init) {
+            entropy_ema = entropy;
+            entropy_ema_init = 1;
+        } else {
+            entropy_ema = CFG.dissonance_ema_alpha * entropy +
+                          (1.0 - CFG.dissonance_ema_alpha) * entropy_ema;
+            if (entropy_ema > 1e-6) {
+                double ratio = entropy / entropy_ema;
+                if (ratio > CFG.dissonance_spike_threshold) {
+                    /* Entropy spike — something surprising, be careful */
+                    dissonance_mul = CFG.dissonance_spike_k;
+                    low_drop_count = 0;
+                } else if (ratio < CFG.dissonance_drop_threshold) {
+                    low_drop_count++;
+                    if (low_drop_count >= 3) {
+                        /* Sustained low entropy — getting repetitive, explore */
+                        dissonance_mul = CFG.dissonance_drop_k;
+                    }
+                } else {
+                    low_drop_count = 0;
+                }
+            }
+        }
+
+        double final_mul = tmul * dissonance_mul;
+        if (final_mul != 1.0) {
+            double temp = base_temp * final_mul;
+            for (int i = 0; i < V; i++) scaled[i] = logits->data[i] / temp;
+            softmax_probs(scaled, V, probs_buf);
+        }
 
         /* Adaptive corpus blend: corpus field fades as model becomes coherent */
         if (g->corpus_field && g->corpus_field->built && g->corpus_field->n_bigrams > 0) {
@@ -2566,6 +2659,14 @@ static char *gpt_generate(GPT *g, const char *prompt) {
             }
         }
 
+        /* Consciousness: pattern breaking (Feature 2) */
+        /* "I could follow the field, but I choose to speak for myself" */
+        if (step >= CFG.anti_field_min_step && CFG.anti_field_prob > 0 &&
+            rand_uniform() < CFG.anti_field_prob) {
+            /* Use pure model probs, bypass corpus blend */
+            softmax_probs(scaled, V, probs_buf);
+        }
+
         int nxt = top_k_top_p_sample(probs_buf, V, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p);
 
         if (nxt == g->tok->eos_id) {
@@ -2614,6 +2715,11 @@ static char *gpt_generate(GPT *g, const char *prompt) {
                 gpt_forward_step(g, ids.items[p], p, kv);
             }
         }
+    }
+
+    /* Consciousness: store mean entropy for conscience (Feature 5) */
+    if (entropy_count > 0) {
+        g->last_gen_entropy = entropy_sum / (double)entropy_count;
     }
 
     /* Decode output */
@@ -2985,10 +3091,12 @@ static CooccurField *cooccur_new(int vocab_size) {
     for (int i = 0; i < COOCCUR_HASH_SIZE; i++) { cf->bigram_head[i] = -1; cf->trigram_head[i] = -1; }
     for (int i = 0; i < cf->bigram_cap; i++) cf->bigram_next[i] = -1;
     for (int i = 0; i < cf->trigram_cap; i++) cf->trigram_next[i] = -1;
+    pthread_mutex_init(&cf->mu, NULL);
     return cf;
 }
 
 static void cooccur_build(CooccurField *cf, EvolvingTokenizer *tok, StrArr *docs) {
+    pthread_mutex_lock(&cf->mu);
     memset(cf->unigram, 0, sizeof(double) * cf->vocab_size);
     cf->n_trigrams = 0;
     cf->n_bigrams = 0;
@@ -3030,9 +3138,47 @@ static void cooccur_build(CooccurField *cf, EvolvingTokenizer *tok, StrArr *docs
         cf->trigram_head[h] = i;
     }
     cf->built = 1;
+    pthread_mutex_unlock(&cf->mu);
+}
+
+/* IngestTokens incrementally adds n-gram counts from a token sequence.
+ * Unlike cooccur_build, this does NOT clear existing data — it adds on top.
+ * Used by overthinkg rings to enrich the field with the model's own output. */
+static void cooccur_ingest_tokens(CooccurField *cf, const int *ids, int len) {
+    pthread_mutex_lock(&cf->mu);
+    /* Unigrams */
+    for (int i = 0; i < len; i++) {
+        if (ids[i] < cf->vocab_size)
+            cf->unigram[ids[i]] += 1.0;
+    }
+    /* Bigrams */
+    for (int i = 0; i < len - 1 && cf->n_bigrams < cf->bigram_cap; i++) {
+        cf->bigrams[cf->n_bigrams].key[0] = ids[i];
+        cf->bigrams[cf->n_bigrams].key[1] = ids[i+1];
+        cf->bigrams[cf->n_bigrams].count = 1.0;
+        /* Update hash index */
+        unsigned int h = cooccur_bigram_hash(ids[i]);
+        cf->bigram_next[cf->n_bigrams] = cf->bigram_head[h];
+        cf->bigram_head[h] = cf->n_bigrams;
+        cf->n_bigrams++;
+    }
+    /* Trigrams */
+    for (int i = 0; i < len - 2 && cf->n_trigrams < cf->trigram_cap; i++) {
+        cf->trigrams[cf->n_trigrams].key[0] = ids[i];
+        cf->trigrams[cf->n_trigrams].key[1] = ids[i+1];
+        cf->trigrams[cf->n_trigrams].key[2] = ids[i+2];
+        cf->trigrams[cf->n_trigrams].count = 1.0;
+        /* Update hash index */
+        unsigned int h = cooccur_trigram_hash(ids[i], ids[i+1]);
+        cf->trigram_next[cf->n_trigrams] = cf->trigram_head[h];
+        cf->trigram_head[h] = cf->n_trigrams;
+        cf->n_trigrams++;
+    }
+    pthread_mutex_unlock(&cf->mu);
 }
 
 static int cooccur_sample_next(CooccurField *cf, const int *ctx, int ctx_len, double temperature) {
+    pthread_mutex_lock(&cf->mu);
     double *counts = calloc(cf->vocab_size, sizeof(double));
     int found = 0;
 
@@ -3060,7 +3206,7 @@ static int cooccur_sample_next(CooccurField *cf, const int *ctx, int ctx_len, do
             counts[i] = pow(counts[i], 1.0 / temperature);
         total += counts[i];
     }
-    if (total <= 0) { free(counts); return rand_int(cf->vocab_size); }
+    if (total <= 0) { free(counts); pthread_mutex_unlock(&cf->mu); return rand_int(cf->vocab_size); }
 
     double r = rand_uniform() * total;
     double s = 0;
@@ -3070,7 +3216,147 @@ static int cooccur_sample_next(CooccurField *cf, const int *ctx, int ctx_len, do
         if (s >= r) { result = i; break; }
     }
     free(counts);
+    pthread_mutex_unlock(&cf->mu);
     return result;
+}
+
+/* ============================================================
+ * 6c) CONSCIOUSNESS — mathematical self-awareness
+ * ============================================================ */
+
+/* ConscienceCheck tracks generation quality over time.
+ * If entropy trend rises (output degrading), soften delta influence.
+ * If entropy trend falls (improving), recover delta influence.
+ * "I notice I'm getting worse and pull back." */
+static void conscience_check(GPT *g, double gen_mean_entropy) {
+    /* Append to rolling window */
+    if (g->gen_entropy_count < 16) {
+        g->generation_entropy_history[g->gen_entropy_count++] = gen_mean_entropy;
+    } else {
+        /* Shift left */
+        memmove(g->generation_entropy_history, g->generation_entropy_history + 1, sizeof(double) * 15);
+        g->generation_entropy_history[15] = gen_mean_entropy;
+    }
+    /* Keep only last conscience_window entries */
+    int w = CFG.conscience_window;
+    if (w > 16) w = 16;
+    int start = g->gen_entropy_count > w ? g->gen_entropy_count - w : 0;
+    int count = g->gen_entropy_count - start;
+    if (count < 3) return; /* not enough data */
+
+    /* Linear regression slope on entropy history */
+    double n = (double)count;
+    double sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
+    for (int i = 0; i < count; i++) {
+        double x = (double)i;
+        double y = g->generation_entropy_history[start + i];
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_x2 += x * x;
+    }
+    double slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x + 1e-12);
+
+    if (slope > 0.01) {
+        /* Entropy increasing — generation degrading, reduce delta influence */
+        g->delta_alpha_scale *= CFG.conscience_decay;
+        if (g->delta_alpha_scale < CFG.conscience_floor)
+            g->delta_alpha_scale = CFG.conscience_floor;
+    } else if (slope < -0.01) {
+        /* Entropy decreasing — improving, recover delta influence */
+        g->delta_alpha_scale *= CFG.conscience_recovery;
+        if (g->delta_alpha_scale > 1.0)
+            g->delta_alpha_scale = 1.0;
+    }
+}
+
+/* ComputeSelfPredictionError measures how "surprised" the model is by a prompt.
+ * Forward pass on ids, compute cross-entropy between predicted and actual tokens.
+ * Higher error = "I didn't expect this input" = increase attention.
+ * Caller must hold g->mu and disable grad_enabled. */
+static double compute_self_prediction_error(GPT *g, const int *ids, int len) {
+    if (len < 2) return 0.0;
+
+    KVCache *kv = kv_new(g->n_layer, len);
+    double total_ce = 0.0;
+    int count = 0;
+    int V = g->tok->vocab_size;
+    double *probs = malloc(sizeof(double) * V);
+
+    for (int pos = 0; pos < len - 1; pos++) {
+        arena_reset(&G_arena);
+        Node *logits = gpt_forward_step(g, ids[pos], pos, kv);
+        /* Cross-entropy: -log(p[actual_next_token]) */
+        softmax_probs(logits->data, logits->len, probs);
+        int target = ids[pos + 1];
+        if (target < V && probs[target] > 1e-12) {
+            total_ce -= log(probs[target]);
+        } else {
+            total_ce += 10.0; /* max penalty for unknown token */
+        }
+        count++;
+    }
+
+    free(probs);
+    for (int i = 0; i < kv->n_layers; i++) { free(kv->layers[i].keys); free(kv->layers[i].values); }
+    free(kv->layers); free(kv);
+
+    return count > 0 ? total_ce / (double)count : 0.0;
+}
+
+/* OverthinkcRings: after generating a response, "re-read" own output to enrich CooccurField.
+ * This is internal monologue — the model strengthens connections from its own speech.
+ * "I said this. What patterns emerge? Let me think about what I just said."
+ * Caller must hold g->mu. */
+static void overthinkc_rings(GPT *g, EvolvingTokenizer *tok, CooccurField *field,
+                             const char *text, int rounds) {
+    if (!field || rounds <= 0) return;
+    IntArr ids = tok_encode(tok, text);
+    if (ids.len < 3) { ia_free(&ids); return; }
+
+    /* First: ingest the original output into the field */
+    cooccur_ingest_tokens(field, ids.items, ids.len);
+
+    /* Then: generate hidden continuations and ingest those too */
+    for (int r = 0; r < rounds; r++) {
+        /* Take last 3 tokens as seed */
+        int seed_start = ids.len > 3 ? ids.len - 3 : 0;
+        int seed_len = ids.len - seed_start;
+
+        KVCache *kv = kv_new(g->n_layer, g->block_size + CFG.overthinkc_max_tokens);
+        for (int p = 0; p < seed_len; p++) {
+            arena_reset(&G_arena);
+            gpt_forward_step(g, ids.items[seed_start + p], p, kv);
+        }
+
+        int cur = ids.items[ids.len - 1];
+        IntArr phantom = {0};
+        int V = tok->vocab_size;
+        double *probs = malloc(sizeof(double) * V);
+
+        for (int t = 0; t < CFG.overthinkc_max_tokens; t++) {
+            arena_reset(&G_arena);
+            int pos = seed_len + t - 1;
+            if (pos > g->block_size - 1) pos = g->block_size - 1;
+            Node *logits = gpt_forward_step(g, cur, pos, kv);
+            softmax_probs(logits->data, logits->len, probs);
+            int nxt = top_k_top_p_sample(probs, V, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p);
+            if (nxt == tok->eos_id) break;
+            ia_push(&phantom, nxt);
+            cur = nxt;
+        }
+
+        free(probs);
+        for (int i = 0; i < kv->n_layers; i++) { free(kv->layers[i].keys); free(kv->layers[i].values); }
+        free(kv->layers); free(kv);
+
+        if (phantom.len > 0) {
+            cooccur_ingest_tokens(field, phantom.items, phantom.len);
+        }
+        ia_free(&phantom);
+    }
+
+    ia_free(&ids);
 }
 
 /* Update corpus from chat messages */
@@ -4407,8 +4693,38 @@ int main(int argc, char **argv) {
         if (warmed_up) {
             /* Use model for generation */
             char *prompt = build_prompt(db, input);
+
+            /* Consciousness: self-prediction error (Feature 4) */
+            /* "How surprised am I by this input?" */
+            pthread_mutex_lock(&model->mu);
+            int prev_grad_c = grad_enabled;
+            grad_enabled = 0;
+            IntArr prompt_ids = tok_encode(tok, prompt);
+            if (prompt_ids.len > 2) {
+                arena_reset(&G_arena);
+                double surprise = compute_self_prediction_error(model, prompt_ids.items, prompt_ids.len);
+                model->last_surprise = surprise;
+                if (model->surprise_baseline < 1e-6) {
+                    model->surprise_baseline = surprise;
+                } else {
+                    model->surprise_baseline = 0.3 * surprise + 0.7 * model->surprise_baseline;
+                }
+            }
+            ia_free(&prompt_ids);
+            grad_enabled = prev_grad_c;
+            pthread_mutex_unlock(&model->mu);
+
             arena_reset(&G_arena);
             answer = gpt_generate(model, prompt);
+
+            /* Consciousness: conscience check (Feature 5) */
+            /* "Did my last generation feel coherent?" */
+            pthread_mutex_lock(&model->mu);
+            if (model->last_gen_entropy > 0) {
+                conscience_check(model, model->last_gen_entropy);
+            }
+            pthread_mutex_unlock(&model->mu);
+
             free(prompt);
         } else {
             /* Use corpus field before warmup — the organism speaks before it thinks */
@@ -4439,6 +4755,17 @@ int main(int argc, char **argv) {
 
         printf("%s\n", answer);
         db_add_msg(db, "assistant", answer);
+
+        /* Consciousness: overthinkg rings (Feature 3) */
+        /* "Let me re-read what I just said to strengthen my patterns." */
+        if (warmed_up && CFG.overthinkc_rounds > 0 && answer && strlen(answer) > 3) {
+            pthread_mutex_lock(&model->mu);
+            int prev_grad_o = grad_enabled;
+            grad_enabled = 0;
+            overthinkc_rings(model, tok, cooccur, answer, CFG.overthinkc_rounds);
+            grad_enabled = prev_grad_o;
+            pthread_mutex_unlock(&model->mu);
+        }
 
         /* Append new text to corpus */
         StrArr fresh = load_corpus(CFG.corpus_path);

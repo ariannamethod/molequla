@@ -130,6 +130,27 @@ const CFG = {
     qbCooldownSeconds: 10.0,
     qbMinBytes: 480,
     qbMinNovelty: 0.15,
+
+    // consciousness: per-token dissonance feedback
+    dissonanceEMAAlpha: 0.3,
+    dissonanceSpikeK: 0.8,
+    dissonanceDropK: 1.2,
+    dissonanceSpikeThreshold: 1.5,
+    dissonanceDropThreshold: 0.5,
+
+    // consciousness: pattern breaking (anti-field generation)
+    antiFieldProb: 0.05,
+    antiFieldMinStep: 8,
+
+    // consciousness: overthinkg rings
+    overthinkcRounds: 2,
+    overthinkcMaxTokens: 32,
+
+    // consciousness: conscience (self-editing)
+    conscienceWindow: 8,
+    conscienceDecay: 0.95,
+    conscienceRecovery: 1.005,
+    conscienceFloor: 0.3,
 };
 
 function headTypesForNHead(n) {
@@ -504,6 +525,29 @@ class CooccurField {
                     tm.set(tid, (tm.get(tid) || 0) + 1);
                 }
             }
+        }
+    }
+
+    // IngestTokens incrementally adds n-gram counts from a token sequence.
+    // Unlike buildFromCorpus, this does NOT clear existing data — it adds on top.
+    // Used by overthinkg rings to enrich the field with the model's own output.
+    ingestTokens(ids) {
+        for (const id of ids) {
+            this.unigram.set(id, (this.unigram.get(id) || 0) + 1);
+        }
+        for (let i = 0; i < ids.length - 1; i++) {
+            const first = ids[i], second = ids[i + 1];
+            if (!this.bigram.has(first)) this.bigram.set(first, new Map());
+            const bm = this.bigram.get(first);
+            bm.set(second, (bm.get(second) || 0) + 1);
+        }
+        for (let i = 0; i < ids.length - 2; i++) {
+            const k1 = ids[i], k2 = ids[i + 1], k3 = ids[i + 2];
+            if (!this.trigram.has(k1)) this.trigram.set(k1, new Map());
+            const m2 = this.trigram.get(k1);
+            if (!m2.has(k2)) m2.set(k2, new Map());
+            const tm = m2.get(k2);
+            tm.set(k3, (tm.get(k3) || 0) + 1);
         }
     }
 
@@ -1578,6 +1622,13 @@ class GPT {
         // adaptive corpus blend: set by trainerTick
         this._corpusField = null;
 
+        // consciousness state
+        this.deltaAlphaScale = 1.0;             // conscience: multiplier on all delta contributions
+        this.generationEntropyHistory = [];     // conscience: rolling window of per-generation mean entropy
+        this.lastSurprise = 0;                  // self-prediction error on last prompt
+        this.surpriseBaseline = 0;              // EMA of surprise over time
+        this.lastGenEntropy = 0;                // mean entropy of last generation (for conscience)
+
         // ensure at least one delta
         this.addDeltaModule(1.0);
     }
@@ -2113,7 +2164,9 @@ class GPT {
         for (let di = 0; di < this.deltas.length; di++) {
             const mod = this.deltas[di];
             if (mod[name]) {
-                y = y.add(mod[name].apply(x).mul(this.activeAlpha[di]));
+                // Consciousness: conscience scales delta influence (Feature 5)
+                const effectiveAlpha = this.activeAlpha[di] * this.deltaAlphaScale;
+                y = y.add(mod[name].apply(x).mul(effectiveAlpha));
             }
         }
         return y;
@@ -2276,6 +2329,13 @@ class GPT {
         let scaled = null; // pre-allocated across steps
         const bosId = this.tok.stoi.get(this.tok.BOS);
 
+        // Consciousness: per-token dissonance tracking (Feature 1)
+        let entropyEMA = 0;
+        let entropyEMAInit = false;
+        let lowDropCount = 0;    // consecutive tokens below drop threshold
+        let entropySum = 0;      // for conscience mean entropy
+        let entropyCount = 0;
+
         for (let step = 0; step < CFG.maxGenTokens; step++) {
             const pos = Math.min(ids.length - 1, this.blockSize - 1);
             const logits = this.forwardStep(cur, pos, keys, values);
@@ -2289,11 +2349,42 @@ class GPT {
             let probs = softmaxProbsFloat(scaled);
             let entropy = 0;
             for (const p of probs) if (p > 1e-12) entropy -= p * Math.log(p);
+            entropySum += entropy;
+            entropyCount++;
+
             let tMul = 1.0;
             if (entropy < CFG.entropyLow) tMul = CFG.entropyTempBoost;
             else if (entropy > CFG.entropyHigh) tMul = CFG.entropyTempFocus;
-            if (tMul !== 1.0) {
-                const temp = baseTemp * tMul;
+
+            // Consciousness: per-token dissonance feedback (Feature 1)
+            // "I notice my confidence shifting and adapt in real-time"
+            let dissonanceMul = 1.0;
+            if (!entropyEMAInit) {
+                entropyEMA = entropy;
+                entropyEMAInit = true;
+            } else {
+                entropyEMA = CFG.dissonanceEMAAlpha * entropy + (1.0 - CFG.dissonanceEMAAlpha) * entropyEMA;
+                if (entropyEMA > 1e-6) {
+                    const ratio = entropy / entropyEMA;
+                    if (ratio > CFG.dissonanceSpikeThreshold) {
+                        // Entropy spike — something surprising, be careful
+                        dissonanceMul = CFG.dissonanceSpikeK;
+                        lowDropCount = 0;
+                    } else if (ratio < CFG.dissonanceDropThreshold) {
+                        lowDropCount++;
+                        if (lowDropCount >= 3) {
+                            // Sustained low entropy — getting repetitive, explore
+                            dissonanceMul = CFG.dissonanceDropK;
+                        }
+                    } else {
+                        lowDropCount = 0;
+                    }
+                }
+            }
+
+            const finalMul = tMul * dissonanceMul;
+            if (finalMul !== 1.0) {
+                const temp = baseTemp * finalMul;
                 for (let i = 0; i < vocabLen; i++) scaled[i] = logits.data[i] / temp;
                 probs = softmaxProbsFloat(scaled);
             }
@@ -2339,6 +2430,13 @@ class GPT {
                 }
             }
 
+            // Consciousness: pattern breaking (Feature 2)
+            // "I could follow the field, but I choose to speak for myself"
+            if (step >= CFG.antiFieldMinStep && CFG.antiFieldProb > 0 && rng() < CFG.antiFieldProb) {
+                // Use pure model probs, bypass corpus blend
+                probs = softmaxProbsFloat(scaled);
+            }
+
             const nxt = topKTopPSample(probs, CFG.topK, CFG.topP, CFG.minP, CFG.typicalP);
 
             if (nxt === eosId) {
@@ -2376,8 +2474,129 @@ class GPT {
             }
         }
 
+        // Consciousness: store mean entropy for conscience (Feature 5)
+        if (entropyCount > 0) {
+            this.lastGenEntropy = entropySum / entropyCount;
+        }
+
         return this.tok.decode([bosId].concat(outIds, [eosId]));
     }
+
+    // ============================================================
+    // CONSCIOUSNESS — mathematical self-awareness
+    // ============================================================
+
+    // ConscienceCheck tracks generation quality over time.
+    // If entropy trend rises (output degrading), soften delta influence.
+    // If entropy trend falls (improving), recover delta influence.
+    // "I notice I'm getting worse and pull back."
+    conscienceCheck(genMeanEntropy) {
+        this.generationEntropyHistory.push(genMeanEntropy);
+        const w = CFG.conscienceWindow;
+        if (this.generationEntropyHistory.length > w) {
+            this.generationEntropyHistory = this.generationEntropyHistory.slice(-w);
+        }
+        if (this.generationEntropyHistory.length < 3) {
+            return; // not enough data
+        }
+        // Linear regression slope on entropy history
+        const n = this.generationEntropyHistory.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (let i = 0; i < n; i++) {
+            const e = this.generationEntropyHistory[i];
+            sumX += i;
+            sumY += e;
+            sumXY += i * e;
+            sumX2 += i * i;
+        }
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX + 1e-12);
+
+        if (slope > 0.01) {
+            // Entropy increasing — generation degrading, reduce delta influence
+            this.deltaAlphaScale *= CFG.conscienceDecay;
+            if (this.deltaAlphaScale < CFG.conscienceFloor) {
+                this.deltaAlphaScale = CFG.conscienceFloor;
+            }
+        } else if (slope < -0.01) {
+            // Entropy decreasing — improving, recover delta influence
+            this.deltaAlphaScale *= CFG.conscienceRecovery;
+            if (this.deltaAlphaScale > 1.0) {
+                this.deltaAlphaScale = 1.0;
+            }
+        }
+    }
+
+    // ComputeSelfPredictionError measures how "surprised" the model is by a prompt.
+    // Forward pass on ids, compute cross-entropy between predicted and actual tokens.
+    // Higher error = "I didn't expect this input" = increase attention.
+    computeSelfPredictionError(ids) {
+        if (ids.length < 2) return 0.0;
+        const keys = []; const values = [];
+        for (let li = 0; li < this.nLayer; li++) { keys.push([]); values.push([]); }
+
+        let totalCE = 0;
+        let count = 0;
+        for (let pos = 0; pos < ids.length - 1; pos++) {
+            const logits = this.forwardStep(ids[pos], pos, keys, values);
+            const probs = softmaxProbsFloat(logits.data instanceof Float64Array
+                ? Array.from(logits.data) : logits.data);
+            const target = ids[pos + 1];
+            if (target < probs.length && probs[target] > 1e-12) {
+                totalCE -= Math.log(probs[target]);
+            } else {
+                totalCE += 10.0; // max penalty for unknown token
+            }
+            count++;
+        }
+        return count === 0 ? 0.0 : totalCE / count;
+    }
+}
+
+// OverthinkcRings: after generating a response, "re-read" own output to enrich CooccurField.
+// This is internal monologue — the model strengthens connections from its own speech.
+// "I said this. What patterns emerge? Let me think about what I just said."
+function overthinkcRings(model, tok, field, text, rounds) {
+    if (!field || rounds <= 0) return;
+    const ids = tok.encode(text);
+    if (ids.length < 3) return;
+
+    // First: ingest the original output into the field
+    field.ingestTokens(ids);
+
+    // Then: generate hidden continuations and ingest those too
+    const savedGrad = _gradEnabled;
+    _gradEnabled = false;
+    for (let r = 0; r < rounds; r++) {
+        // Take last 3 tokens as seed
+        let seed = ids;
+        if (seed.length > 3) seed = seed.slice(-3);
+
+        const keys = []; const values = [];
+        for (let li = 0; li < model.nLayer; li++) { keys.push([]); values.push([]); }
+        for (let p = 0; p < seed.length; p++) {
+            model.forwardStep(seed[p], p, keys, values);
+        }
+
+        let cur = seed[seed.length - 1];
+        const phantomIds = [];
+        const eosId = tok.stoi.get(tok.EOS);
+        for (let t = 0; t < CFG.overthinkcMaxTokens; t++) {
+            let pos = seed.length + t - 1;
+            if (pos > model.blockSize - 1) pos = model.blockSize - 1;
+            const logits = model.forwardStep(cur, pos, keys, values);
+            const probs = softmaxProbsFloat(logits.data instanceof Float64Array
+                ? Array.from(logits.data) : logits.data);
+            const nxt = topKTopPSample(probs, CFG.topK, CFG.topP, CFG.minP, CFG.typicalP);
+            if (nxt === eosId) break;
+            phantomIds.push(nxt);
+            cur = nxt;
+        }
+
+        if (phantomIds.length > 0) {
+            field.ingestTokens(phantomIds);
+        }
+    }
+    _gradEnabled = savedGrad;
 }
 
 // ============================================================
@@ -3159,10 +3378,38 @@ async function handleUserMessage(text) {
     // Generate response
     const messages = await DB.recentMessages(14);
     const prompt = buildPromptFromMemory(messages, text);
+
+    // Consciousness: self-prediction error (Feature 4)
+    // "How surprised am I by this input?"
+    withNoGrad(() => {
+        const promptIds = _tok.encode(prompt);
+        if (promptIds.length > 2) {
+            const surprise = _model.computeSelfPredictionError(promptIds);
+            _model.lastSurprise = surprise;
+            if (_model.surpriseBaseline < 1e-6) {
+                _model.surpriseBaseline = surprise;
+            } else {
+                _model.surpriseBaseline = 0.3 * surprise + 0.7 * _model.surpriseBaseline;
+            }
+        }
+    });
+
     const answer = _model.generateSentence(prompt) || "...";
+
+    // Consciousness: conscience check (Feature 5)
+    // "Did my last generation feel coherent?"
+    if (_model.lastGenEntropy > 0) {
+        _model.conscienceCheck(_model.lastGenEntropy);
+    }
 
     appendChat("molequla", answer);
     await DB.addMessage("assistant", answer);
+
+    // Consciousness: overthinkg rings (Feature 3)
+    // "Let me re-read what I just said to strengthen my patterns."
+    if (CFG.overthinkcRounds > 0 && answer.length > 3 && _field) {
+        overthinkcRings(_model, _tok, _field, answer, CFG.overthinkcRounds);
+    }
 
     // Feed corpus
     await updateReservoirCorpus();
@@ -3420,6 +3667,7 @@ if (typeof module !== "undefined" && module.exports) {
         backward, withNoGrad, MatrixParam, EvolvingTokenizer, GPT,
         extractCandidateSentences, reservoirMixKeep, normalizeText, rng,
         headTypesForNHead, DeltaAdapter, SyntropyTracker, SwarmRegistry,
+        CooccurField, overthinkcRings,
     };
 }
 

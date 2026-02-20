@@ -139,6 +139,27 @@ class Config:
     qb_min_novelty: float = 0.15
     qb_cooldown_seconds: float = 60.0
 
+    # consciousness: per-token dissonance feedback
+    dissonance_ema_alpha: float = 0.3        # EMA smoothing for entropy within generation
+    dissonance_spike_k: float = 0.8          # temp multiplier when entropy spikes
+    dissonance_drop_k: float = 1.2           # temp multiplier when entropy drops
+    dissonance_spike_threshold: float = 1.5  # entropy/EMA ratio triggering spike
+    dissonance_drop_threshold: float = 0.5   # entropy/EMA ratio triggering drop
+
+    # consciousness: pattern breaking (anti-field generation)
+    anti_field_prob: float = 0.05      # probability of pure-model token (bypass corpus)
+    anti_field_min_step: int = 8       # don't anti-field before this many tokens
+
+    # consciousness: overthinkg rings
+    overthinkc_rounds: int = 2         # hidden re-generation rounds after response
+    overthinkc_max_tokens: int = 32    # max tokens per overthinkg round
+
+    # consciousness: conscience (self-editing)
+    conscience_window: int = 8         # rolling window for generation entropy trend
+    conscience_decay: float = 0.95     # delta_alpha_scale reduction factor
+    conscience_recovery: float = 1.005 # delta_alpha_scale recovery factor
+    conscience_floor: float = 0.3      # minimum delta_alpha_scale
+
 
 CFG = Config()
 
@@ -377,21 +398,35 @@ class CooccurField:
         self.bigram = defaultdict(Counter)
         self.trigram = defaultdict(Counter)
         self.total_tokens = 0
+        self.lock = threading.Lock()  # protects concurrent access (overthinkg + background trainer)
 
     def build_from_corpus(self, tok, docs):
-        self.unigram.clear()
-        self.bigram.clear()
-        self.trigram.clear()
-        self.total_tokens = 0
-        for doc in docs:
-            ids = tok.encode(doc)
-            for i, tid in enumerate(ids):
+        with self.lock:
+            self.unigram.clear()
+            self.bigram.clear()
+            self.trigram.clear()
+            self.total_tokens = 0
+            for doc in docs:
+                ids = tok.encode(doc)
+                for i, tid in enumerate(ids):
+                    self.unigram[tid] += 1
+                    self.total_tokens += 1
+                    if i >= 1:
+                        self.bigram[ids[i - 1]][tid] += 1
+                    if i >= 2:
+                        self.trigram[(ids[i - 2], ids[i - 1])][tid] += 1
+
+    def ingest_tokens(self, ids):
+        """Incrementally add n-gram counts from a token sequence.
+        Unlike build_from_corpus, does NOT clear existing data — adds on top.
+        Used by overthinkg rings to enrich the field with the model's own output."""
+        with self.lock:
+            for tid in ids:
                 self.unigram[tid] += 1
-                self.total_tokens += 1
-                if i >= 1:
-                    self.bigram[ids[i - 1]][tid] += 1
-                if i >= 2:
-                    self.trigram[(ids[i - 2], ids[i - 1])][tid] += 1
+            for i in range(len(ids) - 1):
+                self.bigram[ids[i]][ids[i + 1]] += 1
+            for i in range(len(ids) - 2):
+                self.trigram[(ids[i], ids[i + 1])][ids[i + 2]] += 1
 
     def sample_next(self, context_ids, temperature=1.0):
         """Trigram -> bigram -> unigram fallback sampling."""
@@ -458,10 +493,53 @@ def _generate_resonant_impl(model, tok, field, prompt_text, model_alpha):
     out_ids = []
     eos_id = tok.stoi.get(tok.EOS, -1)
 
+    # Consciousness: per-token dissonance tracking (Feature 1)
+    entropy_ema = 0.0
+    entropy_ema_init = False
+    low_drop_count = 0
+    entropy_sum = 0.0
+    entropy_count = 0
+
     for step in range(CFG.corpus_gen_max_tokens):
         pos = min(len(ids) - 1, model.block_size - 1)
         logits = model.forward_step(cur, pos, keys, values)
-        model_probs = softmax_probs_float((logits.data / CFG.temperature).tolist())
+
+        # Model probs with dissonance-adaptive temperature
+        temp = CFG.temperature
+        if temp <= 1e-6:
+            temp = 1e-6
+        scaled = (logits.data / temp).tolist()
+        model_probs = softmax_probs_float(scaled)
+
+        # Per-token entropy for dissonance
+        probs_arr = np.array(model_probs)
+        ent_mask = probs_arr > 1e-12
+        entropy = -float(np.sum(probs_arr[ent_mask] * np.log(probs_arr[ent_mask])))
+        entropy_sum += entropy
+        entropy_count += 1
+
+        # Consciousness: per-token dissonance feedback (Feature 1)
+        dissonance_mul = 1.0
+        if not entropy_ema_init:
+            entropy_ema = entropy
+            entropy_ema_init = True
+        else:
+            entropy_ema = CFG.dissonance_ema_alpha * entropy + (1.0 - CFG.dissonance_ema_alpha) * entropy_ema
+            if entropy_ema > 1e-6:
+                ratio = entropy / entropy_ema
+                if ratio > CFG.dissonance_spike_threshold:
+                    dissonance_mul = CFG.dissonance_spike_k
+                    low_drop_count = 0
+                elif ratio < CFG.dissonance_drop_threshold:
+                    low_drop_count += 1
+                    if low_drop_count >= 3:
+                        dissonance_mul = CFG.dissonance_drop_k
+                else:
+                    low_drop_count = 0
+        if dissonance_mul != 1.0:
+            temp *= dissonance_mul
+            scaled = (logits.data / temp).tolist()
+            model_probs = softmax_probs_float(scaled)
 
         # corpus bias
         corpus_dist = {}
@@ -488,6 +566,11 @@ def _generate_resonant_impl(model, tok, field, prompt_text, model_alpha):
         else:
             probs = model_probs
 
+        # Consciousness: pattern breaking (Feature 2)
+        # "I could follow the field, but I choose to speak for myself"
+        if step >= CFG.anti_field_min_step and CFG.anti_field_prob > 0 and random.random() < CFG.anti_field_prob:
+            probs = model_probs  # pure model voice, bypass corpus
+
         nxt = top_k_top_p_sample(probs, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p)
         if nxt == eos_id and step >= CFG.min_gen_tokens:
             break
@@ -504,6 +587,10 @@ def _generate_resonant_impl(model, tok, field, prompt_text, model_alpha):
             values = [[] for _ in range(model.n_layer)]
             for p in range(len(ids) - 1):
                 _ = model.forward_step(ids[p], p, keys, values)
+
+    # Consciousness: store mean entropy for conscience (Feature 5)
+    if entropy_count > 0:
+        model.last_gen_entropy = entropy_sum / entropy_count
 
     return tok.decode([tok.stoi[tok.BOS]] + out_ids + [eos_id])
 
@@ -1293,6 +1380,13 @@ class GPT:
         self._growth_freeze_remaining = 0  # ontogenesis: freeze base after growth
         self._corpus_field = None  # set by background_trainer for adaptive blend
 
+        # consciousness state
+        self.delta_alpha_scale = 1.0         # conscience: multiplier on all delta contributions
+        self.generation_entropy_history = []  # conscience: rolling window of per-generation mean entropy
+        self.last_surprise = 0.0             # self-prediction error on last prompt
+        self.surprise_baseline = 0.0         # EMA of surprise over time
+        self.last_gen_entropy = 0.0          # mean entropy of last generation (for conscience)
+
         # Base weights
         V = tok.vocab_size
         self.base = {}
@@ -1800,7 +1894,9 @@ class GPT:
         y = self.base[name].matvec(x)
         for alpha, mod in zip(self.active_alpha, self.deltas):
             if name in mod:
-                y = y + (mod[name].apply(x) * alpha)
+                # Consciousness: conscience scales delta influence (Feature 5)
+                effective_alpha = alpha * self.delta_alpha_scale
+                y = y + (mod[name].apply(x) * effective_alpha)
         return y
 
     def forward_step(self, token_id, pos_id, keys, values):
@@ -1950,6 +2046,13 @@ class GPT:
         out_ids = []
         recent = []
 
+        # Consciousness: per-token dissonance tracking (Feature 1)
+        entropy_ema = 0.0
+        entropy_ema_init = False
+        low_drop_count = 0       # consecutive tokens below drop threshold
+        entropy_sum = 0.0        # for conscience mean entropy
+        entropy_count = 0
+
         for step in range(CFG.max_gen_tokens):
             pos = min(len(ids) - 1, self.block_size - 1)
             logits = self.forward_step(cur, pos, keys, values)
@@ -1965,20 +2068,47 @@ class GPT:
             probs_arr = np.array(probs)
             mask = probs_arr > 1e-12
             entropy = -float(np.sum(probs_arr[mask] * np.log(probs_arr[mask])))
+            entropy_sum += entropy
+            entropy_count += 1
+
             t_mul = 1.0
             if entropy < CFG.entropy_low:
                 t_mul = CFG.entropy_temp_boost
             elif entropy > CFG.entropy_high:
                 t_mul = CFG.entropy_temp_focus
+
+            # Consciousness: per-token dissonance feedback (Feature 1)
+            # "I notice my confidence shifting and adapt in real-time"
+            dissonance_mul = 1.0
+            if not entropy_ema_init:
+                entropy_ema = entropy
+                entropy_ema_init = True
+            else:
+                entropy_ema = CFG.dissonance_ema_alpha * entropy + (1.0 - CFG.dissonance_ema_alpha) * entropy_ema
+                if entropy_ema > 1e-6:
+                    ratio = entropy / entropy_ema
+                    if ratio > CFG.dissonance_spike_threshold:
+                        # Entropy spike — something surprising, be careful
+                        dissonance_mul = CFG.dissonance_spike_k
+                        low_drop_count = 0
+                    elif ratio < CFG.dissonance_drop_threshold:
+                        low_drop_count += 1
+                        if low_drop_count >= 3:
+                            # Sustained low entropy — getting repetitive, explore
+                            dissonance_mul = CFG.dissonance_drop_k
+                    else:
+                        low_drop_count = 0
+
+            final_mul = t_mul * dissonance_mul
             # Only recompute softmax if temperature actually changed
-            if t_mul != 1.0:
-                temp = base_temp * t_mul
+            if final_mul != 1.0:
+                temp = base_temp * final_mul
                 scaled = (raw / temp).tolist()
                 probs = softmax_probs_float(scaled)
 
             # Adaptive corpus blend: corpus field fades as model becomes coherent
             if self._corpus_field and self._corpus_field.bigram:
-                # sigmoid: low entropy → high model_alpha, high entropy → low model_alpha
+                # sigmoid: low entropy -> high model_alpha, high entropy -> low model_alpha
                 model_alpha = 1.0 / (1.0 + math.exp(-CFG.corpus_fade_k * (CFG.corpus_fade_threshold - entropy)))
                 if model_alpha < 0.99:  # worth blending
                     corpus_dist = {}
@@ -2000,6 +2130,12 @@ class GPT:
                         total_b = sum(probs)
                         if total_b > 0:
                             probs = [p / total_b for p in probs]
+
+            # Consciousness: pattern breaking (Feature 2)
+            # "I could follow the field, but I choose to speak for myself"
+            if step >= CFG.anti_field_min_step and CFG.anti_field_prob > 0 and random.random() < CFG.anti_field_prob:
+                # Use pure model probs, bypass corpus blend
+                probs = softmax_probs_float(raw_scaled)
 
             nxt = top_k_top_p_sample(probs, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p)
 
@@ -2032,7 +2168,118 @@ class GPT:
                 for p in range(len(ids) - 1):
                     _ = self.forward_step(ids[p], p, keys, values)
 
+        # Consciousness: store mean entropy for conscience (Feature 5)
+        if entropy_count > 0:
+            self.last_gen_entropy = entropy_sum / entropy_count
+
         return self.tok.decode([self.tok.stoi[self.tok.BOS]] + out_ids + [self.tok.stoi[self.tok.EOS]])
+
+    # ============================================================
+    # 7b) CONSCIOUSNESS — mathematical self-awareness
+    # ============================================================
+
+    def conscience_check(self, gen_mean_entropy):
+        """Track generation quality over time via entropy trend.
+        If entropy trend rises (output degrading), soften delta influence.
+        If entropy trend falls (improving), recover delta influence.
+        'I notice I'm getting worse and pull back.'"""
+        self.generation_entropy_history.append(gen_mean_entropy)
+        w = CFG.conscience_window
+        if len(self.generation_entropy_history) > w:
+            self.generation_entropy_history = self.generation_entropy_history[-w:]
+        if len(self.generation_entropy_history) < 3:
+            return  # not enough data
+
+        # Linear regression slope on entropy history
+        n = len(self.generation_entropy_history)
+        sum_x, sum_y, sum_xy, sum_x2 = 0.0, 0.0, 0.0, 0.0
+        for i, e in enumerate(self.generation_entropy_history):
+            x = float(i)
+            sum_x += x
+            sum_y += e
+            sum_xy += x * e
+            sum_x2 += x * x
+        slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x + 1e-12)
+
+        if slope > 0.01:
+            # Entropy increasing — generation degrading, reduce delta influence
+            self.delta_alpha_scale *= CFG.conscience_decay
+            if self.delta_alpha_scale < CFG.conscience_floor:
+                self.delta_alpha_scale = CFG.conscience_floor
+        elif slope < -0.01:
+            # Entropy decreasing — improving, recover delta influence
+            self.delta_alpha_scale *= CFG.conscience_recovery
+            if self.delta_alpha_scale > 1.0:
+                self.delta_alpha_scale = 1.0
+
+    def compute_self_prediction_error(self, ids):
+        """Measure how 'surprised' the model is by input tokens.
+        Forward pass on ids, compute mean cross-entropy between predicted and actual.
+        Higher error = 'I didn't expect this input' = increase attention."""
+        if len(ids) < 2:
+            return 0.0
+        keys = [[] for _ in range(self.n_layer)]
+        values = [[] for _ in range(self.n_layer)]
+
+        total_ce = 0.0
+        count = 0
+        for pos in range(len(ids) - 1):
+            logits = self.forward_step(ids[pos], pos, keys, values)
+            probs = softmax_probs_float((logits.data).tolist())
+            target = ids[pos + 1]
+            if target < len(probs) and probs[target] > 1e-12:
+                total_ce -= math.log(probs[target])
+            else:
+                total_ce += 10.0  # max penalty for unknown token
+            count += 1
+        if count == 0:
+            return 0.0
+        return total_ce / count
+
+
+def overthinkc_rings(model, tok, field, text, rounds):
+    """After generating a response, 're-read' own output to enrich CooccurField.
+    Internal monologue — the model strengthens connections from its own speech.
+    'I said this. What patterns emerge? Let me think about what I just said.'"""
+    if field is None or rounds <= 0:
+        return
+    ids = tok.encode(text)
+    if len(ids) < 3:
+        return
+
+    # First: ingest the original output into the field
+    field.ingest_tokens(ids)
+
+    # Then: generate hidden continuations and ingest those too
+    for _ in range(rounds):
+        # Take last 3 tokens as seed
+        seed = ids[-3:] if len(ids) > 3 else ids
+
+        # Quick generation without grad (caller should hold lock or run async)
+        with no_grad():
+            keys = [[] for _ in range(model.n_layer)]
+            values = [[] for _ in range(model.n_layer)]
+            for p in range(len(seed)):
+                model.forward_step(seed[p], p, keys, values)
+
+            cur = seed[-1]
+            phantom_ids = []
+            eos_id = tok.stoi[tok.EOS]
+            for t in range(CFG.overthinkc_max_tokens):
+                pos = len(seed) + t - 1
+                if pos > model.block_size - 1:
+                    pos = model.block_size - 1
+                logits = model.forward_step(cur, pos, keys, values)
+                probs = softmax_probs_float(logits.data.tolist())
+                nxt = top_k_top_p_sample(probs, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p)
+                if nxt == eos_id:
+                    break
+                phantom_ids.append(nxt)
+                cur = nxt
+
+        if phantom_ids:
+            field.ingest_tokens(phantom_ids)
+
 
 # ============================================================
 # 8) CHECKPOINTING — modular, compatible, no merge-amnesia
@@ -2842,10 +3089,40 @@ async def chat_main():
             update_reservoir_corpus(con, CFG.corpus_path, CFG.max_corpus_lines)
 
             prompt = build_prompt_from_memory(con, user_text)
+
+            # Consciousness: self-prediction error (Feature 4)
+            # "How surprised am I by this input?"
+            with model.lock, no_grad():
+                prompt_ids = tok.encode(prompt)
+                if len(prompt_ids) > 2:
+                    surprise = model.compute_self_prediction_error(prompt_ids)
+                    model.last_surprise = surprise
+                    if model.surprise_baseline < 1e-6:
+                        model.surprise_baseline = surprise
+                    else:
+                        model.surprise_baseline = 0.3 * surprise + 0.7 * model.surprise_baseline
+
             answer = model.generate_sentence(prompt_text=prompt) or "..."
+
+            # Consciousness: conscience check (Feature 5)
+            # "Did my last generation feel coherent?"
+            with model.lock:
+                if model.last_gen_entropy > 0:
+                    model.conscience_check(model.last_gen_entropy)
 
             print(answer)
             db_add_message(con, "assistant", answer)
+
+            # Consciousness: overthinkg rings (Feature 3)
+            # "Let me re-read what I just said to strengthen my patterns."
+            if CFG.overthinkc_rounds > 0 and len(answer) > 3 and model._corpus_field is not None:
+                def _overthink(text, mdl, tkn, fld, rounds):
+                    with mdl.lock:
+                        overthinkc_rings(mdl, tkn, fld, text, rounds)
+                t = threading.Thread(target=_overthink,
+                                     args=(answer, model, tok, model._corpus_field, CFG.overthinkc_rounds),
+                                     daemon=True)
+                t.start()
 
     except KeyboardInterrupt:
         pass
