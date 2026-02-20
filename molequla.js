@@ -97,14 +97,14 @@ const CFG = {
     gammaSparsityThreshold: 0.01,
 
     // noise immune system
-    noiseDriftThreshold: -0.15,
-    gammaMinMagnitude: 0.01,
+    noiseDriftThreshold: -0.1,
+    gammaMinMagnitude: 1e-6,
 
     // entropy-adaptive generation
-    entropyLow: 1.0,
-    entropyHigh: 4.0,
-    entropyTempBoost: 1.3,
-    entropyTempFocus: 0.7,
+    entropyLow: 0.5,
+    entropyHigh: 1.5,
+    entropyTempBoost: 1.2,
+    entropyTempFocus: 0.8,
 
     // corpus generation
     corpusGenMaxTokens: 60,
@@ -152,6 +152,10 @@ const CFG = {
     conscienceDecay: 0.95,
     conscienceRecovery: 1.005,
     conscienceFloor: 0.3,
+
+    // frequency/presence penalty
+    freqPenalty: 0.3,
+    presencePenalty: 0.3,
 };
 
 function headTypesForNHead(n) {
@@ -2340,9 +2344,22 @@ class GPT {
         let entropySum = 0;      // for conscience mean entropy
         let entropyCount = 0;
 
+        // Frequency/presence penalty tracking
+        const tokenCounts = new Map();
+
         for (let step = 0; step < CFG.maxGenTokens; step++) {
             const pos = Math.min(ids.length - 1, this.blockSize - 1);
             const logits = this.forwardStep(cur, pos, keys, values);
+
+            // Frequency/presence penalty — penalize repeated tokens before temperature scaling
+            if (CFG.freqPenalty > 0 || CFG.presencePenalty > 0) {
+                for (const [tid, cnt] of tokenCounts) {
+                    if (tid < logits.data.length) {
+                        logits.data[tid] -= CFG.freqPenalty * cnt;
+                        if (cnt > 0) logits.data[tid] -= CFG.presencePenalty;
+                    }
+                }
+            }
 
             // entropy-adaptive temperature (with syntropy offset)
             let baseTemp = CFG.temperature + this.syntropyTempOffset;
@@ -2451,6 +2468,7 @@ class GPT {
             ids.push(nxt);
             cur = nxt;
             outIds.push(nxt);
+            tokenCounts.set(nxt, (tokenCounts.get(nxt) || 0) + 1);
 
             recent.push(nxt);
             if (recent.length > CFG.repetitionGuard * 2) {
@@ -2570,37 +2588,40 @@ function overthinkcRings(model, tok, field, text, rounds) {
     // Then: generate hidden continuations and ingest those too
     const savedGrad = _gradEnabled;
     _gradEnabled = false;
-    for (let r = 0; r < rounds; r++) {
-        // Take last 3 tokens as seed
-        let seed = ids;
-        if (seed.length > 3) seed = seed.slice(-3);
+    try {
+        for (let r = 0; r < rounds; r++) {
+            // Take last 3 tokens as seed
+            let seed = ids;
+            if (seed.length > 3) seed = seed.slice(-3);
 
-        const keys = []; const values = [];
-        for (let li = 0; li < model.nLayer; li++) { keys.push([]); values.push([]); }
-        for (let p = 0; p < seed.length; p++) {
-            model.forwardStep(seed[p], p, keys, values);
-        }
+            const keys = []; const values = [];
+            for (let li = 0; li < model.nLayer; li++) { keys.push([]); values.push([]); }
+            for (let p = 0; p < seed.length; p++) {
+                model.forwardStep(seed[p], p, keys, values);
+            }
 
-        let cur = seed[seed.length - 1];
-        const phantomIds = [];
-        const eosId = tok.stoi.get(tok.EOS);
-        for (let t = 0; t < CFG.overthinkcMaxTokens; t++) {
-            let pos = seed.length + t - 1;
-            if (pos > model.blockSize - 1) pos = model.blockSize - 1;
-            const logits = model.forwardStep(cur, pos, keys, values);
-            const probs = softmaxProbsFloat(logits.data instanceof Float64Array
-                ? Array.from(logits.data) : logits.data);
-            const nxt = topKTopPSample(probs, CFG.topK, CFG.topP, CFG.minP, CFG.typicalP);
-            if (nxt === eosId) break;
-            phantomIds.push(nxt);
-            cur = nxt;
-        }
+            let cur = seed[seed.length - 1];
+            const phantomIds = [];
+            const eosId = tok.stoi.get(tok.EOS);
+            for (let t = 0; t < CFG.overthinkcMaxTokens; t++) {
+                let pos = seed.length + t - 1;
+                if (pos > model.blockSize - 1) pos = model.blockSize - 1;
+                const logits = model.forwardStep(cur, pos, keys, values);
+                const probs = softmaxProbsFloat(logits.data instanceof Float64Array
+                    ? Array.from(logits.data) : logits.data);
+                const nxt = topKTopPSample(probs, CFG.topK, CFG.topP, CFG.minP, CFG.typicalP);
+                if (nxt === eosId) break;
+                phantomIds.push(nxt);
+                cur = nxt;
+            }
 
-        if (phantomIds.length > 0) {
-            field.ingestTokens(phantomIds);
+            if (phantomIds.length > 0) {
+                field.ingestTokens(phantomIds);
+            }
         }
+    } finally {
+        _gradEnabled = savedGrad;
     }
-    _gradEnabled = savedGrad;
 }
 
 // ============================================================

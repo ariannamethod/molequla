@@ -96,6 +96,8 @@ class Config:
     max_gen_tokens: int = 180
     min_gen_tokens: int = 16
     repetition_guard: int = 4
+    freq_penalty: float = 0.3
+    presence_penalty: float = 0.3
 
     # tokenizer evolution
     enable_bpe_after_chars: int = 20000  # corpus size threshold to begin learning merges
@@ -2069,6 +2071,9 @@ class GPT:
         out_ids = []
         recent = []
 
+        # Frequency / presence penalty token tracking
+        token_counts = {}
+
         # Consciousness: per-token dissonance tracking (Feature 1)
         entropy_ema = 0.0
         entropy_ema_init = False
@@ -2085,6 +2090,13 @@ class GPT:
             if base_temp <= 1e-6:
                 base_temp = 1e-6
             raw = logits.data
+            # Frequency / presence penalty: penalize repeated tokens
+            if CFG.freq_penalty > 0 or CFG.presence_penalty > 0:
+                for tid, cnt in token_counts.items():
+                    if tid < len(raw):
+                        raw[tid] -= CFG.freq_penalty * cnt
+                        if cnt > 0:
+                            raw[tid] -= CFG.presence_penalty
             raw_scaled = (raw / base_temp).tolist()
             probs = softmax_probs_float(raw_scaled)
             # Compute entropy via numpy (vectorized, no Python loop)
@@ -2171,6 +2183,7 @@ class GPT:
             ids.append(nxt)
             cur = nxt
             out_ids.append(nxt)
+            token_counts[nxt] = token_counts.get(nxt, 0) + 1
 
             recent.append(nxt)
             if len(recent) > CFG.repetition_guard * 2:

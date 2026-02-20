@@ -68,14 +68,14 @@ function saveCheckpoint(model, tok) {
             growth_stages: CFG.growthStages, freeze_after_growth_steps: CFG.freezeAfterGrowthSteps, post_growth_lr_scale: CFG.postGrowthLRScale,
             warmup_steps: CFG.warmupSteps, micro_steps: CFG.microSteps,
             accum_steps: CFG.accumSteps, batch_size: CFG.batchSize || 1,
-            learning_rate: CFG.lr, lr_min: CFG.lrMin, cosine_warmup_steps: CFG.cosineWarmupSteps,
+            learning_rate: CFG.learningRate, lr_min: CFG.lrMin, cosine_warmup_steps: CFG.cosineWarmupSteps,
             beta1: CFG.beta1, beta2: CFG.beta2, eps_adam: CFG.epsAdam, grad_clip: CFG.gradClip,
             temperature: CFG.temperature, top_k: CFG.topK, top_p: CFG.topP,
             min_p: CFG.minP, typical_p: CFG.typicalP,
             max_gen_tokens: CFG.maxGenTokens, min_gen_tokens: CFG.minGenTokens,
             corpus_gen_max_tokens: CFG.corpusGenMaxTokens,
             corpus_fade_threshold: CFG.corpusFadeThreshold, corpus_fade_k: CFG.corpusFadeK,
-            repetition_guard: CFG.repGuard,
+            repetition_guard: CFG.repetitionGuard,
             enable_bpe_after_chars: CFG.enableBpeAfterChars,
             bpe_num_merges: CFG.bpeNumMerges, bpe_retrain_every_chars: CFG.bpeRetrainEveryChars,
             delta_rank: CFG.deltaRank, max_delta_modules: CFG.maxDeltaModules,
@@ -121,8 +121,8 @@ function loadCheckpoint(corpusLines) {
         // Restore tokens from checkpoint
         if (data.tokenizer && data.tokenizer.tokens) {
             tok.tokens = data.tokenizer.tokens;
-            tok.stoi = {};
-            for (let i = 0; i < tok.tokens.length; i++) tok.stoi[tok.tokens[i]] = i;
+            tok.stoi = new Map();
+            for (let i = 0; i < tok.tokens.length; i++) tok.stoi.set(tok.tokens[i], i);
             tok.vocabSize = tok.tokens.length;
             tok.bpeEnabled = data.tokenizer.bpe_enabled || false;
             tok.merges = data.tokenizer.merges || [];
@@ -220,30 +220,8 @@ function nodeTrainSteps(model, tok, docs, nSteps, logEvery) {
 // ============================================================
 // Generation (inference)
 // ============================================================
-function generate(model, tok, prompt, maxTokens) {
-    maxTokens = maxTokens || CFG.maxGenTokens || 60;
-    let ids = tok.encode(prompt || "");
-    if (ids.length === 0) ids = [tok.stoi["<BOS>"] || 256];
-
-    const generated = [];
-    withNoGrad(() => {
-        for (let t = 0; t < maxTokens; t++) {
-            const context = ids.slice(-CFG.blockSize);
-            const logits = model.forwardInfer(context, tok);
-            if (!logits || logits.length === 0) break;
-
-            // Simple temperature sampling
-            const temp = CFG.temperature || 0.9;
-            const probs = mol.softmaxProbsFloat(logits, temp);
-            const tokenId = mol.topKTopPSample(probs, CFG.topK || 40, CFG.topP || 0.95);
-
-            if (tokenId === (tok.stoi["<EOS>"] || 257)) break;
-            ids.push(tokenId);
-            generated.push(tokenId);
-        }
-    });
-
-    return tok.decode(generated);
+function generate(model, tok, prompt) {
+    return model.generateSentence(prompt || "");
 }
 
 // ============================================================

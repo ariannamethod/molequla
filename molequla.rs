@@ -81,6 +81,12 @@ struct Config {
     conscience_recovery: f64,
     #[serde(default = "default_conscience_floor")]
     conscience_floor: f64,
+
+    // frequency/presence penalty
+    #[serde(default = "default_freq_penalty")]
+    freq_penalty: f64,
+    #[serde(default = "default_presence_penalty")]
+    presence_penalty: f64,
 }
 
 impl Default for Config {
@@ -115,6 +121,7 @@ impl Default for Config {
             anti_field_prob: 0.05, anti_field_min_step: 8,
             overthinkc_rounds: 2, overthinkc_max_tokens: 32,
             conscience_window: 8, conscience_decay: 0.95, conscience_recovery: 1.005, conscience_floor: 0.3,
+            freq_penalty: 0.3, presence_penalty: 0.3,
         }
     }
 }
@@ -717,6 +724,8 @@ fn default_conscience_window() -> usize { 8 }
 fn default_conscience_decay() -> f64 { 0.95 }
 fn default_conscience_recovery() -> f64 { 1.005 }
 fn default_conscience_floor() -> f64 { 0.3 }
+fn default_freq_penalty() -> f64 { 0.3 }
+fn default_presence_penalty() -> f64 { 0.3 }
 
 impl EvolvingTokenizer {
     /// Rebuild stoi and special token IDs from tokens vec (for cross-impl compat)
@@ -1057,6 +1066,12 @@ impl GPT {
             dm.insert(format!("{}.fc_g", p), DeltaAdapter::new(4*ne, ne, r, std));
             dm.insert(format!("{}.fc_v", p), DeltaAdapter::new(4*ne, ne, r, std));
             dm.insert(format!("{}.fc2", p), DeltaAdapter::new(ne, 4*ne, r, std));
+            for (hi, htype) in self.head_types.iter().enumerate() {
+                if htype == "rrpram" || htype == "hybrid" {
+                    dm.insert(format!("{}.h{}.w_pattern", p, hi),
+                        DeltaAdapter::new(self.block_size, self.head_dim, r, std));
+                }
+            }
         }
         dm.insert("lm_head".into(), DeltaAdapter::new(self.tok.vocab_size, ne, r, std));
         self.deltas.push(dm);
@@ -1085,7 +1100,7 @@ impl GPT {
             if let Some(adapter) = dm.get(name) {
                 let bx = tape.matvec(MatRef::DeltaB(di, name.to_string()), &adapter.b.data, x);
                 let abx = tape.matvec(MatRef::DeltaA(di, name.to_string()), &adapter.a.data, bx);
-                let scaled = tape.scale(abx, self.active_alpha[di]);
+                let scaled = tape.scale(abx, self.active_alpha[di] * self.delta_alpha_scale);
                 out = tape.add(out, scaled);
             }
         }
@@ -1546,11 +1561,24 @@ impl GPT {
         let mut entropy_sum = 0.0;
         let mut entropy_count = 0;
 
+        // Frequency/presence penalty tracking
+        let mut token_counts: HashMap<usize, usize> = HashMap::new();
+
         for step in 0..cfg.max_gen_tokens {
             let start = if ids.len() > self.block_size { ids.len() - self.block_size } else { 0 };
             let window = &ids[start..];
             let all_logits = self.forward_infer(window);
-            let logits = all_logits.last().unwrap();
+            let mut logits = all_logits.last().unwrap().clone();
+
+            // Frequency/presence penalty (applied before temperature scaling, same as Go)
+            if cfg.freq_penalty > 0.0 || cfg.presence_penalty > 0.0 {
+                for (&tid, &count) in &token_counts {
+                    if tid < logits.len() {
+                        logits[tid] -= cfg.freq_penalty * count as f64
+                            + cfg.presence_penalty * if count > 0 { 1.0 } else { 0.0 };
+                    }
+                }
+            }
 
             // Entropy-adaptive temperature + syntropy bridge
             let base_temp = (cfg.temperature + self.syntropy_temp_offset).max(1e-6);
@@ -1625,6 +1653,7 @@ impl GPT {
             ids.push(nxt);
             generated.push(nxt);
             recent.push(nxt);
+            *token_counts.entry(nxt).or_insert(0) += 1;
 
             // Repetition guard
             if recent.len() > cfg.repetition_guard * 2 {
@@ -2158,8 +2187,8 @@ impl SwarmRegistry {
     fn heartbeat(&self, stage: usize, n_params: usize, syntropy: f64, entropy: f64,
                  gamma_dir: Option<&[u8]>, gamma_mag: f64) {
         if let Some(ref db) = self.mesh_db {
-            db.execute("UPDATE organisms SET stage=?1,n_params=?2,syntropy=?3,entropy=?4,last_heartbeat=?5,gamma_magnitude=?6 WHERE id=?7",
-                params![stage, n_params, syntropy, entropy, now_secs(), gamma_mag, self.organism_id]).ok();
+            db.execute("UPDATE organisms SET stage=?1,n_params=?2,syntropy=?3,entropy=?4,last_heartbeat=?5,gamma_magnitude=?6,gamma_direction=?7 WHERE id=?8",
+                params![stage, n_params, syntropy, entropy, now_secs(), gamma_mag, gamma_dir, self.organism_id]).ok();
         }
     }
 
@@ -2230,6 +2259,17 @@ impl MetabolismMLP {
         for i in 0..self.w2.len() {
             for j in 0..hidden.len() {
                 self.w2[i][j] += self.lr * outputs[i] * hidden[j];
+            }
+        }
+        // Gentle weight decay to prevent unbounded Hebbian growth
+        for row in &mut self.w1 {
+            for w in row.iter_mut() {
+                *w *= 0.999;
+            }
+        }
+        for row in &mut self.w2 {
+            for w in row.iter_mut() {
+                *w *= 0.999;
             }
         }
     }
@@ -2505,6 +2545,7 @@ struct TopologyMonitor {
     self_drift_rate: f64,       // how fast our own gamma is changing
     last_check: f64,
     prev_gamma_direction: Option<Vec<f64>>,
+    prev_magnitudes: HashMap<String, f64>,  // previous gamma magnitudes per organism for drift detection
 }
 
 impl TopologyMonitor {
@@ -2515,6 +2556,7 @@ impl TopologyMonitor {
             self_drift_rate: 0.0,
             last_check: 0.0,
             prev_gamma_direction: None,
+            prev_magnitudes: HashMap::new(),
         }
     }
 
@@ -2590,11 +2632,23 @@ impl TopologyMonitor {
     }
 
     /// Organisms drifting too fast (gamma_magnitude changing rapidly)
-    fn detect_drift(&self, threshold: f64) -> Vec<String> {
-        self.organisms.iter()
-            .filter(|o| o.gamma_magnitude > threshold)
-            .map(|o| o.id.clone())
-            .collect()
+    fn detect_drift(&mut self, threshold: f64) -> Vec<String> {
+        let mut drifting = Vec::new();
+        for o in &self.organisms {
+            if let Some(&prev_mag) = self.prev_magnitudes.get(&o.id) {
+                if prev_mag.abs() > 1e-12 {
+                    let rate = (o.gamma_magnitude - prev_mag).abs() / prev_mag;
+                    if rate > threshold {
+                        drifting.push(o.id.clone());
+                    }
+                }
+            }
+        }
+        // Update prev_magnitudes for next check
+        for o in &self.organisms {
+            self.prev_magnitudes.insert(o.id.clone(), o.gamma_magnitude);
+        }
+        drifting
     }
 
     /// Self-reflection: (our_drift_rate, are_we_the_outlier)

@@ -117,6 +117,10 @@ typedef struct {
     int freeze_after_growth_steps;
     double post_growth_lr_scale;      /* LR multiplier during freeze period */
 
+    /* frequency / presence penalty */
+    double freq_penalty;
+    double presence_penalty;
+
     /* consciousness: per-token dissonance feedback */
     double dissonance_ema_alpha;       /* EMA smoothing for entropy within generation */
     double dissonance_spike_k;         /* temp multiplier when entropy spikes */
@@ -209,6 +213,10 @@ static Config CFG = {
     .n_growth_stages = 5,
     .freeze_after_growth_steps = 500,
     .post_growth_lr_scale = 0.3,
+
+    /* frequency / presence penalty */
+    .freq_penalty = 0.3,
+    .presence_penalty = 0.3,
 
     /* consciousness defaults */
     .dissonance_ema_alpha = 0.3,
@@ -2555,6 +2563,9 @@ static char *gpt_generate(GPT *g, const char *prompt) {
     double entropy_sum = 0.0;  /* for conscience mean entropy */
     int entropy_count = 0;
 
+    /* Frequency / presence penalty token tracking */
+    int *token_counts = calloc(max_vocab, sizeof(int));
+
     for (int step = 0; step < CFG.max_gen_tokens; step++) {
         arena_reset(&G_arena);
         int pos = ids.len - 1;
@@ -2565,6 +2576,15 @@ static char *gpt_generate(GPT *g, const char *prompt) {
         double base_temp = CFG.temperature + g->syntropy_temp_offset;
         if (base_temp < 1e-6) base_temp = 1e-6;
         int V = logits->len;
+        /* Frequency / presence penalty: penalize repeated tokens */
+        if (CFG.freq_penalty > 0 || CFG.presence_penalty > 0) {
+            for (int i = 0; i < V; i++) {
+                if (token_counts[i] > 0) {
+                    logits->data[i] -= CFG.freq_penalty * token_counts[i];
+                    logits->data[i] -= CFG.presence_penalty;
+                }
+            }
+        }
         for (int i = 0; i < V; i++) scaled[i] = logits->data[i] / base_temp;
         softmax_probs(scaled, V, probs_buf);
         double entropy = 0;
@@ -2682,6 +2702,7 @@ static char *gpt_generate(GPT *g, const char *prompt) {
         ia_push(&ids, nxt);
         cur = nxt;
         ia_push(&out_ids, nxt);
+        token_counts[nxt]++;
 
         /* Repetition guard */
         ia_push(&recent, nxt);
@@ -2737,6 +2758,7 @@ static char *gpt_generate(GPT *g, const char *prompt) {
     /* Cleanup */
     free(probs_buf);
     free(scaled);
+    free(token_counts);
     ia_free(&ids); ia_free(&out_ids); ia_free(&recent); ia_free(&dec);
     for (int i = 0; i < kv->n_layers; i++) { free(kv->layers[i].keys); free(kv->layers[i].values); }
     free(kv->layers); free(kv);
