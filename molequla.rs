@@ -1,6 +1,6 @@
 // molequla.rs
-// The Fifth Element: a GPT organism + distributed cognition metabolism.
-// Rust port — full feature parity with Go/C/Python/JS + mesh coordinator.
+// The Fourth Element: a GPT organism + distributed cognition metabolism.
+// Rust — full feature parity with Go/C/JS + mesh coordinator.
 // In the beginning there was nonames.txt. And Rust said, "hold my borrow checker."
 
 use std::cell::Cell;
@@ -3227,7 +3227,7 @@ fn topology_monitor_thread(
 
 fn main() {
     eprintln!("╔══════════════════════════════════════════════════╗");
-    eprintln!("║  MOLEQULA.RS — The Fifth Element                ║");
+    eprintln!("║  MOLEQULA.RS — The Fourth Element                ║");
     eprintln!("║  GPT organism + distributed cognition metabolism ║");
     eprintln!("╚══════════════════════════════════════════════════╝");
 
@@ -3439,5 +3439,5 @@ fn main() {
     trainer_handle.join().ok();
     topo_handle.join().ok();
     swarm.lock().unwrap().unregister();
-    eprintln!("[shutdown] Done. The fifth element rests.");
+    eprintln!("[shutdown] Done. The fourth element rests.");
 }

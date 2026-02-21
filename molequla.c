@@ -1,4 +1,3 @@
-//go:build ignore
 
 /*
  * molequla.c
