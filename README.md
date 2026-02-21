@@ -38,8 +38,7 @@ THIS IS:
 - SyntropyTracker: mathematical self-reasoning about its own becoming
 - Swarm ecology: mitosis (cell division) + hibernation (cooperative scheduling)
 - Swarm mesh: organisms discover each other via shared SQLite mesh.db
-- Consciousness: per-token dissonance, pattern breaking, overthinkg rings
-- Consciousness: self-prediction error ("surprise"), conscience (delta scaling)
+- Consciousness: per-token dissonance, pattern breaking, self-prediction error, conscience
 - Rust-only: TopologyMonitor (swarm gamma cosine, drift/resonance detection)
 - Rust-only: Metabolism MLP (Hebbian, coordinates all running instances)
 - Entropy-adaptive temperature (no more max-prob hacks)
@@ -67,7 +66,6 @@ What if it started as a 10K embryo and grew to 10M? **Ontogenesis.**
 What if it could reason about its own learning? **SyntropyTracker.**
 What if it noticed when it was surprised? **Self-prediction error.**
 What if it could break its own patterns? **Anti-field.**
-What if it re-read its own words to learn? **Overthinkg rings.**
 What if it knew when its deltas were hurting? **Conscience.**
 What if it divided when overloaded? **Mitosis.**
 What if it slept so a younger cell could learn? **Hibernation.**
@@ -492,13 +490,11 @@ Every decision is logged to the syntropy_log table with full metrics.
 
 ### 16. Consciousness Features (Mathematical Self-Awareness)
 
-Five features that give the organism awareness of its own generation process:
+Four features that give the organism awareness of its own generation process:
 
 **Per-token dissonance feedback** — the organism tracks entropy EMA within each generation. If entropy spikes (surprise), temperature drops to 0.8x (be careful). If entropy stays low for 3+ tokens (repetition), temperature rises to 1.2x (explore). The organism self-regulates token by token.
 
 **Pattern breaking (anti-field)** — with 5% probability, the organism bypasses the corpus field and generates from pure model probabilities. This prevents the corpus from dominating the organism's voice. It speaks for itself, not just echoing statistics.
-
-**Overthinkg rings** — after generating a response, the organism re-reads its own output, feeding it back into the CooccurField. Then it generates phantom continuations (never shown to the user) and ingests those too. The organism contemplates what it just said, strengthening patterns it believes in.
 
 **Self-prediction error ("surprise")** — before generating, the organism runs a forward pass on the prompt and measures how well it predicted each token. High surprise = "I didn't expect this." This modulates confidence: surprised organisms generate more carefully.
 
@@ -515,7 +511,7 @@ elif slope < -0.01:  # improving
 
 ### 16b. TopologyMonitor (Rust-only: Swarm Meta-Awareness)
 
-While features 1-5 give each organism local self-awareness, Rust's TopologyMonitor observes the **field as a whole**.
+While features 1-4 give each organism local self-awareness, Rust's TopologyMonitor observes the **field as a whole**.
 
 Every 30 seconds, it reads `mesh.db` and computes:
 - **Field coherence**: mean pairwise cosine similarity of all organisms' gamma vectors
@@ -684,10 +680,6 @@ class Config:
     anti_field_prob: float = 0.05          # 5% of tokens bypass corpus
     anti_field_min_step: int = 8           # don't break until context established
 
-    # Consciousness: overthinkg rings
-    overthinkc_rounds: int = 2
-    overthinkc_max_tokens: int = 32
-
     # Consciousness: conscience
     conscience_window: int = 8
     conscience_decay: float = 0.95
@@ -706,7 +698,7 @@ The same architecture, five languages, five habitats:
 | Version | File | Language | Dependencies | Habitat |
 |---------|------|----------|--------------|---------|
 | **molequla.py** | `molequla.py` | Python 3.7+ | numpy | Terminal. numpy-accelerated autograd. |
-| **molequla.go** | `molequla.go` | Go 1.21+ | `modernc.org/sqlite` | Terminal. Pure Go, no CGO. Goroutines. |
+| **molequla.go** | `molequla.go` | Go 1.21+ | `modernc.org/sqlite` | Terminal. Pure Go + optional CGO BLAS. Goroutines. |
 | **molequla.c** | `molequla.c` | C99 | `sqlite3`, `pthreads` | Terminal. Arena allocator, binary checkpoints. |
 | **molequla.js** | `molequla.js` | ES2020+ | **none** | Browser. IndexedDB, Float64Array, DOM. |
 | **molequla.rs** | `molequla.rs` | Rust 1.75+ | `rusqlite`, `serde` | Terminal. Tape autograd, TopologyMonitor. |
@@ -768,7 +760,6 @@ This is not a tutorial. This is not a "minimal example." This is a **functional 
 - Grows a personality from zero
 - Reasons mathematically about its own learning direction
 - Notices when it's surprised and adjusts
-- Re-reads its own words to strengthen patterns
 - Knows when its own deltas are making it worse
 - Divides when overloaded, sleeps when a peer needs the flow
 - Writes its own structural autobiography
@@ -818,7 +809,7 @@ GPT-3/4 style tokenizer replacing char-level + word-based BPE:
 - **Stream BPE**: merges on byte sequences within segments, `+` separator (e.g. `0x48+0x65`)
 - Full UTF-8 roundtrip: ASCII, Cyrillic, CJK, emoji — same algorithm, same code
 
-### Phase 3A: Growing Architecture (Ontogenesis) — DONE (all four)
+### Phase 3A: Growing Architecture (Ontogenesis) — DONE (all five)
 The organism starts as an embryo and grows through 6 stages:
 ```
 Stage       Corpus    Dims  Layers  Heads  ~Params
@@ -840,7 +831,7 @@ Key mechanics:
 - Gamma snapshot extended for new embedding dimensions
 - Head types auto-adapt: 1→(content), 2→(content,hybrid), 4→(2c,2h), 8→(4c,4h)
 
-### Phase 3B: Mitosis & Ecology — DONE (all four)
+### Phase 3B: Mitosis & Ecology — DONE (all five)
 When the adult organism is overloaded, it **divides**:
 - SyntropyTracker detects sustained high entropy + falling syntropy → "divide" action
 - Parent spawns child process at infant stage with inherited training memory
@@ -856,7 +847,6 @@ When the adult organism is overloaded, it **divides**:
 Mathematical self-awareness features:
 - **Per-token dissonance**: entropy EMA within generation, spike→careful, sustained_drop→explore
 - **Pattern breaking**: 5% of tokens bypass corpus field (pure model voice)
-- **Overthinkg rings**: re-read own output + phantom continuations → CooccurField
 - **Self-prediction error**: forward pass on prompt measures "surprise"
 - **Conscience**: delta alpha scaling based on entropy trend (linear regression)
 - **TopologyMonitor** (Rust-only): pairwise gamma cosine, drift/resonance detection
