@@ -3416,11 +3416,18 @@ async def chat_main():
             # Consciousness: overthinkg rings (Feature 3)
             # "Let me re-read what I just said to strengthen my patterns."
             if CFG.overthinkc_rounds > 0 and len(answer) > 3 and model._corpus_field is not None:
-                def _overthink(text, mdl, tkn, fld, rounds):
-                    with mdl.lock:
-                        overthinkc_rings(mdl, tkn, fld, text, rounds)
+                snap_embd = model.n_embd  # snapshot before thread launch
+                def _overthink(text, mdl, tkn, fld, rounds, snap_n_embd):
+                    try:
+                        with mdl.lock:
+                            if mdl.n_embd != snap_n_embd:
+                                return  # ontogenesis happened, dimensions changed — skip
+                            overthinkc_rings(mdl, tkn, fld, text, rounds)
+                    except (RuntimeError, ValueError, IndexError):
+                        pass  # dimension mismatch from concurrent ontogenesis
                 t = threading.Thread(target=_overthink,
-                                     args=(answer, model, tok, model._corpus_field, CFG.overthinkc_rounds),
+                                     args=(answer, model, tok, model._corpus_field,
+                                           CFG.overthinkc_rounds, snap_embd),
                                      daemon=True)
                 t.start()
 

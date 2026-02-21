@@ -5567,11 +5567,21 @@ func main() {
 		// Consciousness: overthinkg rings (Feature 3)
 		// "Let me re-read what I just said to strengthen my patterns."
 		if CFG.OverthinkcRounds > 0 && len(answer) > 3 {
-			go func(text string) {
+			go func(text string, snapEmbd int) {
+				defer func() {
+					if r := recover(); r != nil {
+						// Ontogenesis may have changed model dimensions between goroutine
+						// creation and execution. This is non-critical — skip silently.
+					}
+				}()
 				model.mu.Lock()
 				defer model.mu.Unlock()
+				// Skip if model grew since this goroutine was created
+				if model.NEmbd != snapEmbd {
+					return
+				}
 				OverthinkcRings(model, tok, cooccur, text, CFG.OverthinkcRounds)
-			}(answer)
+			}(answer, model.NEmbd)
 		}
 	}
 

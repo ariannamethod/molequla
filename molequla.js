@@ -2800,10 +2800,13 @@ class GPT {
 // OverthinkcRings: after generating a response, "re-read" own output to enrich CooccurField.
 // This is internal monologue — the model strengthens connections from its own speech.
 // "I said this. What patterns emerge? Let me think about what I just said."
-function overthinkcRings(model, tok, field, text, rounds) {
+function overthinkcRings(model, tok, field, text, rounds, _snapEmbd) {
     if (!field || rounds <= 0) return;
     const ids = tok.encode(text);
     if (ids.length < 3) return;
+
+    // Snapshot embedding dimension for ontogenesis race guard
+    const snapEmbd = _snapEmbd || model.nEmbd;
 
     // First: ingest the original output into the field
     field.ingestTokens(ids);
@@ -2813,6 +2816,12 @@ function overthinkcRings(model, tok, field, text, rounds) {
     _gradEnabled = false;
     try {
         for (let r = 0; r < rounds; r++) {
+            // Ontogenesis guard: if model dimensions changed mid-loop, bail out
+            if (model.nEmbd !== snapEmbd) {
+                logUI(`[overthinkcRings] ontogenesis detected mid-loop (snap=${snapEmbd}, now=${model.nEmbd}), aborting round ${r}`);
+                break;
+            }
+
             // Take last 3 tokens as seed
             let seed = ids;
             if (seed.length > 3) seed = seed.slice(-3);
@@ -2827,6 +2836,11 @@ function overthinkcRings(model, tok, field, text, rounds) {
             const phantomIds = [];
             const eosId = tok.stoi.get(tok.EOS);
             for (let t = 0; t < CFG.overthinkcMaxTokens; t++) {
+                // Inner ontogenesis check: dimension mismatch mid-generation
+                if (model.nEmbd !== snapEmbd) {
+                    logUI(`[overthinkcRings] ontogenesis mid-token at t=${t}, aborting`);
+                    break;
+                }
                 let pos = seed.length + t - 1;
                 if (pos > model.blockSize - 1) pos = model.blockSize - 1;
                 const logits = model.forwardStep(cur, pos, keys, values);
@@ -3700,8 +3714,18 @@ async function handleUserMessage(text) {
 
     // Consciousness: overthinkg rings (Feature 3)
     // "Let me re-read what I just said to strengthen my patterns."
+    // Guard against ontogenesis race: snapshot nEmbd before call,
+    // skip if dimensions changed (model grew mid-generation).
     if (CFG.overthinkcRounds > 0 && answer.length > 3 && _field) {
-        overthinkcRings(_model, _tok, _field, answer, CFG.overthinkcRounds);
+        const snapEmbd = _model.nEmbd;
+        try {
+            if (_model.nEmbd === snapEmbd) {
+                overthinkcRings(_model, _tok, _field, answer, CFG.overthinkcRounds, snapEmbd);
+            }
+        } catch (e) {
+            // Dimension mismatch from ontogenesis — silently skip
+            logUI(`[overthinkcRings] skipped: dimension mismatch (snap=${snapEmbd}, now=${_model.nEmbd}): ${e.message}`);
+        }
     }
 
     // Feed corpus

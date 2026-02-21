@@ -3478,15 +3478,32 @@ fn main() {
 
         // Consciousness: overthinkg rings (Feature 3)
         // "Let me re-read what I just said to strengthen my patterns."
+        // SAFETY: snapshot n_embd before spawn — if ontogenesis changes model
+        // dimensions between scheduling and execution, skip to avoid panics.
         let overthinkc_rounds = cfg.overthinkc_rounds;
         if overthinkc_rounds > 0 && answer.len() > 3 {
+            let snap_embd = model.lock().unwrap().n_embd;
             let m_clone = Arc::clone(&model);
             let cf_clone = Arc::clone(&corpus_field);
             let ans = answer.clone();
             thread::spawn(move || {
                 let m = m_clone.lock().unwrap();
+                // Ontogenesis guard: if model dimensions changed since we scheduled
+                // this task, the weight matrices no longer match our expectations.
+                if m.n_embd != snap_embd {
+                    eprintln!("[overthinkc] skipped: ontogenesis changed n_embd {} -> {}", snap_embd, m.n_embd);
+                    return;
+                }
                 let mut cf = cf_clone.lock().unwrap();
-                overthinkc_rings(&m, &m.tok, &mut cf, &ans, overthinkc_rounds);
+                // catch_unwind: even if overthinkc panics (e.g. dimension mismatch
+                // from a concurrent growth that slipped past the guard), don't crash
+                // the whole process — this is a background enrichment, not critical path.
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    overthinkc_rings(&m, &m.tok, &mut cf, &ans, overthinkc_rounds);
+                }));
+                if let Err(e) = result {
+                    eprintln!("[overthinkc] caught panic in background ring: {:?}", e);
+                }
             });
         }
 

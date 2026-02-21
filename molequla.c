@@ -3710,23 +3710,54 @@ static double compute_self_prediction_error(GPT *g, const int *ids, int len) {
 /* OverthinkcRings: after generating a response, "re-read" own output to enrich CooccurField.
  * This is internal monologue — the model strengthens connections from its own speech.
  * "I said this. What patterns emerge? Let me think about what I just said."
- * Caller must hold g->mu. */
+ * Caller must hold g->mu.
+ *
+ * Safety: snapshots model dimensions at entry. If ontogenesis (growth) changes
+ * n_embd/n_layer/n_head between rounds, the KVCache and probs buffer would have
+ * stale sizes — instant segfault. We detect this and bail. */
 static void overthinkc_rings(GPT *g, EvolvingTokenizer *tok, CooccurField *field,
                              const char *text, int rounds) {
     if (!field || rounds <= 0) return;
     IntArr ids = tok_encode(tok, text);
     if (ids.len < 3) { ia_free(&ids); return; }
 
+    /* Snapshot model dimensions before we allocate anything.
+     * If ontogenesis fires concurrently (or between rounds), these will diverge. */
+    const int snap_n_layer = g->n_layer;
+    const int snap_n_embd  = g->n_embd;
+    const int snap_n_head  = g->n_head;
+    const int snap_block   = g->block_size;
+
     /* First: ingest the original output into the field */
     cooccur_ingest_tokens(field, ids.items, ids.len);
 
     /* Then: generate hidden continuations and ingest those too */
     for (int r = 0; r < rounds; r++) {
+        /* Dimension check: if model grew since we started, our KVCache/probs
+         * allocations are stale. Bail rather than segfault. */
+        if (g->n_layer != snap_n_layer || g->n_embd != snap_n_embd ||
+            g->n_head != snap_n_head || g->block_size != snap_block) {
+            printf("[overthinkc] dimensions changed during rings "
+                   "(layer %d->%d, embd %d->%d) — aborting safely\n",
+                   snap_n_layer, g->n_layer, snap_n_embd, g->n_embd);
+            break;
+        }
+
         /* Take last 3 tokens as seed */
         int seed_start = ids.len > 3 ? ids.len - 3 : 0;
         int seed_len = ids.len - seed_start;
 
-        KVCache *kv = kv_new(g->n_layer, g->block_size + CFG.overthinkc_max_tokens);
+        KVCache *kv = kv_new(snap_n_layer, snap_block + CFG.overthinkc_max_tokens);
+
+        /* Validate KVCache allocation matches model before forward pass */
+        if (kv->n_layers != g->n_layer) {
+            printf("[overthinkc] KVCache n_layers=%d != model n_layer=%d — aborting round\n",
+                   kv->n_layers, g->n_layer);
+            for (int i = 0; i < kv->n_layers; i++) { free(kv->layers[i].keys); free(kv->layers[i].values); }
+            free(kv->layers); free(kv);
+            break;
+        }
+
         for (int p = 0; p < seed_len; p++) {
             arena_reset(&G_arena);
             gpt_forward_step(g, ids.items[seed_start + p], p, kv);
@@ -3740,11 +3771,23 @@ static void overthinkc_rings(GPT *g, EvolvingTokenizer *tok, CooccurField *field
         for (int t = 0; t < CFG.overthinkc_max_tokens; t++) {
             arena_reset(&G_arena);
             int pos = seed_len + t - 1;
-            if (pos > g->block_size - 1) pos = g->block_size - 1;
+            if (pos > snap_block - 1) pos = snap_block - 1;
+
+            /* Pre-step dimension guard: catch growth that happened mid-loop */
+            if (g->n_layer != snap_n_layer || g->n_embd != snap_n_embd) {
+                printf("[overthinkc] dimension drift mid-generation — stopping phantom\n");
+                break;
+            }
+
             Node *logits = gpt_forward_step(g, cur, pos, kv);
-            softmax_probs(logits->data, logits->len, probs);
-            int nxt = top_k_top_p_sample(probs, V, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p);
-            if (nxt == tok->eos_id) break;
+
+            /* Guard: logits->len may differ from V if vocab expanded.
+             * Use the smaller of the two to prevent buffer overflow on probs[]. */
+            int actual_V = logits->len < V ? logits->len : V;
+            if (actual_V <= 0) break;
+            softmax_probs(logits->data, actual_V, probs);
+            int nxt = top_k_top_p_sample(probs, actual_V, CFG.top_k, CFG.top_p, CFG.min_p, CFG.typical_p);
+            if (nxt == tok->eos_id || nxt < 0 || nxt >= tok->vocab_size) break;
             ia_push(&phantom, nxt);
             cur = nxt;
         }
@@ -5480,10 +5523,25 @@ int main(int argc, char **argv) {
         /* "Let me re-read what I just said to strengthen my patterns." */
         if (warmed_up && CFG.overthinkc_rounds > 0 && answer && strlen(answer) > 3) {
             pthread_mutex_lock(&model->mu);
+            /* Snapshot dimensions before calling overthinkc_rings.
+             * If ontogenesis changed the model between answer generation and now,
+             * the KVCache allocation inside overthinkc_rings would segfault. */
+            int pre_n_layer = model->n_layer;
+            int pre_n_embd  = model->n_embd;
+            int pre_n_head  = model->n_head;
             int prev_grad_o = grad_enabled;
             grad_enabled = 0;
             overthinkc_rings(model, tok, cooccur, answer, CFG.overthinkc_rounds);
             grad_enabled = prev_grad_o;
+            /* Post-call sanity: warn if dimensions shifted during the call.
+             * This shouldn't happen (we hold mu), but if it does, we want to know. */
+            if (model->n_layer != pre_n_layer || model->n_embd != pre_n_embd ||
+                model->n_head != pre_n_head) {
+                printf("[WARNING] model dimensions changed during overthinkc_rings! "
+                       "layer %d->%d, embd %d->%d, head %d->%d\n",
+                       pre_n_layer, model->n_layer, pre_n_embd, model->n_embd,
+                       pre_n_head, model->n_head);
+            }
             pthread_mutex_unlock(&model->mu);
         }
 
