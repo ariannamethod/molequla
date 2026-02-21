@@ -2588,6 +2588,136 @@ void am_notorch_step(float* A, float* B, int out_dim, int in_dim, int rank,
 
 static AM_MethodState M;
 
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * HARMONIC NET — weightless neural network in C
+ *
+ * Layer 1: Fourier decomposition of entropy history
+ * Layer 2: Correlation matrix (pairwise gamma cosines = the "weights")
+ * Layer 3: Phase aggregation (resonance + harmonics → steering refinement)
+ *
+ * No trainable weights. No backprop. Just harmonic resonance.
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+static struct {
+    /* Entropy history (circular buffer) */
+    float entropy_history[AM_HARMONIC_MAX_HISTORY];
+    int   history_len;
+    int   history_pos;
+
+    /* Organism gammas for this step */
+    float gammas[AM_HARMONIC_MAX_ORGANISMS][AM_HARMONIC_GAMMA_DIM];
+    float org_entropy[AM_HARMONIC_MAX_ORGANISMS];
+    int   n_organisms;
+} HN;
+
+void am_harmonic_init(void) {
+    memset(&HN, 0, sizeof(HN));
+}
+
+void am_harmonic_clear(void) {
+    HN.n_organisms = 0;
+}
+
+void am_harmonic_push_entropy(float entropy) {
+    HN.entropy_history[HN.history_pos] = entropy;
+    HN.history_pos = (HN.history_pos + 1) % AM_HARMONIC_MAX_HISTORY;
+    if (HN.history_len < AM_HARMONIC_MAX_HISTORY)
+        HN.history_len++;
+}
+
+void am_harmonic_push_gamma(int id, const float *gamma, int dim, float entropy) {
+    if (HN.n_organisms >= AM_HARMONIC_MAX_ORGANISMS) return;
+    int idx = HN.n_organisms++;
+    int copy_dim = dim < AM_HARMONIC_GAMMA_DIM ? dim : AM_HARMONIC_GAMMA_DIM;
+    memcpy(HN.gammas[idx], gamma, copy_dim * sizeof(float));
+    /* Zero-pad if needed */
+    for (int i = copy_dim; i < AM_HARMONIC_GAMMA_DIM; i++)
+        HN.gammas[idx][i] = 0.0f;
+    HN.org_entropy[idx] = entropy;
+}
+
+AM_HarmonicResult am_harmonic_forward(int step) {
+    AM_HarmonicResult r;
+    memset(&r, 0, sizeof(r));
+    r.n_organisms = HN.n_organisms;
+    r.strength_mod = 0.3f;
+
+    if (HN.n_organisms == 0) return r;
+
+    int T = HN.history_len;
+
+    /* ── Layer 1: Fourier decomposition of entropy history ── */
+    if (T >= 4) {
+        for (int k = 0; k < AM_HARMONIC_N_FREQ; k++) {
+            float sum = 0.0f;
+            for (int t = 0; t < T; t++) {
+                int idx = (HN.history_pos - T + t + AM_HARMONIC_MAX_HISTORY) % AM_HARMONIC_MAX_HISTORY;
+                float phase = 2.0f * 3.14159265f * (float)(k + 1) * (float)t / (float)T;
+                sum += HN.entropy_history[idx] * sinf(phase);
+            }
+            r.harmonics[k] = sum / (float)T;
+        }
+    }
+
+    /* ── Layer 2: Correlation matrix (pairwise gamma cosines) ── */
+    int n = HN.n_organisms;
+
+    /* Compute norms */
+    float norms[AM_HARMONIC_MAX_ORGANISMS];
+    for (int i = 0; i < n; i++) {
+        float s = 0.0f;
+        for (int d = 0; d < AM_HARMONIC_GAMMA_DIM; d++)
+            s += HN.gammas[i][d] * HN.gammas[i][d];
+        norms[i] = sqrtf(s);
+        if (norms[i] < 1e-8f) norms[i] = 1e-8f;
+    }
+
+    /* Pairwise cosines + phase resonance */
+    float mean_ent = 0.0f;
+    for (int i = 0; i < n; i++) mean_ent += HN.org_entropy[i];
+    mean_ent /= (float)n;
+
+    for (int i = 0; i < n; i++) {
+        float res = 0.0f;
+        float phase_i = HN.org_entropy[i] - mean_ent;
+        for (int j = 0; j < n; j++) {
+            if (i == j) continue;
+            /* Cosine similarity */
+            float dot = 0.0f;
+            for (int d = 0; d < AM_HARMONIC_GAMMA_DIM; d++)
+                dot += HN.gammas[i][d] * HN.gammas[j][d];
+            float cos_ij = dot / (norms[i] * norms[j]);
+
+            /* Phase similarity */
+            float phase_j = HN.org_entropy[j] - mean_ent;
+            float phase_sim = expf(-fabsf(phase_i - phase_j));
+
+            res += cos_ij * phase_sim;
+        }
+        if (n > 1) res /= (float)(n - 1);
+        r.resonance[i] = res;
+    }
+
+    /* ── Layer 3: Output ── */
+    /* Find dominant harmonic */
+    float max_amp = 0.0f;
+    r.dominant_freq = 0;
+    if (T >= 4) {
+        for (int k = 0; k < AM_HARMONIC_N_FREQ; k++) {
+            float a = fabsf(r.harmonics[k]);
+            if (a > max_amp) { max_amp = a; r.dominant_freq = k; }
+        }
+    }
+
+    /* Confidence: more data = more confident */
+    float conf_t = T < 16 ? (float)T / 16.0f : 1.0f;
+    float conf_n = n < 4 ? (float)n / 4.0f : 1.0f;
+    r.strength_mod = 0.3f + 0.7f * conf_t * conf_n;
+
+    return r;
+}
+
 void am_method_init(void) {
     memset(&M, 0, sizeof(AM_MethodState));
 }

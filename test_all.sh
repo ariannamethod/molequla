@@ -670,6 +670,32 @@ else
     fail "notorch benchmark" "no output"
 fi
 
+# TEST: HarmonicNet C forward speed
+PERF_HN=$(cd ~/molequla && python3 -c "
+import ctypes, time
+from ariannamethod.method import _load_libaml
+lib = _load_libaml()
+for i in range(64):
+    lib.am_harmonic_push_entropy(ctypes.c_float(1.0 + 0.5 * (i % 7)))
+import random
+random.seed(42)
+for oid in range(16):
+    gamma = (ctypes.c_float * 32)(*[random.gauss(0, 1) for _ in range(32)])
+    lib.am_harmonic_push_gamma(oid, gamma, 32, ctypes.c_float(1.0 + oid * 0.1))
+N = 100000
+t0 = time.perf_counter()
+for _ in range(N):
+    lib.am_harmonic_forward(0)
+t1 = time.perf_counter()
+us = (t1-t0)/N*1e6
+print(f'{us:.1f}')
+" 2>/dev/null)
+if [ -n "$PERF_HN" ]; then
+    pass "HarmonicNet C: ${PERF_HN}μs/forward (16 organisms, 64 history)"
+else
+    fail "HarmonicNet C benchmark" "no output"
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════════"
 echo -e " Results: ${GREEN}$PASS passed${NC}, ${RED}$FAIL failed${NC}, ${YELLOW}$SKIP skipped${NC}"

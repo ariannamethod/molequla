@@ -50,6 +50,18 @@ class AM_MethodSteering(ctypes.Structure):
         ("step", ctypes.c_int),
     ]
 
+AM_HARMONIC_N_FREQ = 8
+AM_HARMONIC_MAX_ORGANISMS = 64
+
+class AM_HarmonicResult(ctypes.Structure):
+    _fields_ = [
+        ("harmonics", ctypes.c_float * AM_HARMONIC_N_FREQ),
+        ("resonance", ctypes.c_float * AM_HARMONIC_MAX_ORGANISMS),
+        ("strength_mod", ctypes.c_float),
+        ("dominant_freq", ctypes.c_int),
+        ("n_organisms", ctypes.c_int),
+    ]
+
 
 # Action constants (match C defines)
 METHOD_WAIT = 0
@@ -146,9 +158,31 @@ def _load_libaml():
     lib.am_method_get_state.restype = ctypes.c_void_p
     lib.am_method_get_state.argtypes = []
 
-    # Initialize both AML core and METHOD
+    # HARMONIC NET bindings
+    lib.am_harmonic_init.restype = None
+    lib.am_harmonic_init.argtypes = []
+
+    lib.am_harmonic_clear.restype = None
+    lib.am_harmonic_clear.argtypes = []
+
+    lib.am_harmonic_push_entropy.restype = None
+    lib.am_harmonic_push_entropy.argtypes = [ctypes.c_float]
+
+    lib.am_harmonic_push_gamma.restype = None
+    lib.am_harmonic_push_gamma.argtypes = [
+        ctypes.c_int,                       # id
+        ctypes.POINTER(ctypes.c_float),     # gamma
+        ctypes.c_int,                       # dim
+        ctypes.c_float,                     # entropy
+    ]
+
+    lib.am_harmonic_forward.restype = AM_HarmonicResult
+    lib.am_harmonic_forward.argtypes = [ctypes.c_int]  # step
+
+    # Initialize AML core, METHOD, and HARMONIC
     lib.am_init()
     lib.am_method_init()
+    lib.am_harmonic_init()
     return lib
 
 

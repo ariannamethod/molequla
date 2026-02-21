@@ -553,8 +553,9 @@ class HarmonicNet:
 
     N_HARMONICS = 8
 
-    def __init__(self, dim=32):
+    def __init__(self, dim=32, lib=None):
         self.dim = dim
+        self.lib = lib  # C library reference (for HarmonicNet C acceleration)
         self._entropy_history = []
         self._max_history = 64
         self._last_harmonics = np.zeros(self.N_HARMONICS)
@@ -563,6 +564,7 @@ class HarmonicNet:
     def forward(self, organisms, field_entropy, field_coherence, field_syntropy, step):
         """
         One forward pass. No backprop ever.
+        Uses C acceleration when available (libaml.so), falls back to numpy.
 
         Returns dict:
             action_bias: {action_name: score} — suggested emphasis
@@ -575,6 +577,11 @@ class HarmonicNet:
             return {"action_bias": {}, "strength_mod": 0.0,
                     "harmonics": [], "resonance": [], "dominant_freq": 0}
 
+        # ── C-accelerated path ──
+        if self.lib is not None:
+            return self._forward_c(organisms, field_entropy, step)
+
+        # ── Python fallback path ──
         self._entropy_history.append(field_entropy)
         if len(self._entropy_history) > self._max_history:
             self._entropy_history = self._entropy_history[-self._max_history:]
@@ -659,6 +666,84 @@ class HarmonicNet:
             "strength_mod": float(strength_mod),
             "harmonics": harmonics.tolist(),
             "resonance": resonance.tolist(),
+            "dominant_freq": dominant_freq,
+        }
+
+
+    def _forward_c(self, organisms, field_entropy, step):
+        """C-accelerated forward pass via libaml.so."""
+        import ctypes
+
+        # Push entropy to C circular buffer
+        self.lib.am_harmonic_push_entropy(ctypes.c_float(field_entropy))
+
+        # Also keep Python history for _entropy_history (used by tests/REPL)
+        self._entropy_history.append(field_entropy)
+        if len(self._entropy_history) > self._max_history:
+            self._entropy_history = self._entropy_history[-self._max_history:]
+
+        # Clear and push organism gammas
+        self.lib.am_harmonic_clear()
+        for o in organisms:
+            gamma_f32 = None
+            if o.gamma_direction and len(o.gamma_direction) >= self.dim * 8:
+                g64 = np.frombuffer(o.gamma_direction[:self.dim * 8], dtype=np.float64)
+                gamma_f32 = g64[:self.dim].astype(np.float32)
+            elif o.gamma_direction and len(o.gamma_direction) >= self.dim * 4:
+                gamma_f32 = np.frombuffer(o.gamma_direction[:self.dim * 4], dtype=np.float32)
+
+            if gamma_f32 is not None and len(gamma_f32) > 0:
+                arr = (ctypes.c_float * len(gamma_f32))(*gamma_f32)
+                oid = hash(o.id) & 0x7FFFFFFF if isinstance(o.id, str) else int(o.id)
+                self.lib.am_harmonic_push_gamma(
+                    oid, arr, len(gamma_f32), ctypes.c_float(o.entropy))
+            else:
+                # Push zero gamma
+                arr = (ctypes.c_float * self.dim)(*([0.0] * self.dim))
+                oid = hash(o.id) & 0x7FFFFFFF if isinstance(o.id, str) else int(o.id)
+                self.lib.am_harmonic_push_gamma(
+                    oid, arr, self.dim, ctypes.c_float(o.entropy))
+
+        # Forward pass in C
+        result = self.lib.am_harmonic_forward(step)
+
+        # Unpack C result
+        harmonics = [float(result.harmonics[k]) for k in range(8)]
+        n = result.n_organisms
+        resonance = [float(result.resonance[i]) for i in range(n)]
+        strength_mod = float(result.strength_mod)
+        dominant_freq = int(result.dominant_freq)
+
+        self._last_harmonics = np.array(harmonics)
+        self._last_resonance = resonance
+
+        # ── Action biases (same logic as Python, but using C-computed values) ──
+        action_bias = {}
+        if len(self._entropy_history) >= 4:
+            dominant_amp = harmonics[dominant_freq]
+
+            if dominant_freq <= 1:
+                if dominant_amp > 0.1:
+                    action_bias["dampen"] = min(dominant_amp * 2, 1.0)
+                elif dominant_amp < -0.1:
+                    action_bias["amplify"] = min(abs(dominant_amp) * 2, 1.0)
+            elif dominant_freq >= 4:
+                action_bias["ground"] = min(abs(harmonics[dominant_freq]) * 3, 1.0)
+
+        mean_res = np.mean(resonance) if resonance else 0.0
+        if mean_res < 0.3:
+            action_bias["explore"] = max(action_bias.get("explore", 0), 0.5)
+
+        if n > 1 and resonance:
+            res_var = float(np.var(resonance))
+            if res_var > 0.1:
+                action_bias["realign"] = min(res_var * 3, 1.0)
+
+        return {
+            "action_bias": action_bias,
+            "strength_mod": strength_mod,
+            "harmonics": harmonics,
+            "resonance": resonance,
             "dominant_freq": dominant_freq,
         }
 
@@ -824,7 +909,7 @@ class Mycelium:
         self.drift = DriftTracker()
         self.voice = MyceliumVoice()
         self.gamma = MyceliumGamma()
-        self.harmonic = HarmonicNet()
+        self.harmonic = HarmonicNet(lib=self.method.lib)
         self.syntropy = MyceliumSyntropy()
         self.pulse = FieldPulse()
         self.dissonance = SteeringDissonance()

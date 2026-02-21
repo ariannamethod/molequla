@@ -543,6 +543,29 @@ void am_janus_register(
 #endif // AM_JANUS_DISABLED
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// HARMONIC NET — weightless neural network in C
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#define AM_HARMONIC_MAX_HISTORY 64
+#define AM_HARMONIC_MAX_ORGANISMS 64
+#define AM_HARMONIC_N_FREQ 8
+#define AM_HARMONIC_GAMMA_DIM 32
+
+typedef struct {
+    float harmonics[AM_HARMONIC_N_FREQ];   /* Fourier decomposition */
+    float resonance[AM_HARMONIC_MAX_ORGANISMS]; /* per-organism resonance */
+    float strength_mod;                     /* confidence multiplier */
+    int   dominant_freq;                    /* which harmonic dominates */
+    int   n_organisms;
+} AM_HarmonicResult;
+
+void am_harmonic_init(void);
+void am_harmonic_clear(void);
+void am_harmonic_push_entropy(float entropy);
+void am_harmonic_push_gamma(int id, const float *gamma, int dim, float entropy);
+AM_HarmonicResult am_harmonic_forward(int step);
+
 // METHOD — distributed cognition operator
 // works on the FIELD, not individual organisms.
 // reads collective metrics, computes steering for the mouth.
