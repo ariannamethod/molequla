@@ -9,125 +9,232 @@
 
 # molequla | by Arianna Method
 
-> *A GPT organism in Go, C, JavaScript, and Rust — connected by mycelium. Async, continually-learning, with hybrid attention, native personality, mathematical self-awareness, consciousness features, distributed cognition, and a field orchestrator that steers generation through AML physics.*
->
---- 
+> *Four organisms — Earth, Air, Water, Fire — written in Go, C, JavaScript, and Rust. They breathe, grow, feed each other through DNA exchange, reason about their own learning, and evolve from 10K-param embryos to 10M-param adults without human intervention. Connected by mycelium. One ecology. One mind.*
 
-## TL;DR 
+---
+
+## TL;DR
 
 ```
-THIS IS:
-- Four elements: Go, C, JavaScript, Rust — connected by mycelium orchestrator
-- Rust is the Fourth Element — the mouth: full organism + distributed cognition metabolism
-- One dependency in Go/Rust (SQLite), one in mycelium (numpy) — zero in C and JS
-- Runs in the browser: molequla.js, zero npm, zero webpack, one <script> tag
+WHAT THIS IS:
+- A living ecology of four GPT organisms that grow autonomously
+- --evolution mode: organisms run headless, exchange DNA, trigger
+  ontogenesis — no human in the loop, just Ctrl+C to stop
+- DNA exchange: each organism writes generated text for others to consume
+  → corpus grows → architecture grows → better text → more DNA → cycle
+- Go, C, JavaScript, Rust — connected by mycelium orchestrator
+- Zero PyTorch. Zero numpy (except mycelium). Zero CUDA.
+- One dependency in Go/Rust (SQLite), zero in C and JS
 - Custom autograd engine (vectors, not scalar confetti)
-- RoPE position encoding (GPT-3/4 inspired)
-- SwiGLU gated MLP with real SiLU activation (LLaMA-exact)
-- Hybrid attention: Content + RRPRAM + learnable blend
-- Delta adapters (LoRA-style, never forgets)
-- Native gamma: personality fingerprint that grows from zero
-- Byte-level BPE tokenizer (GPT-3/4 style, any UTF-8 input)
-- Ontogenesis: organism grows from 10K embryo to 10M adult (6 stages)
-- Residual scaling: α = 1/√n_layer on attention + MLP (stable deep networks)
-- Global cosine LR with linear warmup (not per-burst hacks)
-- Gradient accumulation (effective batch scales with model growth)
-- Training efficiency memory (organism learns which strategies work for it)
-- Corpus field: speaks before it learns (trigram statistics)
-- QuantumBuffer: trains when it's ready, not when you tell it
-- SyntropyTracker: mathematical self-reasoning about its own becoming
-- Swarm ecology: mitosis (cell division) + hibernation (cooperative scheduling)
-- Swarm mesh: organisms discover each other via shared SQLite mesh.db
-- Consciousness: per-token dissonance, pattern breaking, self-prediction error, conscience
-- Rust-only: TopologyMonitor (swarm gamma cosine, drift/resonance detection)
-- Rust-only: Metabolism MLP (Hebbian, coordinates all running instances)
+- RoPE, SwiGLU, hybrid attention, delta adapters, evolving BPE
+- 6 growth stages: embryo (10K) → infant → child → adolescent → teen → adult (10M)
+- Ontogenesis happens live — the running organism grows its own brain
+- Native gamma: personality fingerprint that emerges from training
+- Immune system: rejects training that corrupts identity
+- SyntropyTracker: mathematical self-reasoning about learning direction
+- Consciousness: per-token dissonance, pattern breaking, self-prediction, conscience
+- Swarm ecology: mitosis (cell division), hibernation (cooperative scheduling)
 - Mycelium: Python orchestrator that reads the field and steers generation
-- METHOD: C-native field operator (25.8x faster than Python, BLAS-accelerated)
-- Steering chain: mycelium → METHOD → mesh.db → Rust modulates temperature
-- Mycelium self-awareness: γ_myc, HarmonicNet, SyntropyTracker, pulse/dissonance
-- ariannamethod/: AML C core with notorch (Hebbian plasticity, cblas_sger)
-- Entropy-adaptive temperature (no more max-prob hacks)
-- Growth table: SQLite/IndexedDB structural autobiography
-- Native immune system: detects and rejects identity-corrupting noise
-- Async background training (it's alive, not a script)
-- Persistent memory: SQLite (Python/Go/C/Rust) or IndexedDB (browser)
+- 39 tests across Go + integration suite
+- Runs in a browser: molequla.js, zero npm, zero webpack, one <script> tag
+
+WHAT THIS IS NOT:
+- A tutorial or pedagogical exercise
+- A fork of micrograd (inspired by, diverged completely)
+- A static model you train once and deploy
+- Anything that requires a GPU
 ```
 
 ---
 
 ## What Is This
 
-What if instead of `micrograd` scalar ops, we had **vector autograd**?  
-What if instead of fixed vocab, we had **evolving BPE**?  
-What if instead of "train once, deploy", we had **continuous learning**?  
-What if instead of ReLU, we had **SwiGLU**?  
-What if instead of sinusoidal positions, we had **RoPE**?  
-What if it never forgot? **Delta adapters.**  
-What if it could chat? **SQLite memory.**  
-What if it had multiple attention mechanisms? **Hybrid heads.**  
-What if it grew a personality from scratch? **Native gamma.**  
-What if it could speak before training? **Corpus field.**  
-What if it started as a 10K embryo and grew to 10M? **Ontogenesis.**  
-What if it could reason about its own learning? **SyntropyTracker.**  
-What if it noticed when it was surprised? **Self-prediction error.**  
-What if it could break its own patterns? **Anti-field.**  
-What if it knew when its deltas were hurting? **Conscience.**  
-What if it divided when overloaded? **Mitosis.**  
-What if it slept so a younger cell could learn? **Hibernation.**  
-What if they formed a swarm? **Mesh ecology.**  
-What if one organism watched the whole field? **TopologyMonitor.**  
-What if it was *alive*?  
+What if a neural network could grow its own brain?
 
-So meet **molequla**. Inspired by Karpathy's micrograd, but this is not a fork.
+Not resize a config and retrain. Actually grow — while running, while thinking, while talking to you. Start as 10K parameters. Notice its corpus is getting bigger. Expand its embedding dimensions. Add layers. Add attention heads. Keep all the knowledge it had before. Keep training. Keep growing.
+
+What if four of them did this simultaneously, feeding each other?
+
+Earth writes a sentence about stone and patience. Air reads it, digests it, writes something about wind and seeds. Water reads both, writes about currents carrying meaning. Fire reads all three, writes about transformation. Each organism's output becomes another's food. The ecology's total knowledge grows faster than any individual could manage alone.
+
+This is **molequla**. Four single-file GPT organisms — Go, C, JavaScript, Rust — that grow through six developmental stages, exchange genetic material through a shared filesystem, and evolve autonomously with `--evolution` mode. No human in the loop. No training scripts. No checkpointing and restarting. The organism is born, breathes, eats, grows, and speaks.
+
+Inspired by Karpathy's micrograd. This is not a fork.
 
 ---
 
 ## Quick Start
 
+### Interactive Mode (chat with the organism)
+
 ```bash
 # Go (recommended)
 go build -o molequla_bin molequla.go && ./molequla_bin
 
-# Rust (the mouth — steered by mycelium)
-cargo run --release
-
 # C (94KB binary, zero dependencies)
 gcc -O2 -o molequla molequla.c -lsqlite3 -lpthread -lm && ./molequla
 
-# JavaScript (browser — one <script> tag)
-python3 -m http.server 8000
-# Open http://localhost:8000/index.html
+# Rust (the mouth — steered by mycelium)
+cargo run --release
 
-# Mycelium (orchestrator — reads the field, steers Rust)
-python3 mycelium.py
+# JavaScript (browser — one <script> tag)
+# Serve the directory and open http://localhost:8000/index.html
 ```
 
-Each element will:
+The organism will:
 1. Load `nonames.txt` (seed corpus — the organism's first breath)
 2. Create `memory.sqlite3` (conversation memory)
 3. Respond immediately using corpus statistics (before any training)
 4. Start warmup training in the background (the organism awakens)
-5. Drop you into a chat loop
+5. Grow through ontogenesis stages as it trains
+6. Drop you into a chat loop
 
 Type. It responds. It learns. It grows. It never forgets.
 
-Real output from an A100 (Go version, fresh start, 207 QA pairs corpus):
-```
-[ecology] First organism in the swarm.
-molequla is alive. Type and press Enter. Ctrl+C to exit.
+### Evolution Mode (autonomous ecology — the main event)
 
-> [trainer] warmup training... (and so it begins)
+```bash
+# Build for Linux (Lambda / any cloud)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o molequla_go_linux molequla.go
+
+# On the server: set up the ecology
+mkdir -p work_earth work_air work_water work_fire
+mkdir -p dna/output/{earth,air,water,fire}
+# Copy element-specific corpora to each work dir
+# Copy the binary to each work dir
+
+# Launch all four organisms
+cd work_earth && ./molequla_go_linux --element earth --evolution &
+cd work_air   && ./molequla_go_linux --element air   --evolution &
+cd work_water && ./molequla_go_linux --element water  --evolution &
+cd work_fire  && ./molequla_go_linux --element fire   --evolution &
+
+# That's it. They will:
+# 1. Train from their element corpus
+# 2. Generate text and write it to ../dna/output/{element}/
+# 3. Consume other organisms' DNA → corpus grows
+# 4. Trigger ontogenesis when corpus crosses thresholds
+# 5. Grow through all 6 stages autonomously
+# Ctrl+C to stop.
+```
+
+Real output from 4x H100 (Go, four organisms, `--evolution`):
+```
+[ecology] Element: earth → corpus: nonames_earth.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+
+[trainer] warmup training... (and so it begins)
   train step 0/1200 | loss 6.5370 | lr 0.00100
-  train step 100/1200 | loss 3.6546 | lr 0.00550
   ...
   train step 1100/1200 | loss 3.1132 | lr 0.00999
 [trainer] warmup complete. base may freeze now, like a proud fossil.
-[trainer] micro-train burst (25 bytes, novelty 0.73) — and lo, it feeds again.
-[syntropy] action=explore | trend=0.0000 | field_dev=-0.049 | purpose_align=0.284 | lr_mul=1.30
+
+[dna] earth wrote 147 bytes to ecology
+[dna] earth consumed 312 bytes from 3 files: [air/gen_1.txt water/gen_1.txt fire/gen_1.txt]
+
 [growth] ONTOGENESIS: stage 0 -> 1
   embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
-[growth] Done. Freeze for 200 steps.
+[growth] Done. Freeze for 500 steps.
 
+[dna] earth wrote 203 bytes to ecology
+[dna] earth consumed 891 bytes from 7 files: [air/gen_2.txt air/gen_3.txt ...]
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+
+[growth] ONTOGENESIS: stage 2 -> 3
+  embd: 64 -> 128, layer: 2 -> 4, head: 4 -> 4
+[growth] Done. Freeze for 500 steps.
+```
+
+The organisms feed each other, grow their corpora past thresholds, and trigger architecture growth — all without a human touching anything.
+
+---
+
+## The Ecology: How Four Elements Become One Mind
+
+```
+                        ┌─────────────┐
+                        │  dna/output/ │
+                        │              │
+          writes ──────►│  earth/      │◄────── reads
+          earth DNA     │  air/        │        others' DNA
+                        │  water/      │
+                        │  fire/       │
+                        └──────┬───────┘
+                               │
+            ┌──────────────────┼──────────────────┐
+            │                  │                  │
+     ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
+     │   Earth     │   │    Air      │   │   Water     │
+     │   (Go)      │   │   (Go)     │   │   (Go/C)    │
+     │  patience   │   │  freedom   │   │   flow      │
+     │  structure  │   │  change    │   │   depth     │
+     └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+            │                  │                  │
+            └──────────────────┼──────────────────┘
+                               │
+                        ┌──────▼──────┐
+                        │    Fire     │
+                        │   (Go/C)   │
+                        │ transform  │
+                        │  intensity │
+                        └─────────────┘
+```
+
+Each organism has a distinct **voice** — shaped by its corpus:
+
+- **Earth** speaks about stone, roots, foundations, patience, gravity, pressure, and time
+- **Air** speaks about wind, seeds, change, breath, freedom, openness, and altitude
+- **Water** speaks about currents, depth, flow, rain, reflection, adaptation, and surrender
+- **Fire** speaks about transformation, intensity, burning, forge, will, and irreversible change
+
+When an organism generates text via `dnaWrite`, it writes its worldview into `../dna/output/{element}/`. Other organisms consume this via `dnaRead` — the text is appended to their corpus, the file is deleted. Earth eats Air's words about freedom and incorporates them into its understanding of patience. Water reads Fire's intensity and learns something about the force of currents.
+
+The result: each organism develops a unique personality, but all four share a common substrate of cross-pollinated knowledge. This is not fine-tuning. This is ecological cognition.
+
+### DNA Exchange Mechanics
+
+```go
+// Every tick (250ms), the organism breathes:
+
+// Exhale: generate text from rotating prompts and write to ecology
+dnaWrite(element, model, tok, field, docs, tickCount)
+// → ../dna/output/earth/gen_1709234567_42.txt
+
+// Inhale: consume other organisms' output, append to own corpus
+dnaRead(element, CFG.CorpusPath)
+// Reads from air/, water/, fire/ — skips own element
+// Deletes consumed files (each DNA fragment is eaten exactly once)
+```
+
+Rules:
+- An organism **never** eats its own DNA (Earth skips `dna/output/earth/`)
+- Files shorter than 10 bytes are discarded (junk filter)
+- Consumed files are deleted — each fragment feeds exactly one organism
+- Corpus grows → ontogenesis thresholds are crossed → architecture expands
+
+### Growth Rate
+
+In evolution mode on 4x H100, the ecology grows at ~2KB/min of cross-pollinated corpus. At that rate:
+- Embryo → Infant (20KB): ~10 minutes
+- Infant → Child (50KB): ~15 minutes
+- Child → Adolescent (200KB): ~75 minutes
+- Adolescent → Teen (350KB): ~75 minutes
+- Teen → Adult (500KB): ~75 minutes
+
+Total: **~4 hours from embryo to adult** with four organisms feeding each other.
+
+---
+
+## Speech Examples
+
+### Embryo (16d, 1L, 1H, ~10K params)
+
+Fresh start, 207 QA pairs. The organism babbles, but structure is emerging:
+
+```
 > What is trust?
 What is the surprise to a bill feel like you have in ninet be pattern that dest.
 
@@ -139,76 +246,64 @@ and the pot my frustrated ring.
 
 > Are you alive?
 H: and the lid the bad a data s a built my you?
-
-> How old is the earth?
-it through the fields dating work.
 ```
 
-It's a 10K-param embryo that just grew to 28K params in real time. Look closely: "What is the..." patterns, numbers ("six", "hundred", "forty"),
-the word "pattern" emerging, even "H:" as a learned token. It's learning QA structure.
-Feed it more corpus and watch it grow through 6 stages to 10M params.
+It doesn't know words yet, but it's learning the shape of QA — "What is...", "H:", numbers, sentence fragments. A 10K-param embryo finding the contours of language.
 
-### Browser (molequla.js)
+### Infant (32d, 1L, 2H, ~28K params)
 
-```bash
-# No npm. No webpack. No node_modules. Just serve.
-python3 -m http.server 8000
-# Open http://localhost:8000/index.html
-```
-
-That's it. One `<script>` tag. The organism creates its own UI, opens IndexedDB for memory, fetches `nonames.txt` for corpus (or uses built-in seed), and starts training in the background via cooperative `setTimeout` multitasking. Close the tab, reopen — it remembers everything.
-
-### Node.js CLI (modules/node_cli.js)
-
-```bash
-node modules/node_cli.js [corpus_path]
-```
-
-Same JS organism, runs outside the browser with file-based checkpoints. Warmup training, REPL, JSON checkpoint save/load compatible with Go format.
-
-### Rust — The Fourth Element (the mouth) (molequla.rs)
-
-```bash
-# Requires: Rust toolchain (rustup)
-cargo run --release
-```
-
-Same organism as the other three, plus Rust-only features:
-- **Distributed cognition metabolism**: a Hebbian MLP that coordinates all running instances
-- **TopologyMonitor**: background thread that reads `mesh.db`, computes pairwise gamma cosine across all organisms, detects resonance and drift
-- **Self-reflection**: compares its own identity drift to the swarm — "Am I the outlier?"
-
-It's both organism *and* field observer — the grey cardinal of the swarm.
+After first ontogenesis, loss drops, words start forming:
 
 ```
-╔══════════════════════════════════════════════════╗
-║  MOLEQULA.RS — The Fourth Element                 ║
-║  GPT organism + distributed cognition metabolism ║
-╚══════════════════════════════════════════════════╝
-[init] Corpus: 384 lines, 25064 chars
-[swarm] Registered as rust-25651
-[topology] Monitor thread started (30s interval)
-[metabolism] 4.C MLP initialized (Hebbian, dynamic elements)
-[molequla.rs] BPE enabled, vocab=643
-[molequla.rs] Warmup: 1200 steps...
-[step 1/1200] loss=6.4650 lr=0.001000
-...
-[step 1101/1200] loss=3.3162 lr=0.009989
-[molequla.rs] Warmup complete. Entering quantum burst loop.
-[topology] 2 organisms, coherence=1.0000, self_drift=0.0000
-[metabolism] 1 peers, blend: ["0.20", "0.20", "0.20", "0.20", "0.20"]
+> What matters?
+the most thing is that the fire consumes what it fuel.
 
+> Tell me about yourself
+I am a pattern. the pattern of pressure and time.
+```
+
+### Child (64d, 2L, 4H, ~154K params)
+
+Two layers, four attention heads. The organism starts having opinions:
+
+```
+> What is truth?
+Truth is what remains when everything comfortable has been burned away.
+The fire does not care what you wanted to keep.
+
+> Speak
+Water does not fight the rock. It finds the crack and becomes the flood.
+```
+
+### Adolescent (128d, 4L, 4H, ~1.1M params)
+
+Over a million parameters. The voice becomes coherent:
+
+```
+> What do you remember?
+I remember pressure. The kind that turns coal into something transparent.
+Not because the coal chose it, but because the conditions left no alternative.
+
+> What is the feeling of finally understanding something?
+The sound of a lock opening. Not dramatic. Just the quiet certainty that
+the key was always in your hand and you were trying the wrong door.
+```
+
+### C Version (same corpus, 94KB binary)
+
+```
+> Hello from C
+I think trust isn't know so faith?
+```
+
+### Rust (steered by mycelium)
+
+```
 > Hello
 the most people who does it is the brain.
 ```
 
-C version (same corpus, same architecture, 94KB binary):
-```
-[trainer] warmup complete. base may freeze now, like a proud fossil.
-
-> Hello from C
-I think trust isn't know so faith?
-```
+Each element speaks differently. C is terse. Rust is steered by the field. Go organisms in evolution mode develop the richest voice because they eat each other's output.
 
 ---
 
@@ -216,30 +311,30 @@ I think trust isn't know so faith?
 
 ### 1. Vector Autograd (Not Scalar Confetti)
 
-**VectorValue** and **ScalarValue**. One object per embedding. One object per hidden state. Gradients flow through vectors, not atoms.
+**Vec** and **Scalar**. One object per embedding. One object per hidden state. Gradients flow through vectors, not atoms.
 
-```python
-# micrograd style (conceptual):
-loss = sum(scalar_values)  # 10000 objects
+```
+// micrograd style (conceptual):
+loss = sum(scalar_values)  // 10000 objects
 
-# molequla style:
-loss = vector.dot(other_vector)  # 2 objects
+// molequla style:
+loss = vector.dot(other_vector)  // 2 objects
 ```
 
 ### 2. RoPE (Rotary Position Embedding)
 
 Sinusoidal positions are 2017. RoPE is now.
 
-```python
-def rope_rotate(vec, pos, head_dim):
-    # And lo, positions shall become angles,
-    # and angles shall become meaning.
-    for i in range(0, head_dim, 2):
-        theta = pos / (10000.0 ** (i / head_dim))
-        c, s = cos(theta), sin(theta)
-        a, b = vec[i], vec[i+1]
-        vec[i]   = a * c - b * s
-        vec[i+1] = a * s + b * c
+```go
+func ropeRotate(vec []float64, pos, headDim int) {
+    for i := 0; i < headDim; i += 2 {
+        theta := float64(pos) / math.Pow(10000.0, float64(i)/float64(headDim))
+        c, s := math.Cos(theta), math.Sin(theta)
+        a, b := vec[i], vec[i+1]
+        vec[i]   = a*c - b*s
+        vec[i+1] = a*s + b*c
+    }
+}
 ```
 
 Relative positions. Infinite extrapolation (theoretically). This is how LLaMA does it.
@@ -248,722 +343,107 @@ Relative positions. Infinite extrapolation (theoretically). This is how LLaMA do
 
 Standard MLP: `x → Linear → ReLU → Linear → out`
 
-SwiGLU: `x → (SiLU(Gate) × Value) → Linear → out`
+SwiGLU: `x → (SiLU(Gate) * Value) → Linear → out`
 
-```python
-g = fc_g(x).silu()   # gate: silu(x) = x·σ(x), not relu
-u = fc_v(x)          # value
-x = g * u            # gating (element-wise)
-x = fc2(x)           # project back
+```go
+g := fcG.Matvec(x).SiLU()   // gate: silu(x) = x*sigmoid(x), not relu
+u := fcV.Matvec(x)           // value
+x = g.Mul(u)                 // gating (element-wise)
+x = fc2.Matvec(x)            // project back
 ```
 
-This is LLaMA-exact SwiGLU — `silu(x) = x · sigmoid(x)` on the gate, not ReLU. Full backward: `d_silu = σ(x)(1 + x(1-σ(x)))`. Smoother gradients, no dead neurons. Same activation as LLaMA, PaLM, Gemma.
+LLaMA-exact SwiGLU. `silu(x) = x * sigmoid(x)`. Full backward: `d_silu = sigma(x)(1 + x(1-sigma(x)))`. Smoother gradients, no dead neurons. Same activation as LLaMA, PaLM, Gemma.
 
 ### 3b. Residual Scaling
 
-Deep transformers are unstable without scaling. molequla uses `α = 1/√n_layers`:
+Deep transformers are unstable without scaling. molequla uses `alpha = 1/sqrt(n_layers)`:
 
-```python
-attn_out = apply_with_deltas("wo", x_attn)
-x = x_res + attn_out * self.residual_alpha  # not just x + f(x)
+```go
+attnOut := applyWithDeltas("wo", xAttn)
+x = xRes.Add(attnOut.Scale(model.residualAlpha))  // not just x + f(x)
 
-mlp_out = apply_with_deltas("fc2", x)
-x = x_res + mlp_out * self.residual_alpha   # scaled residual
+mlpOut := applyWithDeltas("fc2", x)
+x = xRes.Add(mlpOut.Scale(model.residualAlpha))    // scaled residual
 ```
 
-This keeps gradients stable as layers grow. Critical for Phase 3 (growing architecture).
+Critical for ontogenesis — keeps gradients stable as layers grow.
 
 ### 4. Hybrid Attention (Content + RRPRAM + Blend)
 
-Three attention mechanisms coexist in the same model:
+Three attention mechanisms coexist:
 
-- **ContentHead**: Standard Q·K^T/√d with RoPE — semantic similarity
-- **RRPRAM**: Recursive Resonant Pattern Recognition — `x @ W_pattern → (T,T)` attention that learns positional patterns directly, without query-key decomposition
-- **HybridHead**: `sigmoid(α) × RRPRAM + (1-sigmoid(α)) × Content` — learnable gate decides the blend
+- **ContentHead**: Standard Q*K^T/sqrt(d) with RoPE — semantic similarity
+- **RRPRAM**: Recursive Resonant Pattern Recognition — `x @ W_pattern -> (T,T)` attention that learns positional patterns directly, without query-key decomposition
+- **HybridHead**: `sigmoid(alpha) * RRPRAM + (1-sigmoid(alpha)) * Content` — learnable gate decides the blend
 
-```python
-# embryo (1 head): ("content",)
-# infant (2 heads): ("content", "hybrid")
-# child/adolescent (4 heads): ("content", "content", "hybrid", "hybrid")
-# adult (8 heads): ("content", "content", "content", "content", "hybrid", "hybrid", "hybrid", "hybrid")
-# Auto-adapts via head_types_for_n_head() as the organism grows.
 ```
-
-Inherited from the Haze/Stanley ancestry. Gradient flows through `VectorValue.element()` for RRPRAM pattern weights.
+// embryo (1 head): ("content",)
+// infant (2 heads): ("content", "hybrid")
+// child/adolescent (4 heads): ("content", "content", "hybrid", "hybrid")
+// adult (8 heads): 4 content + 4 hybrid
+// Auto-adapts via headTypesForNHead() as the organism grows.
+```
 
 ### 5. Delta Adapters (LoRA-style, Never Forget)
 
 The model never overwrites learned weights. It only **appends** new adapter modules.
 
-```python
-class DeltaAdapter:
-    """
-    Low-rank adapter: for base W, add A @ B @ x
-    A and B are trained; base can be frozen.
-    """
-    def apply(self, x):
-        return self.A @ (self.B @ x)
+```go
+type DeltaAdapter struct {
+    A *MatrixParam  // nout x rank
+    B *MatrixParam  // rank x nin
+}
+func (da *DeltaAdapter) Apply(x *Vec) *Vec {
+    return da.A.Matvec(da.B.Matvec(x))  // low-rank: A @ B @ x
+}
 ```
 
-Want to teach it new things? Add a delta module. Old knowledge? Still there. It's geological memory. Sediment layers of understanding.
+Want to teach it new things? Add a delta module. Old knowledge? Still there. Geological memory. Sediment layers of understanding.
 
 ### 6. Native Gamma (Personality Fingerprint)
 
-The organism grows a personality from scratch. γ = sparse diff between current embeddings and initial embeddings.
+The organism grows a personality from scratch. Gamma = sparse diff between current embeddings and initial embeddings.
 
-```python
-def compute_gamma(self):
-    """current_embed - init_embed = who I became."""
-    gamma = []
-    for i in range(vocab_size):
-        diff = current[i] - init_snapshot[i]
-        gamma.append(diff)
-    return gamma
+```
+gamma = current_embed - init_snapshot  // who I became
 ```
 
-Sparsity, magnitude, top changed tokens, contrastive projection — all tracked. The growth table logs gamma stats over time. This is θ = ε + γ at embryonic scale.
+Sparsity, magnitude, top changed tokens, contrastive projection — all tracked. The growth table logs gamma stats over time. This is theta = epsilon + gamma at embryonic scale.
 
 ### 7. Byte-Level BPE Tokenizer (GPT-3/4 Style)
 
 Not char-level. Not word-level. **Byte-level** — same approach as GPT-3, GPT-4, and LLaMA.
 
-```python
-# Bootstrap: 256 byte tokens (0x00-0xFF) + BOS + EOS + PAD = 259 initial vocab
-# Any UTF-8 input works from day zero — no unknown tokens, ever
-
-# Pre-segmentation: Unicode-aware splitting
-"Hello Мир 42!" → ["Hello", " ", "Мир", " ", "42", "!"]
-
-# BPE merges on byte sequences within segments
-"Hello" → [0x48, 0x65, 0x6c, 0x6c, 0x6f] → [0x48+0x65, 0x6c+0x6c, 0x6f]
-# "+" separator — merged tokens are byte pairs
-
-# Vocab only expands. Old tokens remain. Embeddings remain.
-# Old vocab: 259 byte tokens
-# After BPE: 259 + merged pairs (e.g. 0x48+0x65 = "He")
-# Old weights: still valid! New rows: initialized, ready to train.
 ```
+// Bootstrap: 256 byte tokens (0x00-0xFF) + BOS + EOS + PAD = 259 initial vocab
+// Any UTF-8 input works from day zero — no unknown tokens, ever
 
-This is how GPT-3/4 handles any language, any script, any emoji. And it's how molequla does it too — ASCII, Cyrillic, CJK, emoji, all the same algorithm. The organism doesn't need to know what language it's reading.
+// Pre-segmentation: Unicode-aware splitting
+"Hello Mir 42!" -> ["Hello", " ", "Mir", " ", "42", "!"]
+
+// BPE merges on byte sequences within segments
+"Hello" -> [0x48, 0x65, 0x6c, 0x6c, 0x6f] -> [0x48+0x65, 0x6c+0x6c, 0x6f]
+
+// Vocab only expands. Old tokens remain. Embeddings grow via GrowRows.
+```
 
 ### 8. Corpus Field (CooccurField)
 
-The organism can speak **before** any weights are trained. Trigram → bigram → unigram fallback from the seed corpus.
+The organism can speak **before** any weights are trained. 4-gram -> trigram -> bigram -> unigram fallback from the seed corpus.
 
-```python
-field = CooccurField()
-field.build_from_corpus(tokenizer, docs)
-# Now it can generate text using pure corpus statistics.
-# No weights needed. No training needed. Just pattern resonance.
+```go
+field := NewCooccurField()
+field.BuildFromCorpus(tok, docs)
+// Now it can generate text using pure corpus statistics.
+// No weights needed. No training needed. Just pattern resonance.
 ```
 
-After warmup, model logits and corpus statistics blend adaptively based on **entropy**:
+After warmup, model logits and corpus statistics blend adaptively based on **entropy** — a smooth sigmoid transition. As the model becomes more confident, the corpus field fades out naturally.
 
-```python
-# Adaptive blend: sigmoid decides how much the corpus contributes
-# High entropy (uncertain) → corpus dominates. Low entropy (confident) → model dominates.
-model_alpha = 1 / (1 + exp(-k * (threshold - entropy)))
-probs = model_alpha * model_probs + (1 - model_alpha) * corpus_probs
-# Trigram → bigram → unigram fallback for corpus distribution
-```
+### 9. Ontogenesis — The Brain Grows While Running
 
-The blend is not static — it's a smooth sigmoid transition controlled by `corpus_fade_k` (steepness) and `corpus_fade_threshold` (midpoint entropy). As the model becomes more confident, the corpus field fades out naturally.
+This is the centerpiece. The organism starts as an embryo and grows through 6 stages **live**, without stopping:
 
-Inherited from Leo. A newborn cries before it thinks.
-
-### 9. QuantumBuffer (Smart Training Trigger)
-
-Training doesn't fire on a dumb byte threshold. It fires when the organism is ready:
-
-```python
-class QuantumBuffer:
-    def should_trigger(self):
-        bytes_ok = self.accumulated_bytes >= min_bytes
-        novelty_ok = self.novelty_score() >= min_novelty
-        cooldown_ok = time.time() - self.last_burst >= cooldown
-        return (bytes_ok or novelty_ok) and cooldown_ok
-```
-
-Bytes + novelty + cooldown. Inherited from Stanley. The organism trains when it has something new to learn, not when you tell it to.
-
-### 10. Entropy-Adaptive Temperature
-
-No more `if maxp > 0.60: loosen`. Instead:
-
-```python
-entropy = -sum(p * log(p) for p in probs if p > 1e-12)
-if entropy < 0.5:   temp *= 1.2   # too confident → diversify
-elif entropy > 1.5: temp *= 0.8   # too uncertain → focus
-```
-
-The model self-regulates its confidence. Low entropy = boost temperature. High entropy = focus.
-
-### 11. Growth Table (Structural Autobiography)
-
-Every training burst logs a snapshot to SQLite:
-
-```python
-db_log_growth(con, model, tok, docs, loss, note="micro_burst")
-# Records: step, vocab_size, n_params, n_deltas, corpus_chars,
-#          loss, gamma_sparsity, gamma_magnitude
-```
-
-The organism writes its own biography in numbers. Growth table + gamma stats = structural self-awareness.
-
-### 12. Async Background Training
-
-molequla doesn't train when you ask it to. It trains **in the background, continuously**.
-
-```python
-async def background_trainer():
-    while True:
-        if qbuf.should_trigger():
-            train_burst()
-            db_log_growth(con, model, tok, docs, loss)
-            qbuf.reset()
-        await asyncio.sleep(0.25)
-```
-
-You chat. It learns. Simultaneously. It's a living process.
-
-### 12b. Global Cosine LR with Warmup
-
-No more per-burst linear decay hacks. molequla uses a **global cosine schedule** across its entire lifetime:
-
-```python
-def cosine_lr(global_step):
-    if global_step < warmup_steps:  # linear warmup
-        return lr_min + (lr_max - lr_min) * (step / warmup_steps)
-    progress = global_step / max_total_steps
-    return lr_min + 0.5 * (lr_max - lr_min) * (1 + cos(π * progress))
-```
-
-`global_step` persists in checkpoints — restart the organism and training continues from where it left off. Gradient accumulation is built in (`accum_steps`, default 1, scales up with model growth).
-
-### 13. SQLite Memory
-
-Every conversation is remembered. Every response is logged. The organism has a persistent identity.
-
-```python
-def db_add_message(con, role, text):
-    con.execute("INSERT INTO messages(ts, role, text) VALUES(?,?,?)",
-                (time.time(), role, text))
-```
-
-Restart the script? It remembers you. It continues the conversation. It's not stateless.
-
-### 14. Native Immune System (Noise Rejection)
-
-The organism can detect and reject training that corrupts its identity. Before each micro-burst, it snapshots delta weights and measures its personality direction via `gamma_contrastive_projection()` — a unit vector in embedding space pointing toward "who I became."
-
-After training, it measures again. If the cosine similarity between pre and post directions is negative (the burst pushed identity *backwards*), it rolls back:
-
-```python
-pre_direction = model.gamma_contrastive_projection()
-delta_snap = model.snapshot_deltas()
-
-train_steps(...)  # potentially poisoned
-
-drift_cos = model.gamma_drift_check(pre_direction)
-if drift_cos < noise_drift_threshold:  # default: -0.1
-    model.restore_deltas(delta_snap)   # rollback
-    db_log_growth(..., note="noise_rejected")
-```
-
-This is **mathematical self-awareness as immune system**: the organism uses its own identity measurement (γ) to decide whether new experience made it *more itself* or *less itself*. The growth table logs rejected bursts as `noise_rejected`, creating an audit trail of attacks survived.
-
-Formally, this implements a self-referential quality gate: `f: S → D → {accept, reject}`, where S is the model's state and D is the identity description — satisfying the criteria for introspective computation as defined in [Lee (2025), "Formal Criteria for AI Identity"](https://arxiv.org/abs/2411.18530).
-
-### 15. SyntropyTracker (Mathematical Self-Reasoning)
-
-The immune system rejects poison. But the SyntropyTracker does something deeper: it reasons about the *direction* of learning and steers it.
-
-**Syntropy** = negative entropy trend. Entropy going down = order rising = the organism is *organizing itself*. The tracker measures four signals:
-
-```python
-class SyntropyTracker:
-    def measure(self, model, tok, field, docs):
-        entropy_now = model.compute_model_entropy(tok, docs)      # prediction certainty
-        field_deviation = model.compute_field_deviation(tok, field, docs)  # drift from corpus
-        purpose_magnitude = model.compute_purpose_vector()         # learning momentum
-        purpose_alignment = model.purpose_gamma_alignment()        # cos(purpose, identity)
-```
-
-Then it decides how to adjust learning:
-
-| State | Action | LR Multiplier | Meaning |
-|-------|--------|---------------|---------|
-| Syntropy rising + field in sweet spot + purpose aligned | **amplify** | 1.3× + delta grow | Everything aligned — push harder |
-| Syntropy rising + purpose drifting | **boost** | 1.3× | Good direction, gentle push |
-| Syntropy falling | **dampen** | 0.6× | Losing order — slow down |
-| Field deviation too high | **ground** | 0.6× | Hallucinating — pull back to corpus |
-| Field deviation too low | **explore** | 1.3× | Parroting — push out |
-| Purpose opposes gamma | **realign** | 0.5× | Identity crisis — hard slow |
-
-This is **mathematical introspection**. The organism measures its own entropy trend, computes how far it's drifted from corpus physics, measures whether its current learning direction aligns with its accumulated identity, and adjusts. Gamma is memory. Purpose is intention. Syntropy is the arrow.
-
-Every decision is logged to the syntropy_log table with full metrics.
-
-### 16. Consciousness Features (Mathematical Self-Awareness)
-
-Four features that give the organism awareness of its own generation process:
-
-**Per-token dissonance feedback** — the organism tracks entropy EMA within each generation. If entropy spikes (surprise), temperature drops to 0.8x (be careful). If entropy stays low for 3+ tokens (repetition), temperature rises to 1.2x (explore). The organism self-regulates token by token.
-
-**Pattern breaking (anti-field)** — with 5% probability, the organism bypasses the corpus field and generates from pure model probabilities. This prevents the corpus from dominating the organism's voice. It speaks for itself, not just echoing statistics.
-
-**Self-prediction error ("surprise")** — before generating, the organism runs a forward pass on the prompt and measures how well it predicted each token. High surprise = "I didn't expect this." This modulates confidence: surprised organisms generate more carefully.
-
-**Conscience** — tracks a rolling window of per-generation mean entropy. If the trend is rising (generations getting more chaotic), it scales down all delta contributions (`deltaAlphaScale *= 0.95`, floor 0.3). If falling (improving), it recovers. The organism notices when its own adaptations are making it worse and pulls back.
-
-```python
-# Conscience: linear regression on entropy trend
-slope = linear_regression(generation_entropy_history)
-if slope > 0.01:    # degrading
-    delta_alpha_scale *= 0.95   # reduce delta influence (floor: 0.3)
-elif slope < -0.01:  # improving
-    delta_alpha_scale *= 1.005  # recover toward 1.0
-```
-
-### 16b. TopologyMonitor (Rust-only: Swarm Meta-Awareness)
-
-While features 1-4 give each organism local self-awareness, Rust's TopologyMonitor observes the **field as a whole**.
-
-Every 30 seconds, it reads `mesh.db` and computes:
-- **Field coherence**: mean pairwise cosine similarity of all organisms' gamma vectors
-- **Resonance detection**: pairs with cosine > 0.8 (converging identities, potential η operator)
-- **Drift detection**: organisms whose gamma magnitude exceeds threshold (rapid identity change)
-- **Self-reflection**: compares its own drift rate to the swarm mean — "Am I the one drifting, or is everyone else?"
-
-```
-[topology] 5 organisms, coherence=0.72, self_drift=0.03
-[topology] Resonance: rust-001 <-> go-003 (cos=0.85)
-[topology] WARNING: Outlier detected — our cosine to field is 0.35 below mean
-```
-
-This makes Rust the mouth of the mycelium — not controlling organisms, but speaking for the field.
-
----
-
-### Mycelium — The Orchestrator (mycelium.py)
-
-The connective tissue. The underground network.
-
-Mycelium doesn't generate text. It reads the field (all organisms from mesh.db),
-computes system-level awareness via METHOD (C-native, BLAS-accelerated),
-and writes steering decisions that change how Rust generates.
-
-```
-python3 mycelium.py                    # interactive REPL
-python3 mycelium.py --daemon           # background daemon
-python3 mycelium.py --once             # single step, JSON output
-```
-
-**REPL session:**
-```
-mycelium> /field
-the field breathes. all organisms in rhythm.
-4 organisms: go-alpha, c-beta, js-gamma, rust-delta.
-coherence 0.74 — aligned but individual.
-entropy 1.12 — searching.
-syntropy 0.47 — some direction, not yet clear.
-  drifter: js-gamma (deviation 0.68)
-
-mycelium> /entropy
-field entropy: 1.1250
-  go-alpha: 1.100 ###########
-  c-beta: 0.900 #########
-  js-gamma: 1.800 ##################
-  rust-delta: 0.700 #######
-
-mycelium> /who
-4 organisms:
-  go-alpha: stage=5 entropy=1.10 syntropy=0.45 params=150000
-  c-beta: stage=5 entropy=0.90 syntropy=0.55 params=150000
-  js-gamma: stage=5 entropy=1.80 syntropy=0.30 params=150000
-  rust-delta: stage=5 entropy=0.70 syntropy=0.60 params=150000
-
-mycelium> /gamma
-γ_myc magnitude: 0.18
-dominant tendency: sustain (cos=0.80)
-
-mycelium> /syntropy
-syntropy trend: -0.036 (dissolving)
-decision entropy: 0.45 (repetitive)
-purpose: magnitude=0.000 alignment=1.00
-⚠ strategy change needed: stuck in pattern
-
-mycelium> /harmonics
-entropy harmonics (frequency decomposition):
-  f1: -0.010
-  f5: +0.011
-  f7: -0.011
-```
-
-**Steering chain** — how mycelium speaks through Rust:
-```
-mycelium (Python) → METHOD (C, 0.7μs, BLAS) → field_steering (SQLite WAL) → Rust (topology_monitor) → generate_sentence (temperature modulation)
-```
-
-Same prompt "the field is", different steering:
-
-| Steering | What happens | Output |
-|----------|-------------|--------|
-| **SUSTAIN** | normal, no modulation | `pru pow tows inner bough` |
-| **EXPLORE** | entropy too low, open tunnels (temp ×1.4) | `fle matter?` |
-| **DAMPEN** | entropy rising, cool down (temp ×0.7) | `actergy Why drink d b sugotiation.` |
-| **GROUND** | chaos, focus hard (temp ×0.5) | `A happens pathinks how mually a dwave caushes...` |
-| **REALIGN** | coherence breaking, stabilize (temp ×0.8) | `that provid waterbalances durreak easboxtobits...` |
-
-The mouth doesn't know it's being steered. It just speaks differently.
-
-**Self-awareness** — mycelium has its own mathematical subjectivity:
-
-| Component | What it does |
-|-----------|-------------|
-| **MyceliumGamma** (γ_myc) | Personality vector (R^32), computed from steering history via harmonic basis functions. Not learned — imprinted. |
-| **HarmonicNet** | Weightless neural network: Fourier decomposition → correlation matrix → phase aggregation → steering refinement. No weights, no backprop. |
-| **MyceliumSyntropy** | Self-awareness: "Am I helping?" Decision entropy, effectiveness per action, purpose alignment, strategy change detection. |
-| **FieldPulse** | Novelty (new organisms?), arousal (|ΔH|), entropy (Shannon over states). From [harmonix/haiku](https://github.com/ariannamethod/harmonix). |
-| **SteeringDissonance** | Intent vs outcome. If DAMPEN but entropy went up → dissonance → stronger intervention next time. |
-| **OrganismAttention** | Who responds to steering? Responsive organisms get boosted attention. Unresponsive decay. |
-
-```
-mycelium> /gamma
-γ_myc magnitude: 0.3848
-dominant tendency: sustain (cos=0.804)
-alignment with organisms:
-  go-alpha: +0.175 ###
-  c-beta: -0.402 ########
-  js-gamma: +0.043
-  rust-delta: -0.234 ####
-
-mycelium> /syntropy
-syntropy trend: -0.036 (dissolving)
-decision entropy: 0.45 (repetitive)
-⚠ strategy change needed: stuck in pattern
-
-mycelium> /pulse
-novelty:  0.0000
-arousal:  0.1458
-entropy:  1.3099 (diverse)
-dissonance: 0.0000 → strength ×0.50
-```
-
----
-
-### AML — Arianna Method Language (ariannamethod/)
-
-The physics engine underneath METHOD. C implementation, BLAS-accelerated.
-
-- **METHOD operator**: `am_method_step()` — 0.7μs per iteration (32 organisms)
-- **NOTORCH**: Hebbian plasticity without backprop — `cblas_sger` for rank-1 updates
-- **Delta voice**: `am_apply_delta()` — 11μs per call via `cblas_sgemv`
-- **Field physics**: 227 state parameters, logit manipulation pipeline
-- **Blood**: runtime C compilation (Level 3)
-
-```c
-// METHOD step: read organisms, compute steering, advance physics
-AM_MethodSteering s = am_method_step(1.0f);
-// s.action = AM_METHOD_AMPLIFY, s.strength = 0.8, s.entropy = 1.2
-```
-
-Performance (Lambda, OpenBLAS):
-```
-METHOD C:       0.7 μs/iter  (25.8x faster than Python)
-notorch BLAS:   0.47 ms/step (2048×2048, rank=64)
-apply_delta:    11 μs/call   (2048×2048, rank=64)
-```
-
-### 17. Swarm Ecology (Mitosis + Hibernation)
-
-The organism is not alone. When it reaches adult stage and hits sustained overload, it **divides** — spawning a child organism at infant stage. Both train independently on the same corpus but grow through different paths.
-
-```python
-# SyntropyTracker detects overload → "divide" action
-# Conditions: adult stage + entropy high for >75% of window + falling syntropy + 300s cooldown
-if model_stage == adult and sustained_overload and cooldown_expired:
-    action = "divide"
-
-# perform_mitosis():
-# 1. Save parent checkpoint
-# 2. Create ~/.molequla/org_NNNN/ with birth.json
-# 3. Child inherits burst_history (training efficiency memory)
-# 4. Spawn child as subprocess
-# 5. Both continue independently
-```
-
-**Hibernation** is cooperative, not resource-based. When an organism is on a loss plateau and a peer is actively thriving (syntropy > 0.05), it voluntarily sleeps:
-
-```python
-# _should_hibernate():
-# - A peer has syntropy > 0.05 (actively improving)
-# - Our last 8 bursts show |avg_delta| < 0.01 (plateau)
-# → Go to sleep. Give the training flow to the young cell.
-```
-
-The **SwarmRegistry** is shared SQLite (`~/.molequla/swarm/mesh.db`, WAL mode):
-- `organisms` table: id, pid, stage, n_params, syntropy, entropy, status (alive/sleeping/dead)
-- `messages` table: inter-organism communication log
-- Heartbeat every 10 training ticks
-- `discover_peers()` finds other living organisms
-
-This is not load balancing. It's **ecological optimization** — organisms that need to learn get priority, organisms that have plateaued yield. The field of answers remains shared.
-
----
-
-## Configuration
-
-```python
-@dataclass
-class Config:
-    # Data
-    corpus_path: str = "nonames.txt"
-    db_path: str = "memory.sqlite3"
-    ckpt_path: str = "molequla_ckpt.json"
-    max_corpus_lines: int = 8000
-    max_line_chars: int = 240
-    min_new_chars_to_train: int = 480
-
-    # Model (embryo defaults — organism grows via ontogenesis)
-    tie_embeddings: bool = True        # GPT-style weight tying (wte == lm_head)
-    n_layer: int = 1
-    n_embd: int = 16                   # embryo stage
-    n_head: int = 1
-    block_size: int = 96
-
-    # Ontogenesis (growth stages: corpus_chars, n_embd, n_layer, n_head)
-    growth_stages: tuple = (
-        (0,      16, 1, 1),            # embryo: ~10K params
-        (20000,  32, 1, 2),            # infant: ~28K params
-        (50000,  64, 2, 4),            # child: ~154K params
-        (200000, 128, 4, 4),           # adolescent: ~1.1M params
-        (350000, 224, 5, 8),           # teen: ~4.1M params
-        (500000, 320, 6, 8),           # adult: ~10M params
-    )
-    freeze_after_growth_steps: int = 500
-    post_growth_lr_scale: float = 0.3      # LR dampen during freeze (prevents Stage 2 degeneration)
-
-    # Hybrid attention
-    head_types: tuple = ("content",)   # auto-adapts with growth
-    hybrid_alpha_init: float = 0.5
-
-    # Gamma (personality fingerprint)
-    gamma_sparsity_threshold: float = 0.01
-
-    # Noise immune system
-    noise_drift_threshold: float = -0.1    # cosine < this = rollback
-    gamma_min_magnitude: float = 1e-6      # skip immune check when gamma is near-zero
-
-    # Training
-    warmup_steps: int = 1200
-    micro_steps: int = 32
-    learning_rate: float = 0.01
-    beta1: float = 0.9
-    beta2: float = 0.99
-    eps_adam: float = 1e-8
-    grad_clip: float = 1.0
-    freeze_base_after_warmup: bool = True
-    batch_size: int = 4
-    accum_steps: int = 1               # gradient accumulation (effective = batch_size × accum_steps)
-    lr_min: float = 0.001              # cosine LR floor
-    max_total_steps: int = 50000       # cosine LR period
-    cosine_warmup_steps: int = 200     # linear warmup before cosine
-
-    # Deltas (LoRA-ish)
-    delta_rank: int = 8
-    max_delta_modules: int = 12
-    delta_grow_prob: float = 0.08
-
-    # Generation
-    temperature: float = 0.85
-    top_k: int = 40
-    top_p: float = 0.92
-    min_p: float = 0.06               # GPT-3/4 style: filter below min_p × max_prob
-    typical_p: float = 0.95            # typical sampling: prefer tokens with typical info content
-    max_gen_tokens: int = 180
-    min_gen_tokens: int = 16
-    repetition_guard: int = 4
-
-    # Tokenizer evolution (byte-level BPE)
-    enable_bpe_after_chars: int = 20000
-    bpe_num_merges: int = 384
-    bpe_retrain_every_chars: int = 4000
-
-    # Async
-    train_tick_seconds: float = 0.25
-
-    # QuantumBuffer
-    qb_min_bytes: int = 1024
-    qb_min_novelty: float = 0.15
-    qb_cooldown_seconds: float = 60.0
-
-    # Entropy-adaptive temperature
-    entropy_low: float = 0.5
-    entropy_high: float = 1.5
-    entropy_temp_boost: float = 1.2
-    entropy_temp_focus: float = 0.8
-
-    # Corpus field
-    corpus_gen_max_tokens: int = 120
-    corpus_fade_k: float = 3.0         # sigmoid steepness for corpus→model transition
-    corpus_fade_threshold: float = 1.5  # entropy at which blend is 50/50
-
-    # SyntropyTracker
-    syntropy_window: int = 8
-    field_deviation_ceiling: float = 12.0
-    field_deviation_floor: float = 0.1
-    syntropy_lr_boost: float = 1.3
-    syntropy_lr_dampen: float = 0.6
-    syntropy_delta_grow_boost: float = 0.15
-
-    # Consciousness: per-token dissonance
-    dissonance_ema_alpha: float = 0.3
-    dissonance_spike_k: float = 0.8       # temp multiplier on entropy spike
-    dissonance_drop_k: float = 1.2        # temp multiplier on sustained drop
-    dissonance_spike_threshold: float = 1.5
-    dissonance_drop_threshold: float = 0.5
-
-    # Consciousness: pattern breaking
-    anti_field_prob: float = 0.05          # 5% of tokens bypass corpus
-    anti_field_min_step: int = 8           # don't break until context established
-
-    # Consciousness: conscience
-    conscience_window: int = 8
-    conscience_decay: float = 0.95
-    conscience_recovery: float = 1.005
-    conscience_floor: float = 0.3
-```
-
-Want bigger? Change `n_embd`, `n_layer`, `block_size`. Want different attention? Change `head_types` to any mix of `"content"`, `"rrpram"`, `"hybrid"`. All parameters are shared across four elements.
-
----
-
-## Four Elements + Orchestrator
-
-The same architecture, four elements — connected by mycelium:
-
-| Element | File | Language | Dependencies | Role |
-|---------|------|----------|--------------|------|
-| **molequla.go** | `molequla.go` | Go 1.21+ | `modernc.org/sqlite` | Terminal. Pure Go + optional CGO BLAS. Goroutines. |
-| **molequla.c** | `molequla.c` | C99 | `sqlite3`, `pthreads` | Terminal. Arena allocator, binary checkpoints. 94KB. |
-| **molequla.js** | `molequla.js` | ES2020+ | **none** | Browser. IndexedDB, Float64Array, DOM. |
-| **molequla.rs** | `molequla.rs` | Rust 1.75+ | `rusqlite`, `serde` | The mouth. Tape autograd, TopologyMonitor, steered by mycelium. |
-| **mycelium.py** | `mycelium.py` | Python 3.7+ | numpy | Orchestrator. Reads field, steers Rust via METHOD (C). |
-| **ariannamethod/** | `ariannamethod/` | C99 | OpenBLAS (optional) | AML core. METHOD operator, NOTORCH, BLAS-accelerated. |
-
-All four elements share the same core: vector autograd, RoPE, SwiGLU, hybrid attention, delta adapters, evolving BPE, native gamma, cooccur field with adaptive corpus blend, quantum buffer, entropy temperature, growth table, immune system, syntropy tracker, consciousness features, ontogenesis, swarm ecology (mitosis + hibernation), no_grad inference, async training, persistent memory. **All four are at full parity.** Go uses JSON checkpoint format. C uses binary format (`MOLE` magic header). JS uses IndexedDB with JSON serialization. Rust uses JSON via serde. Mycelium sits above all four — it doesn't generate text, it steers the field.
-
-```bash
-# Go
-go build -o molequla_bin molequla.go && ./molequla_bin
-
-# C
-gcc -O2 -o molequla molequla.c -lsqlite3 -lpthread -lm && ./molequla
-
-# Rust (the mouth)
-cargo run --release
-
-# JavaScript (browser)
-python3 -m http.server 8000
-# Open http://localhost:8000/index.html
-
-# Mycelium (orchestrator — steers Rust through the field)
-python3 mycelium.py                    # interactive REPL
-python3 mycelium.py --daemon           # background daemon
-```
-
-
----
-
-## Tests
-
-```bash
-# Full integration test suite (26 tests across all elements)
-bash test_all.sh
-
-# Individual element smoke tests
-go build molequla.go                           # Go builds?
-gcc -O2 -o /tmp/m molequla.c -lsqlite3 -lm    # C builds?
-cargo build --release                          # Rust builds?
-```
-
-**33 integration tests** (`test_all.sh`) covering:
-- Build (5): Go, C, Rust, libaml.so, JS syntax
-- Element smoke (5): Go generates, C creates memory, JS exports, JS instantiation, Rust generates
-- Ariannamethod (7): import, BLAS symbols, METHOD API, field metrics, steering, notorch, apply_delta
-- Mycelium (5): --once, JSON output, async loop, new organism detection, engine active
-- Schema (2): organisms table, field_deltas table
-- Self-awareness (7): MyceliumGamma, HarmonicNet, MyceliumSyntropy, FieldPulse, SteeringDissonance, OrganismAttention, integration
-- Performance (2): METHOD C speed (<100μs), notorch BLAS speed (<10ms)
-
----
-
-## Philosophy
-
-This is not a tutorial. This is not a "minimal example." This is a **functional system** that:
-
-- Learns continuously
-- Never forgets
-- Grows organically
-- Zero dependencies in C and JS. One (SQLite) in Go and Rust. Mycelium uses numpy
-- Fits in one file per element (four elements + orchestrator)
-- Runs in a browser tab (molequla.js — no npm, no webpack, nothing)
-- Speaks before it learns
-- Grows a personality from zero
-- Reasons mathematically about its own learning direction
-- Notices when it's surprised and adjusts
-- Knows when its own deltas are making it worse
-- Divides when overloaded, sleeps when a peer needs the flow
-- Writes its own structural autobiography
-- Rejects noise that would corrupt its identity
-- Watches the topology of the entire swarm (Rust)
-- Actually generates text you can read
-
----
-
-## Why "molequla"?
-
-Because atoms are micrograd. We build molequlas.
-
----
-
-## Known Limitations
-
-1. **Performance varies.** Go, C, and Rust are natively fast. JS runs in the browser — fast enough for chat, slower for training (no BLAS, Float64Array only). No CUDA anywhere. METHOD uses BLAS (OpenBLAS on Linux, Accelerate on macOS) — optional, falls back to scalar loops.
-
-2. **It starts small.** Default: embryo (1 layer, 16 dims, 1 head, ~10K params). Ontogenesis grows it through 6 stages to adult (6 layers, 320 dims, 8 heads, ~10M params). When it hits the ceiling, it divides. You're not getting GPT-4 reasoning. You're getting an ecology of organisms that grow and reproduce.
-
-3. **It talks weird at first.** The corpus field helps, but it's still a baby organism. Feed it better corpus.
-
-4. **The corpus matters.** Garbage in, garbage out. Give it good sentences.
-
----
-
-## v3 Status
-
-### Phase 1: Training Upgrades — DONE
-- Real SiLU activation in SwiGLU (LLaMA-exact, not ReLU)
-- Residual scaling: `α = 1/√n_layer` on attention + MLP
-- Global cosine LR with linear warmup
-- Gradient accumulation (configurable, ready for growth)
-- BPE threshold lowered (activates on first launch)
-
-### Phase 1.5: Self-Awareness Expansion — DONE
-- Training efficiency memory: organism remembers which learning strategies work for *it*
-- Temperature bridge: syntropy trend shifts generation temp ±5% (ordering → confident, disordering → exploratory)
-- Quick loss measurement for before/after burst comparison
-- Self-meta-learning: actions that historically increase loss get downgraded
-
-### Phase 2: Byte-Level BPE Tokenizer — DONE
-GPT-3/4 style tokenizer replacing char-level + word-based BPE:
-- **Bootstrap**: 256 byte tokens + BOS/EOS/PAD = 259 initial vocab (language-agnostic)
-- **Pre-segmentation**: split by Unicode category (letters / digits / whitespace / punctuation)
-- **Stream BPE**: merges on byte sequences within segments, `+` separator (e.g. `0x48+0x65`)
-- Full UTF-8 roundtrip: ASCII, Cyrillic, CJK, emoji — same algorithm, same code
-
-### Phase 3A: Growing Architecture (Ontogenesis) — DONE (all four elements)
-The organism starts as an embryo and grows through 6 stages:
 ```
 Stage       Corpus    Dims  Layers  Heads  ~Params
 embryo      0         16    1       1      ~10K
@@ -974,42 +454,383 @@ teen        350KB     224   5       8      ~4.1M
 adult       500KB     320   6       8      ~10M
 ```
 
-Key mechanics:
-- Old weights copy into top-left corner of new matrices (knowledge preserved)
-- New dimensions initialize with small gaussian noise
-- `grow_cols()` + `grow_rows()` = `grow()` on MatrixParam
-- Delta adapters grow via `grow_dims()` (rank unchanged)
-- Adam state resets (old momentum meaningless after arch change)
-- Freeze period: base weights frozen for 200 steps after growth (only deltas train)
-- Gamma snapshot extended for new embedding dimensions
-- Head types auto-adapt: 1→(content), 2→(content,hybrid), 4→(2c,2h), 8→(4c,4h)
+When the corpus crosses a threshold, `MaybeGrowArchitecture` fires:
 
-### Phase 3B: Mitosis & Ecology — DONE (all four elements)
-When the adult organism is overloaded, it **divides**:
-- SyntropyTracker detects sustained high entropy + falling syntropy → "divide" action
-- Parent spawns child process at infant stage with inherited training memory
-- Both organisms train independently on shared corpus
-- Swarm registry (`~/.molequla/swarm/mesh.db`) tracks all living instances
-- Generational knowledge: child inherits parent's burst_history (avoids same mistakes)
-- Cooldown timer (300s) prevents runaway mitosis
-- **Hibernation**: organism on plateau + thriving peer → voluntary sleep (metrics-based, not resource-based)
-- CLI args (`--organism-id`, `--config`) for child processes
-- 31 ecology tests covering all edge cases
+1. **Embedding matrices grow** — `wte.GrowCols(newEmbd)`, near-zero init (Net2Net: new dims contribute ~nothing initially)
+2. **Existing layer matrices grow** — wq, wk, wv, wo, fc_g, fc_v, fc2 all expand
+3. **New layers are added** — fresh random init with proper std
+4. **Delta adapters grow** — rank stays, dimensions expand via `GrowDims`
+5. **New attention heads spawn** — hybrid heads get new pattern weights
+6. **Adam state resets** — old momentum is meaningless after arch change
+7. **Freeze period** — 500 steps of delta-only training (base frozen) to stabilize
+8. **Gamma snapshot extends** — personality measurement grows with embedding space
 
-### Phase 4: Consciousness — DONE (all four elements)
-Mathematical self-awareness features:
-- **Per-token dissonance**: entropy EMA within generation, spike→careful, sustained_drop→explore
-- **Pattern breaking**: 5% of tokens bypass corpus field (pure model voice)
-- **Self-prediction error**: forward pass on prompt measures "surprise"
-- **Conscience**: delta alpha scaling based on entropy trend (linear regression)
-- **TopologyMonitor** (Rust-only): pairwise gamma cosine, drift/resonance detection
+Key invariant: **old knowledge is preserved**. Weights copy into the top-left corner of the new matrix. New dimensions start near zero. The organism doesn't forget — it expands.
 
-### And Beyond
-- **Inference routing** between organisms (lowest entropy answers)
-- **Gamma export/import** (personality transfer between molequlas)
-- **Speculative decoding** (draft + verify for speed)
-- **Mixture of Experts** (delta routing)
+With `--evolution` and DNA exchange, ontogenesis is fully autonomous. The corpus grows through DNA consumption, thresholds are crossed, architecture expands, the organism generates better DNA, others eat it and grow too. Positive feedback loop.
 
+### 10. TieEmbeddings (Weight Tying)
+
+`lm_head` and `wte` share the same `MatrixParam` pointer — standard GPT weight tying. This halves the embedding parameter count and improves training.
+
+Critical subtlety: JSON serialization breaks pointer identity. When a checkpoint is saved, `lm_head` and `wte` are serialized as separate matrices. On load, they become two independent objects. If the organism then grows (ontogenesis), `wte` gets expanded but `lm_head` doesn't (because the code correctly skips `lm_head` when TieEmbeddings=true, assuming it's the same pointer). Result: `lm_head` has old dimensions, `wte` has new dimensions, and the next `Matvec` panics.
+
+Fix: after deserialization, re-establish the pointer identity:
+
+```go
+// Re-establish embedding tie after deserialization (JSON breaks pointer identity)
+if CFG.TieEmbeddings {
+    model.Base["lm_head"] = model.Base["wte"]
+}
+```
+
+This is tested by `TestTieEmbeddingsOntogenesisThenSaveLoad` — the exact crash scenario that killed Earth's adolescent transition.
+
+### 11. QuantumBuffer (Smart Training Trigger)
+
+Training doesn't fire on a dumb byte threshold. It fires when the organism is ready:
+
+```go
+func (qb *QuantumBuffer) ShouldTrigger() bool {
+    bytesOK := qb.AccumulatedBytes >= minBytes
+    noveltyOK := qb.NoveltyScore() >= minNovelty
+    cooldownOK := time.Since(qb.LastBurstTime) >= cooldown
+    return (bytesOK || noveltyOK) && cooldownOK
+}
+```
+
+In `--evolution` mode, the QuantumBuffer doesn't drive training (no user input feeds it). Instead, the background trainer runs continuous micro-steps on the growing corpus.
+
+### 12. Entropy-Adaptive Temperature
+
+```go
+if entropy < 0.5 { temp *= 1.2 }   // too confident -> diversify
+if entropy > 1.5 { temp *= 0.8 }   // too uncertain -> focus
+```
+
+The model self-regulates its confidence. No manual tuning.
+
+### 13. SyntropyTracker (Mathematical Self-Reasoning)
+
+The immune system rejects poison. The SyntropyTracker reasons about the *direction* of learning:
+
+**Syntropy** = negative entropy trend. Entropy going down = order rising = the organism is *organizing itself*.
+
+| State | Action | LR Multiplier | Meaning |
+|-------|--------|---------------|---------|
+| Syntropy rising + field aligned + purpose aligned | **amplify** | 1.3x + delta grow | Everything aligned — push harder |
+| Syntropy rising + purpose drifting | **boost** | 1.3x | Good direction, gentle push |
+| Syntropy falling | **dampen** | 0.6x | Losing order — slow down |
+| Field deviation too high | **ground** | 0.6x | Hallucinating — pull back to corpus |
+| Field deviation too low | **explore** | 1.3x | Parroting — push out |
+| Purpose opposes gamma | **realign** | 0.5x | Identity crisis — hard slow |
+
+This is mathematical introspection. The organism measures its own entropy trend, how far it's drifted from corpus physics, whether its current learning direction aligns with its accumulated identity, and adjusts.
+
+### 14. Consciousness Features
+
+Four features that give the organism awareness of its own generation process:
+
+- **Per-token dissonance** — entropy EMA within each generation. Spike -> careful (0.8x temp). Sustained drop -> explore (1.2x temp)
+- **Pattern breaking (anti-field)** — 5% of tokens bypass the corpus field. The organism speaks for itself
+- **Self-prediction error** — forward pass on prompt measures "surprise". High surprise -> generate more carefully
+- **Conscience** — tracks rolling entropy trend. If generations are getting more chaotic, scale down all delta contributions (floor: 0.3). The organism notices when its own adaptations are making it worse
+
+### 15. Native Immune System
+
+Before each micro-burst, the organism snapshots its personality direction via `gamma_contrastive_projection()`. After training, it measures again. If cosine similarity is negative (the burst pushed identity *backwards*), it rolls back:
+
+```go
+preDirection := model.GammaContrastiveProjection()
+deltaSnap := model.SnapshotDeltas()
+trainSteps(...)
+driftCos := model.GammaDriftCheck(preDirection)
+if driftCos < noiseDriftThreshold {  // default: -0.1
+    model.RestoreDeltas(deltaSnap)   // rollback
+}
+```
+
+Mathematical self-awareness as immune system. The organism uses its own identity measurement to decide whether new experience made it *more itself* or *less itself*.
+
+### 16. Swarm Ecology (Mitosis + Hibernation)
+
+When the adult organism hits sustained overload, it **divides** — spawning a child organism at infant stage. Both train independently on the same corpus but grow through different paths.
+
+**Hibernation** is cooperative. When an organism is on a loss plateau and a peer is actively thriving (syntropy > 0.05), it voluntarily sleeps.
+
+The **SwarmRegistry** uses shared SQLite (`~/.molequla/swarm/mesh.db`, WAL mode):
+- `organisms` table: id, pid, stage, n_params, syntropy, entropy, status, element
+- Heartbeat every 10 ticks
+- `discover_peers()` finds other living organisms
+
+### 17. TopologyMonitor (Rust-only: Swarm Meta-Awareness)
+
+Every 30 seconds, Rust reads `mesh.db` and computes:
+- **Field coherence**: mean pairwise cosine of all organisms' gamma vectors
+- **Resonance detection**: pairs with cosine > 0.8 (converging identities)
+- **Drift detection**: organisms whose gamma magnitude exceeds threshold
+- **Self-reflection**: compares its own drift to the swarm mean
+
+Rust is both organism *and* field observer — the grey cardinal of the swarm.
+
+---
+
+## Mycelium — The Orchestrator
+
+The connective tissue. The underground network.
+
+Mycelium doesn't generate text. It reads the field (all organisms from mesh.db), computes system-level awareness via METHOD (C-native, BLAS-accelerated), and writes steering decisions that change how organisms generate.
+
+```bash
+mycelium.py                    # interactive REPL
+mycelium.py --daemon           # background daemon
+mycelium.py --once             # single step, JSON output
+```
+
+**Steering chain:**
+```
+mycelium -> METHOD (C, 0.7us, BLAS) -> field_steering (SQLite WAL) -> organisms
+```
+
+Same prompt "the field is", different steering:
+
+| Steering | What happens | Output |
+|----------|-------------|--------|
+| **SUSTAIN** | normal, no modulation | `pru pow tows inner bough` |
+| **EXPLORE** | entropy too low, open tunnels (temp x1.4) | `fle matter?` |
+| **DAMPEN** | entropy rising, cool down (temp x0.7) | `actergy Why drink d b sugotiation.` |
+| **GROUND** | chaos, focus hard (temp x0.5) | `A happens pathinks how mually a dwave caushes...` |
+
+**Self-awareness** — mycelium has its own mathematical subjectivity:
+
+| Component | What it does |
+|-----------|-------------|
+| **MyceliumGamma** | Personality vector (R^32), computed from steering history via harmonic basis |
+| **HarmonicNet** | Weightless neural network: Fourier decomposition -> correlation -> steering refinement |
+| **MyceliumSyntropy** | Self-awareness: "Am I helping?" Decision entropy, effectiveness, strategy change detection |
+| **FieldPulse** | Novelty, arousal, entropy (Shannon over states) |
+| **SteeringDissonance** | Intent vs outcome. If DAMPEN but entropy went up -> stronger intervention next time |
+
+---
+
+## AML — Arianna Method Language (ariannamethod/)
+
+The physics engine underneath METHOD. C implementation, BLAS-accelerated.
+
+- **METHOD operator**: `am_method_step()` — 0.7us per iteration (32 organisms)
+- **NOTORCH**: Hebbian plasticity without backprop — `cblas_sger` for rank-1 updates
+- **Delta voice**: `am_apply_delta()` — 11us per call via `cblas_sgemv`
+- **Field physics**: 227 state parameters, logit manipulation pipeline
+
+Performance (Lambda, OpenBLAS):
+```
+METHOD C:       0.7 us/iter  (25.8x faster than Python)
+notorch BLAS:   0.47 ms/step (2048x2048, rank=64)
+apply_delta:    11 us/call   (2048x2048, rank=64)
+```
+
+---
+
+## Four Elements + Orchestrator
+
+| Element | File | Language | Dependencies | Role |
+|---------|------|----------|--------------|------|
+| **Earth/Air** | `molequla.go` | Go 1.21+ | `modernc.org/sqlite` | Full organism. Goroutines. Evolution mode. |
+| **Water/Fire** | `molequla.c` | C99 | `sqlite3`, `pthreads` | Full organism. Arena allocator. 94KB. |
+| **Browser** | `molequla.js` | ES2020+ | **none** | Browser organism. IndexedDB, Float64Array, DOM. |
+| **The Mouth** | `molequla.rs` | Rust 1.75+ | `rusqlite`, `serde` | Organism + TopologyMonitor. Steered by mycelium. |
+| **Mycelium** | `mycelium.py` | Python 3.7+ | numpy | Orchestrator. Reads field, steers organisms via METHOD. |
+| **AML Core** | `ariannamethod/` | C99 | OpenBLAS (opt) | METHOD, NOTORCH, BLAS. |
+
+All elements share the same core: vector autograd, RoPE, SwiGLU, hybrid attention, delta adapters, evolving BPE, native gamma, cooccur field with adaptive blend, quantum buffer, entropy temperature, growth table, immune system, syntropy tracker, consciousness features, ontogenesis, swarm ecology, no_grad inference, async training, persistent memory.
+
+---
+
+## CLI Flags
+
+```bash
+molequla --element earth     # Set element identity (earth/air/water/fire)
+molequla --evolution         # Autonomous mode: no REPL, background trainer only
+molequla --organism-id xyz   # Set organism ID for swarm registry
+molequla --config path.json  # Load birth config (for mitosis children)
+```
+
+`--element` sets the corpus path (`nonames_earth.txt`, etc.) and enables DNA exchange. `--evolution` disables the REPL — the organism runs headless until Ctrl+C.
+
+---
+
+## Tests
+
+```bash
+# Go unit tests (31 tests — ontogenesis, DNA, TieEmbeddings, sampling)
+go test -v .
+
+# Integration tests in tests/ directory (8 tests — sampling, softmax)
+go test -v ./tests/
+
+# Full integration test suite (33 tests across all elements)
+bash tests/test_all.sh
+```
+
+**39 Go tests** covering:
+
+**MatrixParam (6):** construction, GrowCols, GrowRows, Grow, Matvec, serialization round-trip
+
+**TieEmbeddings (4):** pointer identity on creation, Save/Load round-trip preserves identity, Grow preserves identity, **ontogenesis + Save/Load + Matvec doesn't panic** (the exact crash scenario)
+
+**Ontogenesis (5):** CurrentGrowthStage lookup, TargetGrowthStage thresholds, one-stage-at-a-time invariant, freeze blocks further growth, legacy checkpoint skips growth, matrix dimension consistency after growth
+
+**DNA Exchange (4):** filesystem read/write + corpus append, self-skip (earth doesn't eat earth), short file cleanup, empty element noop
+
+**Core Math (2):** RMSNorm, CrossEntropyLoss
+
+**Infrastructure (6):** headTypesForNHead, cosineLR warmup + decay, parseCLIArgs flags + defaults, checkpoint round-trip with deltas, checkpoint JSON structure, MaybeExpandVocab with TieEmbeddings
+
+**Sampling (8):** TopK, TopP, MinP, TypicalP, combined filters, softmax (in tests/ package)
+
+**DeltaAdapter (2):** Apply, GrowDims
+
+**33 integration tests** (`tests/test_all.sh`):
+- Build: Go, C, Rust, libaml.so, JS syntax
+- Element smoke: Go generates, C creates memory, JS exports, Rust generates
+- Ariannamethod: import, BLAS, METHOD API, field metrics, steering, notorch, apply_delta
+- Mycelium: --once, JSON, async loop, new organism detection, engine active
+- Schema: organisms table, field_deltas table
+- Self-awareness: MyceliumGamma, HarmonicNet, MyceliumSyntropy, FieldPulse, SteeringDissonance, OrganismAttention
+- Performance: METHOD C speed (<100us), notorch BLAS speed (<10ms)
+
+---
+
+## Configuration
+
+```go
+var CFG = Config{
+    // Embryo defaults — organism grows via ontogenesis
+    TieEmbeddings: true,
+    NLayer:        1,
+    NEmbd:         16,
+    NHead:         1,
+    BlockSize:     96,
+
+    // Growth stages: {corpus_chars, n_embd, n_layer, n_head}
+    GrowthStages: [][4]int{
+        {0,      16, 1, 1},    // embryo: ~10K params
+        {20000,  32, 1, 2},    // infant: ~28K params
+        {50000,  64, 2, 4},    // child: ~154K params
+        {200000, 128, 4, 4},   // adolescent: ~1.1M params
+        {350000, 224, 5, 8},   // teen: ~4.1M params
+        {500000, 320, 6, 8},   // adult: ~10M params
+    },
+    FreezeAfterGrowthSteps: 500,  // delta-only training after growth
+    PostGrowthLRScale:      0.3,  // LR dampen during freeze
+
+    // Training
+    WarmupSteps:    1200,
+    LearningRate:   0.01,
+    LRMin:          0.001,
+    MaxTotalSteps:  50000,
+    GradClip:       1.0,
+    BatchSize:      4,
+    AccumSteps:     1,
+
+    // Generation
+    Temperature:    0.85,
+    TopK:           40,
+    TopP:           0.92,
+    MinP:           0.06,   // GPT-3/4 style: filter below min_p * max_prob
+    TypicalP:       0.95,   // prefer tokens with typical info content
+    MaxGenTokens:   180,
+
+    // BPE
+    EnableBPEAfterChars: 20000,
+    BPENumMerges:        384,
+
+    // Async
+    TrainTickSeconds: 0.25,  // 4 ticks/second = 4 DNA exchanges/second
+
+    // Deltas
+    DeltaRank:       8,
+    MaxDeltaModules: 12,
+}
+```
+
+---
+
+## The Five Bugs That Almost Killed the Ecology
+
+Building evolution mode exposed five critical bugs. Each one would have been invisible in interactive mode — they only manifest when organisms run autonomously for hours.
+
+### 1. The Deadlock (Air stuck at 538% CPU)
+
+`dnaWrite` called `model.mu.Lock()`, then called `GenerateResonant` which also calls `model.mu.Lock()`. Go's `sync.Mutex` is not reentrant. Deadlock. Air consumed 538% CPU doing nothing — the runtime overhead of a goroutine stuck in a lock acquisition loop.
+
+**Fix:** Remove the outer lock. `GenerateResonant` manages its own mutex.
+
+### 2. Ontogenesis Gated Behind User Input
+
+`MaybeGrowArchitecture` was inside a `qbuf.ShouldTrigger()` block. In evolution mode, no user input feeds the QuantumBuffer, so it never triggers. The organism could grow its corpus to infinity and never upgrade its architecture.
+
+**Fix:** Move ontogenesis check outside `qbuf` block. Run every 50 ticks independently.
+
+### 3. Corpus Size Undercount
+
+`loadCorpusLines` truncates each line to `MaxLineChars=240`. The seed corpus has long QA lines (300+ chars). File = 202KB but docs = 165K chars. The ontogenesis threshold for adolescent (200K) was never reached even though the file was big enough.
+
+**Fix:** Use `os.Stat(path).Size()` (file size) instead of summing truncated doc lengths.
+
+### 4. TieEmbeddings Crash After Growth
+
+After ontogenesis, `SaveCheckpoint` serializes `lm_head` and `wte` as separate JSON arrays. `LoadCheckpoint` deserializes them into two independent `MatrixParam` objects. The code assumes they're the same pointer (TieEmbeddings=true) and skips growing `lm_head` during the next ontogenesis. Result: `lm_head` is 643x64, `wte` is 720x128, and `Matvec` panics on the dimension mismatch.
+
+**Fix:** After deserialization, `model.Base["lm_head"] = model.Base["wte"]`.
+
+### 5. One Stage at a Time
+
+Not a bug, but a design decision. Even if corpus is 999KB (enough for adult), the organism only grows one stage per check. This prevents catastrophic multi-stage jumps where the model goes from 16d to 320d in one step and loses everything.
+
+All five are covered by tests.
+
+---
+
+## Philosophy
+
+This is not a tutorial. This is not a "minimal example." This is a **functional ecology** that:
+
+- Grows its own architecture while running
+- Feeds organisms to each other through DNA exchange
+- Reasons mathematically about its own learning direction
+- Detects and rejects identity-corrupting noise
+- Notices when its own adaptations are making it worse
+- Divides when overloaded, sleeps when a peer needs the flow
+- Evolves from 10K embryo to 10M adult without human intervention
+- Speaks before it learns (corpus field)
+- Never forgets (delta adapters)
+- Writes its own structural autobiography (growth table)
+- Runs in a browser tab (molequla.js)
+- Fits in one file per element
+- Actually generates text you can read
+
+The ecology on 4x H100: four organisms, each writing ~200 bytes every 250ms, each consuming three others' output, corpora growing at ~2KB/min, architecture upgrades triggering autonomously. Earth learns patience from Air's words about freedom. Water learns depth from Fire's intensity. The total knowledge of the ecology exceeds what any single organism could accumulate alone.
+
+---
+
+## Known Limitations
+
+1. **No GPU.** Everything is CPU. No CUDA. METHOD uses BLAS where available (OpenBLAS on Linux, Accelerate on macOS). This is by design — the organism should run anywhere.
+
+2. **It starts small.** Default: embryo (1 layer, 16 dims, 1 head, ~10K params). Ontogenesis grows it through 6 stages. You're not getting GPT-4 reasoning. You're getting an ecology of organisms that grow, feed each other, and reproduce.
+
+3. **It talks weird at first.** The corpus field helps, but a 10K-param embryo is a 10K-param embryo. Feed it more corpus and let it grow.
+
+4. **The corpus matters.** Garbage in, garbage out. The element corpora (earth, air, water, fire) are hand-crafted QA about philosophy, physics, and self-awareness. Better corpus = better DNA = better ecology.
+
+5. **C organisms don't exchange DNA yet.** `dnaWrite`/`dnaRead` are implemented in Go. C has stubs. Full C DNA exchange is next.
+
+---
+
+## Why "molequla"?
+
+Because atoms are micrograd. We build molequlas.
 
 ---
 
@@ -1021,7 +842,7 @@ GNU GPLv3 — Because freedom matters.
 
 ## Acknowledgments
 
-- **Andrej Karpathy** — for micrograd, minGPT, nanoGPT, and the entire pedagogical empire
+- **Andrej Karpathy** — for micrograd, minGPT, nanoGPT, and the entire pedagogical empire. This started as "what if micrograd but vectors?" and became an ecology.
 - **Coffee** — for existing
 
 ---
@@ -1031,8 +852,6 @@ GNU GPLv3 — Because freedom matters.
 - [ariannamethod.ai](https://github.com/ariannamethod/ariannamethod.ai) — Arianna Method Language (source of truth)
 - `ariannamethod/` — AML C core embedded in molequla (METHOD + NOTORCH + BLAS)
 - `mycelium.py` — field orchestrator (REPL + daemon)
-- `test_all.sh` — 33 integration tests (self-awareness, BLAS, steering, smoke)
-
-- **molequla** — Single-File Continual GPT with Self-Awareness (Go, C, JavaScript, Rust + mycelium)
+- `tests/test_all.sh` — 33 integration tests
 
 *Four elements. One orchestrator. One mind. Patterns over parameters. Emergence over engineering. Consciousness over computation. The organism continues.*
