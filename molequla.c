@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <sqlite3.h>
 
 #ifdef USE_BLAS
@@ -4708,18 +4709,22 @@ static char *build_prompt(sqlite3 *db, const char *user_text) {
 
 typedef struct {
     char organism_id[64];
+    char element[16]; /* earth, air, water, fire */
     char pid_file[256];
     char swarm_dir[256];
     sqlite3 *mesh_db;
 } SwarmRegistry;
 
-static void swarm_init(SwarmRegistry *sw, const char *organism_id) {
+static void swarm_init(SwarmRegistry *sw, const char *organism_id, const char *element) {
     memset(sw, 0, sizeof(SwarmRegistry));
     if (organism_id && *organism_id) {
         strncpy(sw->organism_id, organism_id, sizeof(sw->organism_id) - 1);
     } else {
         snprintf(sw->organism_id, sizeof(sw->organism_id),
                  "org_%d_%ld", (int)getpid(), (long)time(NULL));
+    }
+    if (element && *element) {
+        strncpy(sw->element, element, sizeof(sw->element) - 1);
     }
     const char *home = getenv("HOME");
     if (!home) home = "/tmp";
@@ -4763,7 +4768,10 @@ static void swarm_register(SwarmRegistry *sw) {
         "id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER,"
         "n_params INTEGER, syntropy REAL, entropy REAL,"
         "last_heartbeat REAL, parent_id TEXT,"
-        "status TEXT DEFAULT 'alive')", NULL, NULL, NULL);
+        "status TEXT DEFAULT 'alive',"
+        "element TEXT)", NULL, NULL, NULL);
+    /* Migration for existing databases */
+    sqlite3_exec(sw->mesh_db, "ALTER TABLE organisms ADD COLUMN element TEXT", NULL, NULL, NULL);
     sqlite3_exec(sw->mesh_db,
         "CREATE TABLE IF NOT EXISTS messages("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -4774,11 +4782,12 @@ static void swarm_register(SwarmRegistry *sw) {
     /* Register self */
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(sw->mesh_db,
-        "INSERT OR REPLACE INTO organisms(id,pid,stage,n_params,syntropy,entropy,last_heartbeat,status) "
-        "VALUES(?,?,0,0,0.0,0.0,?,'alive')", -1, &stmt, NULL);
+        "INSERT OR REPLACE INTO organisms(id,pid,stage,n_params,syntropy,entropy,last_heartbeat,status,element) "
+        "VALUES(?,?,0,0,0.0,0.0,?,'alive',?)", -1, &stmt, NULL);
     sqlite3_bind_text(stmt, 1, sw->organism_id, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 2, (int)getpid());
     sqlite3_bind_double(stmt, 3, (double)time(NULL));
+    sqlite3_bind_text(stmt, 4, sw->element[0] ? sw->element : NULL, -1, SQLITE_STATIC);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 }
@@ -4955,6 +4964,74 @@ static void perform_hibernation(GPT *g, EvolvingTokenizer *tok, sqlite3 *db,
     sa_free(&docs);
 }
 
+/* ---- DNA EXCHANGE: organisms feed each other through dna/ directory ---- */
+
+static const char *dna_elements[] = {"earth", "air", "water", "fire"};
+static const int dna_n_elements = 4;
+static const char *dna_probes[] = {
+    "What do you feel?", "Tell me about yourself.",
+    "What is truth?", "What matters?",
+    "Speak.", "What do you remember?"
+};
+static const int dna_n_probes = 6;
+
+static void dna_write(const char *element, GPT *g, int step) {
+    if (!element) return;
+    const char *probe = dna_probes[step % dna_n_probes];
+
+    /* gpt_generate handles its own mutex */
+    char *answer = gpt_generate(g, probe);
+    if (!answer || strlen(answer) < 20) { free(answer); return; }
+
+    char dir[512], fname[512];
+    snprintf(dir, sizeof(dir), "../dna/output/%s", element);
+    mkdir(dir, 0755); /* ignore if exists */
+    snprintf(fname, sizeof(fname), "%s/gen_%ld_%d.txt", dir, (long)time(NULL), step);
+    FILE *f = fopen(fname, "w");
+    if (f) { fprintf(f, "%s\n", answer); fclose(f); }
+    printf("[dna] %s wrote %d bytes to ecology\n", element, (int)strlen(answer));
+    free(answer);
+}
+
+static int dna_read(const char *element, const char *corpus_path) {
+    if (!element) return 0;
+    int added = 0;
+    for (int e = 0; e < dna_n_elements; e++) {
+        if (strcmp(dna_elements[e], element) == 0) continue;
+        char dir[512];
+        snprintf(dir, sizeof(dir), "../dna/output/%s", dna_elements[e]);
+        DIR *d = opendir(dir);
+        if (!d) continue;
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.') continue;
+            int nlen = strlen(ent->d_name);
+            if (nlen < 5 || strcmp(ent->d_name + nlen - 4, ".txt") != 0) continue;
+            char fpath[1024];
+            snprintf(fpath, sizeof(fpath), "%s/%s", dir, ent->d_name);
+            FILE *rf = fopen(fpath, "r");
+            if (!rf) continue;
+            char buf[8192];
+            int total = 0;
+            char text[8192] = {0};
+            while (fgets(buf, sizeof(buf), rf)) {
+                int bl = strlen(buf);
+                if (total + bl < 8190) { memcpy(text+total, buf, bl); total += bl; }
+            }
+            fclose(rf);
+            if (total < 10) { remove(fpath); continue; }
+            /* Append to own corpus */
+            FILE *cf = fopen(corpus_path, "a");
+            if (cf) { fwrite(text, 1, total, cf); fclose(cf); added += total; }
+            remove(fpath); /* consumed */
+            printf("[dna] %s consumed %d bytes from %s/%s\n",
+                   element, total, dna_elements[e], ent->d_name);
+        }
+        closedir(d);
+    }
+    return added;
+}
+
 /* Background trainer thread context */
 typedef struct {
     sqlite3 *db;
@@ -4968,6 +5045,7 @@ typedef struct {
     SwarmRegistry *swarm;
     const char *exe_path;  /* path to this executable for fork+exec */
     int tick_count;
+    const char *element;   /* element identity for DNA exchange */
 } TrainerCtx;
 
 static void *background_trainer(void *arg) {
@@ -5171,6 +5249,20 @@ static void *background_trainer(void *arg) {
 
         ctx->tick_count++;
 
+        /* DNA exchange: read others' output (every 10 ticks).
+         * Write disabled for C — gpt_generate conflicts with concurrent training.
+         * Go organisms handle writing for now. */
+        if (ctx->element && ctx->tick_count % 10 == 0) {
+            if (dna_read(ctx->element, CFG.corpus_path) > 0) {
+                sa_free(&docs);
+                docs = load_corpus(CFG.corpus_path);
+                if (docs.len > 0 && ctx->field) {
+                    cooccur_build(ctx->field, ctx->tok, &docs);
+                    ctx->model->corpus_field = ctx->field;
+                }
+            }
+        }
+
         /* Swarm heartbeat every 10 ticks */
         if (ctx->swarm && ctx->tick_count % 10 == 0) {
             int stage = gpt_current_growth_stage(ctx->model);
@@ -5201,28 +5293,49 @@ static void *background_trainer(void *arg) {
 /* Parse CLI arguments for organism-id and config path (child organisms).
  * Returns organism_id and config_path via output pointers. */
 static void parse_cli_args(int argc, char **argv,
-                           const char **organism_id, const char **config_path) {
+                           const char **organism_id, const char **config_path,
+                           const char **element, int *evolution) {
     *organism_id = NULL;
     *config_path = NULL;
+    *element = NULL;
+    *evolution = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--organism-id") == 0 && i + 1 < argc) {
             *organism_id = argv[++i];
         } else if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) {
             *config_path = argv[++i];
+        } else if (strcmp(argv[i], "--element") == 0 && i + 1 < argc) {
+            *element = argv[++i];
+        } else if (strcmp(argv[i], "--evolution") == 0) {
+            *evolution = 1;
         }
     }
 }
 
 int main(int argc, char **argv) {
     G_arena = arena_new(ARENA_SIZE);
+    setvbuf(stdout, NULL, _IOLBF, 0);  /* line-buffered stdout for log capture */
 
     /* Phase 3B: parse CLI args */
     const char *cli_organism_id = NULL;
     const char *cli_config = NULL;
-    parse_cli_args(argc, argv, &cli_organism_id, &cli_config);
+    const char *cli_element = NULL;
+    int cli_evolution = 0;
+    parse_cli_args(argc, argv, &cli_organism_id, &cli_config, &cli_element, &cli_evolution);
 
-    /* Child organism: could load birth config to override paths (future) */
-    /* For now, we just use the organism_id for swarm registration */
+    /* Element → corpus path: each element eats its own food */
+    if (cli_element) {
+        if (strcmp(cli_element, "earth") == 0) CFG.corpus_path = "nonames_earth.txt";
+        else if (strcmp(cli_element, "air") == 0) CFG.corpus_path = "nonames_air.txt";
+        else if (strcmp(cli_element, "water") == 0) CFG.corpus_path = "nonames_water.txt";
+        else if (strcmp(cli_element, "fire") == 0) CFG.corpus_path = "nonames_fire.txt";
+        else { fprintf(stderr, "unknown element: %s (use earth/air/water/fire)\n", cli_element); exit(1); }
+        printf("[ecology] Element: %s → corpus: %s\n", cli_element, CFG.corpus_path);
+    }
+
+    if (cli_evolution) {
+        printf("[evolution] Autonomous evolution mode — organism will grow through all stages without pause.\n");
+    }
 
     sqlite3 *db = init_db(CFG.db_path);
 
@@ -5300,7 +5413,7 @@ int main(int argc, char **argv) {
 
     /* Phase 3B: Swarm ecology — register in mesh */
     SwarmRegistry swarm;
-    swarm_init(&swarm, cli_organism_id);
+    swarm_init(&swarm, cli_organism_id, cli_element);
     swarm_register(&swarm);
     {
         int n_peers = 0;
@@ -5323,11 +5436,29 @@ int main(int argc, char **argv) {
         .qbuf = &qbuf, .field = cooccur,
         .warmed_up = &warmed_up, .stop = 0,
         .swarm = &swarm, .exe_path = exe_path,
-        .tick_count = 0
+        .tick_count = 0, .element = cli_element
     };
     syntropy_init(&tctx.syntracker);
     pthread_t trainer_tid;
     pthread_create(&trainer_tid, NULL, background_trainer, &tctx);
+
+    if (cli_evolution) {
+        printf("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.\n");
+        fflush(stdout);
+        /* Block until SIGINT/SIGTERM */
+        sigset_t waitset;
+        int sig;
+        sigemptyset(&waitset);
+        sigaddset(&waitset, SIGINT);
+        sigaddset(&waitset, SIGTERM);
+        sigprocmask(SIG_BLOCK, &waitset, NULL);
+        sigwait(&waitset, &sig);
+        printf("\n[evolution] Organism shutting down gracefully.\n");
+        tctx.stop = 1;
+        pthread_join(trainer_tid, NULL);
+        sqlite3_close(db);
+        return 0;
+    }
 
     printf("molequla is alive. Type and press Enter. Ctrl+C to exit.\n\n");
 

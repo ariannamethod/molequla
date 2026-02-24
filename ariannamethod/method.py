@@ -189,7 +189,7 @@ def _load_libaml():
 class Organism:
     """a single organism's snapshot from mesh.db."""
     __slots__ = ("id", "pid", "stage", "n_params", "syntropy", "entropy",
-                 "gamma_direction", "gamma_magnitude", "last_seen")
+                 "gamma_direction", "gamma_magnitude", "last_seen", "element")
 
     def __init__(self, row):
         self.id = row[0]
@@ -201,6 +201,7 @@ class Organism:
         self.gamma_direction = row[6]  # BLOB or None
         self.gamma_magnitude = row[7] if len(row) > 7 else 0.0
         self.last_seen = row[8] if len(row) > 8 else 0.0
+        self.element = row[9] if len(row) > 9 else None  # earth/air/water/fire
 
 
 class Method:

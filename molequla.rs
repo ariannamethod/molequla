@@ -2578,15 +2578,16 @@ fn build_prompt(conn: &Connection, user_text: &str) -> String {
 
 struct SwarmRegistry {
     organism_id: String,
+    element: String, // earth, air, water, fire
     swarm_dir: String,
     mesh_db: Option<Connection>,
 }
 
 impl SwarmRegistry {
-    fn new(id: &str) -> Self {
+    fn new(id: &str, element: &str) -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
         let dir = format!("{}/.molequla/swarm", home);
-        SwarmRegistry { organism_id: id.into(), swarm_dir: dir, mesh_db: None }
+        SwarmRegistry { organism_id: id.into(), element: element.into(), swarm_dir: dir, mesh_db: None }
     }
 
     fn register(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -2595,12 +2596,15 @@ impl SwarmRegistry {
         let conn = Connection::open(&db_path)?;
         conn.execute_batch("
             PRAGMA journal_mode=WAL;
-            CREATE TABLE IF NOT EXISTS organisms(id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, parent_id TEXT, status TEXT DEFAULT 'alive', gamma_direction BLOB, gamma_magnitude REAL, rrpram_signature BLOB);
+            CREATE TABLE IF NOT EXISTS organisms(id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, parent_id TEXT, status TEXT DEFAULT 'alive', gamma_direction BLOB, gamma_magnitude REAL, rrpram_signature BLOB, element TEXT);
             CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT, to_id TEXT, type TEXT, payload TEXT, ts REAL);
         ")?;
+        // Migration for existing databases
+        conn.execute_batch("ALTER TABLE organisms ADD COLUMN element TEXT").ok();
         let pid = std::process::id();
-        conn.execute("INSERT OR REPLACE INTO organisms(id,pid,status,last_heartbeat) VALUES(?1,?2,'alive',?3)",
-            params![self.organism_id, pid, now_secs()])?;
+        let elem: Option<&str> = if self.element.is_empty() { None } else { Some(&self.element) };
+        conn.execute("INSERT OR REPLACE INTO organisms(id,pid,status,last_heartbeat,element) VALUES(?1,?2,'alive',?3,?4)",
+            params![self.organism_id, pid, now_secs(), elem])?;
         self.mesh_db = Some(conn);
         Ok(())
     }
@@ -3294,7 +3298,36 @@ fn main() {
     eprintln!("║  GPT organism + distributed cognition metabolism ║");
     eprintln!("╚══════════════════════════════════════════════════╝");
 
-    let cfg = Config::default();
+    let mut cfg = Config::default();
+
+    // Parse --element and --organism-id from CLI
+    let args: Vec<String> = std::env::args().collect();
+    let mut cli_element = String::new();
+    let mut cli_organism_id = String::new();
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "--element" && i + 1 < args.len() {
+            cli_element = args[i + 1].clone();
+            i += 2;
+        } else if args[i] == "--organism-id" && i + 1 < args.len() {
+            cli_organism_id = args[i + 1].clone();
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+
+    // Element → corpus path: each element eats its own food
+    if !cli_element.is_empty() {
+        cfg.corpus_path = match cli_element.as_str() {
+            "earth" => "nonames_earth.txt".into(),
+            "air"   => "nonames_air.txt".into(),
+            "water" => "nonames_water.txt".into(),
+            "fire"  => "nonames_fire.txt".into(),
+            _ => { eprintln!("unknown element: {} (use earth/air/water/fire)", cli_element); std::process::exit(1); }
+        };
+        eprintln!("[ecology] Element: {} → corpus: {}", cli_element, cfg.corpus_path);
+    }
 
     // Init SQLite
     let db = Arc::new(Mutex::new(init_db(&cfg.db_path)));
@@ -3356,10 +3389,15 @@ fn main() {
     let corpus_field = init_corpus_field;
 
     // Swarm
-    let organism_id = format!("rust-{}", std::process::id());
-    let swarm = Arc::new(Mutex::new(SwarmRegistry::new(&organism_id)));
+    let organism_id = if cli_organism_id.is_empty() {
+        format!("rust-{}", std::process::id())
+    } else {
+        cli_organism_id
+    };
+    let swarm = Arc::new(Mutex::new(SwarmRegistry::new(&organism_id, &cli_element)));
     swarm.lock().unwrap().register().ok();
-    eprintln!("[swarm] Registered as {}", organism_id);
+    eprintln!("[swarm] Registered as {} (element: {})", organism_id,
+        if cli_element.is_empty() { "none" } else { &cli_element });
 
     // Quantum buffer
     let qbuf = Arc::new(Mutex::new(QuantumBuffer::new()));

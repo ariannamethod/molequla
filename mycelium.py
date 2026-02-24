@@ -43,6 +43,7 @@ except ImportError:
     aiosqlite = None
 
 from ariannamethod import Method
+from ariannamethod import Sentinel
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -920,6 +921,15 @@ class Mycelium:
         # SACRED: field lock. Only ONE step at a time.
         # Sequential field evolution = coherence. (from leo async architecture)
         self._field_lock = asyncio.Lock()
+        # Sentinel — DNA watcher (scans every 5 steps to avoid I/O spam)
+        dna_path = os.path.join(os.path.dirname(os.path.abspath(mesh_path)), "dna")
+        aml_path = os.path.join(dna_path, "sentinel.aml") if os.path.isdir(dna_path) else None
+        self.sentinel = Sentinel(
+            dna_path=dna_path,
+            aml_path=aml_path if aml_path and os.path.exists(aml_path) else None,
+            lib=self.method.lib,
+        ) if os.path.isdir(dna_path) else None
+        self._sentinel_interval = 5  # scan every N steps
 
     def step(self):
         """one tick: snapshot → METHOD → harmonic → gamma → syntropy → steer."""
@@ -1009,6 +1019,14 @@ class Mycelium:
             self.drift.update(self.method)
             drift_report = self.drift.report()
 
+        # Sentinel: scan DNA directory for changes
+        sentinel_report = None
+        if self.sentinel and self._step_count % self._sentinel_interval == 0:
+            changes = self.sentinel.scan()
+            if changes:
+                sentinel_report = self.sentinel.report()
+                steering["dna_changes"] = len(changes)
+
         if self.verbose:
             status = self.monitor.status_line(steering)
             # Append gamma info
@@ -1028,6 +1046,8 @@ class Mycelium:
             print(status)
             if drift_report:
                 print(drift_report)
+            if sentinel_report:
+                print(sentinel_report)
 
         return steering
 
@@ -1173,7 +1193,8 @@ class Mycelium:
             async with aiosqlite.connect(self.mesh_path) as db:
                 async with db.execute("""
                     SELECT id, pid, stage, n_params, syntropy, entropy,
-                           gamma_direction, gamma_magnitude, last_heartbeat
+                           gamma_direction, gamma_magnitude, last_heartbeat,
+                           element
                     FROM organisms
                     WHERE status = 'alive' AND last_heartbeat > ?
                 """, (time.time() - 120,)) as cursor:
@@ -1246,8 +1267,9 @@ class Mycelium:
         lines = []
         for o in self.method.organisms:
             age = time.time() - o.last_seen if o.last_seen else 0
+            elem_tag = f" [{o.element}]" if o.element else ""
             lines.append(
-                f"  {o.id}: stage={o.stage} entropy={o.entropy:.2f} "
+                f"  {o.id}{elem_tag}: stage={o.stage} entropy={o.entropy:.2f} "
                 f"syntropy={o.syntropy:.2f} params={o.n_params} "
                 f"last_seen={age:.0f}s ago"
             )
@@ -1375,6 +1397,40 @@ class Mycelium:
 
         return "\n".join(lines)
 
+    def cmd_sentinel(self):
+        """sentinel status and latest changes."""
+        if not self.sentinel:
+            return "[sentinel] not active (no dna/ directory)."
+        lines = [self.sentinel.status_line()]
+        changes = self.sentinel.scan()
+        if changes:
+            lines.append(self.sentinel.report())
+        else:
+            lines.append("[sentinel] no changes since last scan.")
+        return "\n".join(lines)
+
+    def cmd_dna(self):
+        """DNA directory overview."""
+        if not self.sentinel:
+            return "[dna] not active (no dna/ directory)."
+        dna = self.sentinel.dna_path
+        lines = [f"[dna] root: {dna}"]
+        for zone in ("incoming", "shared", "output"):
+            zpath = os.path.join(dna, zone)
+            if os.path.isdir(zpath):
+                count = 0
+                total_size = 0
+                for root, dirs, files in os.walk(zpath):
+                    for f in files:
+                        if not f.startswith('.'):
+                            count += 1
+                            total_size += os.path.getsize(os.path.join(root, f))
+                lines.append(f"  {zone}/: {count} files, {total_size:,} bytes")
+            else:
+                lines.append(f"  {zone}/: (not found)")
+        lines.append(f"  watched: {self.sentinel.watched_count()} files total")
+        return "\n".join(lines)
+
     def cmd_help(self):
         return (
             "mycelium commands:\n"
@@ -1389,6 +1445,8 @@ class Mycelium:
             "  /harmonics — frequency decomposition of field\n"
             "  /pulse     — field pulse (novelty, arousal, entropy)\n"
             "  /attention — organism attention map\n"
+            "  /sentinel  — DNA watcher status + changes\n"
+            "  /dna       — DNA directory overview\n"
             "  /step      — force one METHOD step\n"
             "  /json      — last steering as JSON\n"
             "  /quit      — exit\n"
@@ -1444,6 +1502,9 @@ class Mycelium:
             self.method.mesh_path,
             n,
         ))
+        if self.sentinel:
+            print(f"sentinel: watching {self.sentinel.dna_path} "
+                  f"({self.sentinel.watched_count()} files)\n")
 
         # Background stepper — async task in event loop
         self.running = True
@@ -1490,6 +1551,10 @@ class Mycelium:
                     print(self.cmd_pulse())
                 elif line == "/attention":
                     print(self.cmd_attention())
+                elif line == "/sentinel":
+                    print(self.cmd_sentinel())
+                elif line == "/dna":
+                    print(self.cmd_dna())
                 elif line == "/step":
                     s = self.step()
                     print(json.dumps(s, indent=2))

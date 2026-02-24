@@ -3810,6 +3810,19 @@ async function awaken() {
         }
     }
 
+    // Element → corpus path: each element eats its own food
+    const cliElement = urlParams.get("element");
+    if (cliElement) {
+        const elementCorpus = {earth: "nonames_earth.txt", air: "nonames_air.txt",
+                               water: "nonames_water.txt", fire: "nonames_fire.txt"};
+        if (elementCorpus[cliElement]) {
+            CFG.corpusUrl = elementCorpus[cliElement];
+            logUI(`[ecology] Element: ${cliElement} → corpus: ${CFG.corpusUrl}`);
+        } else {
+            logUI(`[ecology] Unknown element: ${cliElement} (use earth/air/water/fire)`);
+        }
+    }
+
     // Try to load corpus (fetch -> DB -> default)
     setStatus("loading corpus...");
     let fetched = await fetchCorpus(CFG.corpusUrl);

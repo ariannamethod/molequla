@@ -4,5 +4,6 @@
 # part of molequla. the method that connects organisms.
 
 from .method import Method
+from .sentinel import Sentinel
 
-__all__ = ["Method"]
+__all__ = ["Method", "Sentinel"]

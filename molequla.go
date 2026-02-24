@@ -18,12 +18,14 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -2201,6 +2203,14 @@ func (gpt *GPT) MaybeGrowArchitecture(corpusChars int) bool {
 	gpt.growthStepOffset = gpt.globalStep
 
 	fmt.Printf("[growth] Done. Freeze for %d steps.\n", CFG.FreezeAfterGrowthSteps)
+
+	// Sanity check: verify matrix dimensions after growth
+	for name, m := range gpt.Base {
+		if len(m.Rows) > 0 && len(m.Rows[0].Data) != m.Nin {
+			fmt.Printf("[growth] BUG: %s row0 has %d cols but Nin=%d\n", name, len(m.Rows[0].Data), m.Nin)
+		}
+	}
+
 	return true
 }
 
@@ -3675,6 +3685,10 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 	for k, v := range ckpt.Base {
 		model.Base[k] = deserializeMatrixParam(v)
 	}
+	// Re-establish embedding tie after deserialization (JSON breaks pointer identity)
+	if CFG.TieEmbeddings {
+		model.Base["lm_head"] = model.Base["wte"]
+	}
 
 	model.Deltas = nil
 	model.ActiveAlpha = ckpt.Alpha
@@ -4651,16 +4665,17 @@ var swarmDir = filepath.Join(os.Getenv("HOME"), ".molequla", "swarm")
 // SwarmRegistry discovers and tracks other molequla instances via shared SQLite.
 type SwarmRegistry struct {
 	OrganismID string
+	Element    string // earth, air, water, fire
 	PidFile    string
 	MeshDB     *sql.DB
 }
 
-// NewSwarmRegistry creates a new SwarmRegistry with the given organism ID, or generates one.
-func NewSwarmRegistry(organismID string) *SwarmRegistry {
+// NewSwarmRegistry creates a new SwarmRegistry with the given organism ID and element.
+func NewSwarmRegistry(organismID, element string) *SwarmRegistry {
 	if organismID == "" {
 		organismID = fmt.Sprintf("org_%d_%d", os.Getpid(), time.Now().Unix())
 	}
-	return &SwarmRegistry{OrganismID: organismID}
+	return &SwarmRegistry{OrganismID: organismID, Element: element}
 }
 
 // Register writes PID file and registers in mesh.db.
@@ -4694,7 +4709,10 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER,
 		n_params INTEGER, syntropy REAL, entropy REAL,
 		last_heartbeat REAL, parent_id TEXT,
-		status TEXT DEFAULT 'alive')`)
+		status TEXT DEFAULT 'alive',
+		element TEXT)`)
+	// Migration for existing databases
+	db.Exec("ALTER TABLE organisms ADD COLUMN element TEXT")
 	if err != nil {
 		db.Close()
 		return err
@@ -4715,9 +4733,9 @@ func (sr *SwarmRegistry) registerInMesh() error {
 		return nil
 	}
 	_, err := sr.MeshDB.Exec(
-		"INSERT OR REPLACE INTO organisms(id,pid,stage,n_params,syntropy,entropy,last_heartbeat,status) "+
-			"VALUES(?,?,0,0,0.0,0.0,?,'alive')",
-		sr.OrganismID, os.Getpid(), float64(time.Now().UnixMilli())/1000.0)
+		"INSERT OR REPLACE INTO organisms(id,pid,stage,n_params,syntropy,entropy,last_heartbeat,status,element) "+
+			"VALUES(?,?,0,0,0.0,0.0,?,'alive',?)",
+		sr.OrganismID, os.Getpid(), float64(time.Now().UnixMilli())/1000.0, sr.Element)
 	return err
 }
 
@@ -4853,8 +4871,89 @@ func performHibernation(model *GPT, tok *EvolvingTokenizer, db *sql.DB, swarm *S
 		fmt.Sprintf("hibernate:%s", swarm.OrganismID))
 }
 
-// parseCLIArgs parses --organism-id and --config from os.Args.
-func parseCLIArgs() (organismID string, configPath string) {
+// ============================================================
+// DNA EXCHANGE — organisms feed each other through dna/ directory
+// ============================================================
+
+var dnaElements = []string{"earth", "air", "water", "fire"}
+
+// dnaWrite generates text and writes it to dna/output/{element}/ for other organisms to consume.
+func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *CooccurField, docs []string, step int) {
+	if element == "" || len(docs) == 0 {
+		return
+	}
+	probes := []string{
+		"What do you feel?", "Tell me about yourself.",
+		"What is truth?", "What matters?",
+		"Speak.", "What do you remember?",
+	}
+	probe := probes[step%len(probes)]
+
+	// GenerateResonant takes model.mu.Lock internally — do NOT double-lock
+	answer := GenerateResonant(model, tok, field, probe, docs, true)
+
+	if answer == "" || len(answer) < 20 {
+		return
+	}
+
+	dir := filepath.Join("../dna/output", element)
+	os.MkdirAll(dir, 0755)
+	fname := filepath.Join(dir, fmt.Sprintf("gen_%d_%d.txt", time.Now().Unix(), step))
+	os.WriteFile(fname, []byte(answer+"\n"), 0644)
+	fmt.Printf("[dna] %s wrote %d bytes to ecology\n", element, len(answer))
+}
+
+// dnaRead consumes text from other organisms' output directories, returns bytes added.
+func dnaRead(element string, corpusPath string) int {
+	if element == "" {
+		return 0
+	}
+	added := 0
+	var consumed []string
+
+	for _, e := range dnaElements {
+		if e == element {
+			continue // don't eat own output
+		}
+		dir := filepath.Join("../dna/output", e)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+				continue
+			}
+			fpath := filepath.Join(dir, entry.Name())
+			data, err := os.ReadFile(fpath)
+			if err != nil {
+				continue
+			}
+			text := strings.TrimSpace(string(data))
+			if len(text) < 10 {
+				os.Remove(fpath)
+				continue
+			}
+			// Append to own corpus — the organism eats another's words
+			f, err := os.OpenFile(corpusPath, os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				f.WriteString(text + "\n")
+				f.Close()
+				added += len(text)
+				consumed = append(consumed, fmt.Sprintf("%s/%s", e, entry.Name()))
+			}
+			os.Remove(fpath) // consumed
+		}
+	}
+	if added > 0 {
+		fmt.Printf("[dna] %s consumed %d bytes from %d files: %v\n",
+			element, added, len(consumed), consumed)
+	}
+	return added
+}
+
+// parseCLIArgs parses --organism-id, --config, --element, and --evolution from os.Args.
+func parseCLIArgs() (organismID string, configPath string, element string, evolution bool) {
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--organism-id" && i+1 < len(os.Args) {
 			organismID = os.Args[i+1]
@@ -4862,6 +4961,11 @@ func parseCLIArgs() (organismID string, configPath string) {
 		} else if os.Args[i] == "--config" && i+1 < len(os.Args) {
 			configPath = os.Args[i+1]
 			i++
+		} else if os.Args[i] == "--element" && i+1 < len(os.Args) {
+			element = os.Args[i+1]
+			i++
+		} else if os.Args[i] == "--evolution" {
+			evolution = true
 		}
 	}
 	return
@@ -4961,7 +5065,7 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 	}
 }
 
-func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *QuantumBuffer, swarm *SwarmRegistry, stop chan struct{}) {
+func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *QuantumBuffer, swarm *SwarmRegistry, stop chan struct{}, element string) {
 	// And lo, asynchronous training shall occur, because sleeping is for humans.
 	syntracker := NewSyntropyTracker()
 	field := NewCooccurField()
@@ -5106,23 +5210,6 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				SaveCheckpoint(model, tok, "")
 			}
 
-			// Ontogenesis: check if architecture should grow
-			corpusChars := 0
-			for _, d := range docs {
-				corpusChars += len(d)
-			}
-			model.mu.Lock()
-			if model.MaybeGrowArchitecture(corpusChars) {
-				SaveCheckpoint(model, tok, "")
-				nP := 0
-				for _, m := range model.Base {
-					nP += m.Nout * m.Nin
-				}
-				dbLogGrowth(db, model, tok, docs, 0.0,
-					fmt.Sprintf("ontogenesis:stage=%d|params=%d", model.CurrentGrowthStage(), nP))
-			}
-			model.mu.Unlock()
-
 			// Ecology: mitosis / hibernation
 			if swarm != nil && action == "divide" {
 				fmt.Println("[ecology] MITOSIS triggered — organism overloaded, spawning child")
@@ -5138,6 +5225,41 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				fmt.Println("[ecology] Organism hibernating. Goodbye.")
 				return // exit training loop
 			}
+		}
+
+		// DNA exchange: every tick = every breath. Organism exhales DNA, inhales others'.
+		if element != "" {
+			// Write: generate and share with ecology
+			dnaWrite(element, model, tok, field, docs, tickCount)
+			// Read: consume other organisms' output → corpus grows → ontogenesis unlocks
+			if consumed := dnaRead(element, CFG.CorpusPath); consumed > 0 {
+				// Reload corpus with new food
+				docs = loadCorpusLines(CFG.CorpusPath)
+				if len(docs) > 0 {
+					field.BuildFromCorpus(tok, docs)
+					model.corpusField = field
+				}
+			}
+		}
+
+		// Ontogenesis: check if architecture should grow (every 50 ticks — corpus grows via DNA)
+		if tickCount%50 == 0 {
+			// Use file size for threshold — loadCorpusLines truncates long lines via MaxLineChars
+			corpusChars := 0
+			if fi, err := os.Stat(CFG.CorpusPath); err == nil {
+				corpusChars = int(fi.Size())
+			}
+			model.mu.Lock()
+			if model.MaybeGrowArchitecture(corpusChars) {
+				SaveCheckpoint(model, tok, "")
+				nP := 0
+				for _, m := range model.Base {
+					nP += m.Nout * m.Nin
+				}
+				dbLogGrowth(db, model, tok, docs, 0.0,
+					fmt.Sprintf("ontogenesis:stage=%d|params=%d", model.CurrentGrowthStage(), nP))
+			}
+			model.mu.Unlock()
 		}
 
 		// Swarm heartbeat (every 10 ticks)
@@ -5206,7 +5328,29 @@ func main() {
 	rand.Seed(42) // And lo, determinism shall pretend to tame chaos.
 
 	// Parse CLI args for child organisms
-	organismID, configPath := parseCLIArgs()
+	organismID, configPath, element, evolution := parseCLIArgs()
+
+	// Element → corpus path: each element eats its own food
+	if element != "" {
+		switch element {
+		case "earth":
+			CFG.CorpusPath = "nonames_earth.txt"
+		case "air":
+			CFG.CorpusPath = "nonames_air.txt"
+		case "water":
+			CFG.CorpusPath = "nonames_water.txt"
+		case "fire":
+			CFG.CorpusPath = "nonames_fire.txt"
+		default:
+			fmt.Fprintf(os.Stderr, "unknown element: %s (use earth/air/water/fire)\n", element)
+			os.Exit(1)
+		}
+		fmt.Printf("[ecology] Element: %s → corpus: %s\n", element, CFG.CorpusPath)
+	}
+
+	if evolution {
+		fmt.Println("[evolution] Autonomous evolution mode — organism will grow through all stages without pause.")
+	}
 
 	// Child organism: load birth config from parent
 	var syntrackerSeed []BurstRecord
@@ -5341,7 +5485,8 @@ func main() {
 			model.corpusField = tmpCooccur
 
 			// Interactive mode: pause between stages, let user chat or type /grow
-			if isInteractive {
+			// --evolution skips pause — organism grows autonomously
+			if isInteractive && !evolution {
 				fmt.Printf("[init] Stage %d complete. Chat with the organism, or type /grow to continue growth.\n", stage)
 				for {
 					fmt.Print("> ")
@@ -5368,7 +5513,7 @@ func main() {
 	model.MaybeExpandVocab(tok.VocabSize)
 
 	// Swarm ecology: register in mesh
-	swarm := NewSwarmRegistry(organismID)
+	swarm := NewSwarmRegistry(organismID, element)
 	if err := swarm.Register(); err != nil {
 		fmt.Printf("[ecology] Warning: swarm registration failed: %v\n", err)
 	}
@@ -5393,7 +5538,18 @@ func main() {
 
 	// Start background trainer
 	stop := make(chan struct{})
-	go backgroundTrainer(db, model, tok, qbuf, swarm, stop)
+	go backgroundTrainer(db, model, tok, qbuf, swarm, stop, element)
+
+	if evolution {
+		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")
+		// In evolution mode: no REPL, just let background trainer run forever
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		close(stop)
+		fmt.Println("\n[evolution] Organism shutting down gracefully.")
+		return
+	}
 
 	fmt.Println("molequla is alive. Type and press Enter. Ctrl+C to exit.")
 
