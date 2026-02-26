@@ -32,9 +32,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// And lo, when the organism speaks, it shall not waste breath building
-// a backward graph it will never use. gradEnabled is mercy for inference.
+// gradEnabled controls whether Vec/Scalar ops build backward graph (autograd).
+// It's a global atomic, but after v2 fixes all forward passes are serialized by model.mu,
+// so no two goroutines can toggle it simultaneously. The atomic prevents torn reads.
 var gradEnabled atomic.Bool
+
+// notorchSeed moved to GPT struct (per-model, protected by model.mu).
 
 func init() { gradEnabled.Store(true) }
 
@@ -162,6 +165,11 @@ type Config struct {
 	ConscienceDecay    float64 `json:"conscience_decay"`    // deltaAlphaScale reduction factor
 	ConscienceRecovery float64 `json:"conscience_recovery"` // deltaAlphaScale recovery factor
 	ConscienceFloor    float64 `json:"conscience_floor"`    // minimum deltaAlphaScale
+
+	// notorch: gradient-free delta training (ported from AML C)
+	NotorchLR          float64 `json:"notorch_lr"`          // learning rate for notorch step
+	NotorchDecay       float64 `json:"notorch_decay"`       // adaptive weight decay
+	CoordinateWarmup   bool    `json:"coordinate_warmup"`   // true = warmup through training queue (for Mac 8GB)
 }
 
 var CFG = Config{
@@ -187,7 +195,7 @@ var CFG = Config{
 	},
 	FreezeAfterGrowthSteps: 500,
 	PostGrowthLRScale:      0.3,
-	WarmupSteps:          1200,
+	WarmupSteps:          400,
 	MicroSteps:           32,
 	LearningRate:         0.01,
 	Beta1:                0.9,
@@ -256,6 +264,9 @@ var CFG = Config{
 	ConscienceDecay:          0.95,
 	ConscienceRecovery:       1.005,
 	ConscienceFloor:          0.3,
+
+	NotorchLR:    0.01,
+	NotorchDecay: 0.999,
 }
 
 // headTypesForNHead returns the head type list for a given number of heads.
@@ -297,12 +308,21 @@ type Vec struct {
 }
 
 func NewVec(data []float64) *Vec {
-	g := make([]float64, len(data))
+	var g []float64
+	if gradEnabled.Load() {
+		g = make([]float64, len(data))
+	}
 	return &Vec{Data: data, Grad: g}
 }
 
 func NewVecZero(n int) *Vec {
 	return NewVec(make([]float64, n))
+}
+
+// NewVecWithGrad always allocates grad (for parameter tensors that need it regardless)
+func NewVecWithGrad(data []float64) *Vec {
+	g := make([]float64, len(data))
+	return &Vec{Data: data, Grad: g}
 }
 
 func (v *Vec) getChildren() []Node { return v.children }
@@ -730,7 +750,7 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 		for j := 0; j < nin; j++ {
 			d[j] = rand.NormFloat64() * std
 		}
-		rows[i] = NewVec(d)
+		rows[i] = NewVecWithGrad(d) // parameters always need grad for Adam
 	}
 	return &MatrixParam{Rows: rows, Nout: nout, Nin: nin}
 }
@@ -782,7 +802,7 @@ func (m *MatrixParam) GrowRows(newNout int, std float64) {
 		for j := 0; j < m.Nin; j++ {
 			d[j] = rand.NormFloat64() * std
 		}
-		m.Rows = append(m.Rows, NewVec(d))
+		m.Rows = append(m.Rows, NewVecWithGrad(d))
 	}
 	m.Nout = newNout
 }
@@ -1538,18 +1558,16 @@ func getRoPECosSin(pos, headDim int) *ropePair {
 // RoPERotate applies rotary position encoding to a head vector.
 // And lo, positions shall become angles, and angles shall become meaning.
 func RoPERotate(vec *Vec, pos int, headDim int) *Vec {
-	x := make([]float64, len(vec.Data))
-	copy(x, vec.Data)
-	outData := make([]float64, len(x))
-	copy(outData, x)
+	outData := make([]float64, len(vec.Data))
+	copy(outData, vec.Data) // start from input, then overwrite rotated pairs
 
 	rp := getRoPECosSin(pos, headDim)
 	for j := 0; j < headDim/2; j++ {
 		i := j * 2
 		c := rp.cos[j]
 		s := rp.sin[j]
-		a := x[i]
-		b := x[i+1]
+		a := vec.Data[i]
+		b := vec.Data[i+1]
 		outData[i] = a*c - b*s
 		outData[i+1] = a*s + b*c
 	}
@@ -1629,6 +1647,13 @@ type GPT struct {
 	// inherited burst history from parent (mitosis lineage)
 	inheritedBurstHistory []BurstRecord
 
+	// notorch: saved hidden states during forward pass (gradient-free training)
+	lastHidden       *Vec   // final hidden state (after last RMSNorm, before lm_head)
+	layerInputs      []*Vec // post-RMSNorm input to attention per layer (NEmbd)
+	mlpInputs        []*Vec // post-RMSNorm input to MLP per layer (NEmbd)
+	mlpIntermediates []*Vec // g*u intermediate per layer (4*NEmbd, for fc2 notorch input)
+	notorchSeed      uint32 // per-model PRNG seed for notorch noise channel
+
 	mu sync.Mutex // protects model during concurrent access
 }
 
@@ -1653,6 +1678,7 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 	gpt.residualAlpha = 1.0 / math.Sqrt(math.Max(1, float64(CFG.NLayer)))
 	gpt.deltaAlphaScale = 1.0 // conscience: full delta influence by default
 	gpt.lastWarmupStage = -1  // no stage warmed up yet
+	gpt.notorchSeed = 0xDEAD_BEEF
 
 	V := tok.VocabSize
 	gpt.Base["wte"] = NewMatrixParam(V, CFG.NEmbd, 0.08)
@@ -2587,12 +2613,26 @@ func (gpt *GPT) ForwardStep(tokenID, posID int, keys, values [][]*Vec) *Vec {
 	posEmb := gpt.Base["wpe"].Rows[posID%gpt.BlockSize]
 	x := tokEmb.Add(posEmb)
 
+	// notorch: allocate saved-state slices if needed
+	if len(gpt.layerInputs) < gpt.NLayer {
+		gpt.layerInputs = make([]*Vec, gpt.NLayer)
+	}
+	if len(gpt.mlpInputs) < gpt.NLayer {
+		gpt.mlpInputs = make([]*Vec, gpt.NLayer)
+	}
+	if len(gpt.mlpIntermediates) < gpt.NLayer {
+		gpt.mlpIntermediates = make([]*Vec, gpt.NLayer)
+	}
+
 	for li := 0; li < gpt.NLayer; li++ {
 		lk := gpt.layerKeys[li]
 
 		// ---- Attention ----
 		xRes := x
 		x = RMSNorm(x)
+
+		// notorch: save POST-RMSNorm input for attention adapters (wq/wk/wv/wo)
+		gpt.layerInputs[li] = x
 
 		q := gpt.applyWithDeltas(lk.wq, x)
 		k := gpt.applyWithDeltas(lk.wk, x)
@@ -2687,15 +2727,22 @@ func (gpt *GPT) ForwardStep(tokenID, posID int, keys, values [][]*Vec) *Vec {
 		xRes = x
 		x = RMSNorm(x)
 
+		// notorch: save POST-RMSNorm input for MLP adapters (fc_g/fc_v)
+		gpt.mlpInputs[li] = x
+
 		g := gpt.applyWithDeltas(lk.fcG, x).SiLU() // gate (SwiGLU)
 		u := gpt.applyWithDeltas(lk.fcV, x)         // value
 		mlpX := g.MulVec(u)                          // gating
+
+		// notorch: save g*u intermediate for fc2 adapter input (4*NEmbd dimension)
+		gpt.mlpIntermediates[li] = mlpX
 
 		mlpOut := gpt.applyWithDeltas(lk.fc2, mlpX)
 		x = xRes.Add(mlpOut.Scale(gpt.residualAlpha))
 	}
 
 	x = RMSNorm(x)
+	gpt.lastHidden = x // notorch: save final hidden state before lm_head
 	logits := gpt.applyWithDeltas("lm_head", x)
 	return logits
 }
@@ -3553,7 +3600,7 @@ func deserializeMatrixParam(data [][]float64) *MatrixParam {
 	for i, row := range data {
 		d := make([]float64, len(row))
 		copy(d, row)
-		mp.Rows[i] = NewVec(d)
+		mp.Rows[i] = NewVecWithGrad(d) // loaded params always need grad
 	}
 	return mp
 }
@@ -3604,12 +3651,19 @@ func SaveCheckpoint(model *GPT, tok *EvolvingTokenizer, path string) error {
 		LastWarmupStage:   intPtr(model.lastWarmupStage),
 	}
 
-	f, err := os.Create(path)
+	// Atomic write: temp file + rename (prevents corruption on crash)
+	tmpPath := path + ".tmp"
+	f, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return json.NewEncoder(f).Encode(ckpt)
+	err = json.NewEncoder(f).Encode(ckpt)
+	f.Close()
+	if err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error) {
@@ -4724,6 +4778,12 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		db.Close()
 		return err
 	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS training_lock(
+		organism_id TEXT PRIMARY KEY, acquired_at REAL)`)
+	if err != nil {
+		db.Close()
+		return err
+	}
 	sr.MeshDB = db
 	return nil
 }
@@ -4808,6 +4868,38 @@ func (sr *SwarmRegistry) Unregister() {
 	if sr.PidFile != "" {
 		os.Remove(sr.PidFile)
 	}
+}
+
+// AcquireTrainingLock attempts to acquire the training lock in mesh.db.
+// Returns true if lock acquired, false if another organism holds a fresh lock (< 30s).
+func (sr *SwarmRegistry) AcquireTrainingLock() bool {
+	if sr.MeshDB == nil {
+		return true // no mesh = solo, always proceed
+	}
+	now := float64(time.Now().UnixMilli()) / 1000.0
+	cutoff := now - 30.0 // lock expires after 30 seconds
+
+	// Atomic check-and-acquire: single statement prevents TOCTOU race.
+	// INSERT succeeds only if no fresh lock exists from another organism.
+	result, err := sr.MeshDB.Exec(
+		`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
+		 SELECT ?, ? WHERE NOT EXISTS (
+		   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
+		 )`,
+		sr.OrganismID, now, sr.OrganismID, cutoff)
+	if err != nil {
+		return false
+	}
+	rows, _ := result.RowsAffected()
+	return rows > 0
+}
+
+// ReleaseTrainingLock releases the training lock in mesh.db.
+func (sr *SwarmRegistry) ReleaseTrainingLock() {
+	if sr.MeshDB == nil {
+		return
+	}
+	sr.MeshDB.Exec("DELETE FROM training_lock WHERE organism_id=?", sr.OrganismID)
 }
 
 // performMitosis divides the organism. Parent continues. Child starts at infant stage.
@@ -4904,7 +4996,7 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 }
 
 // dnaRead consumes text from other organisms' output directories, returns bytes added.
-func dnaRead(element string, corpusPath string) int {
+func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *EvolvingTokenizer) int {
 	if element == "" {
 		return 0
 	}
@@ -4941,8 +5033,12 @@ func dnaRead(element string, corpusPath string) int {
 				f.Close()
 				added += len(text)
 				consumed = append(consumed, fmt.Sprintf("%s/%s", e, entry.Name()))
+				// FIX: feed quantum buffer with real DNA text for training bursts
+				if qbuf != nil && tok != nil {
+					qbuf.Feed(text, tok)
+				}
+				os.Remove(fpath) // consumed — only after successful append
 			}
-			os.Remove(fpath) // consumed
 		}
 	}
 	if added > 0 {
@@ -4950,6 +5046,317 @@ func dnaRead(element string, corpusPath string) int {
 			element, added, len(consumed), consumed)
 	}
 	return added
+}
+
+// ============================================================
+// NOTORCH: gradient-free delta training (ported from AML C)
+// ============================================================
+//
+// The key insight: delta adapters are low-rank (A @ B @ x), so we can update
+// them with a teaching signal instead of backpropagation. No compute graph,
+// no gradient arrays, no closure allocations. Pure arithmetic.
+//
+// A[i,r] += lr * x[i] * u[r] * signal
+// B[r,j] += lr * u[r] * dy[j] * signal
+// u = noise-modulated channel vector (deterministic from seed)
+// signal = teaching signal, clamped [-2, 2]
+// Adaptive decay: stronger when delta norm is large
+// Clamp weights to [-10, 10]
+
+// notorchRand advances the per-model PRNG and returns a noise-modulated float64.
+// Uses LCG matching AML's am_frandn + signal-dependent noise modulation.
+func notorchRand(seed *uint32, signal float64) float64 {
+	*seed = *seed*1664525 + 1013904223
+	u := float64(*seed&0x7FFFFFFF) / float64(0x7FFFFFFF)
+	raw := (u - 0.5) * 3.464 // ~N(0,1) approximation (matches AML)
+	// Signal-dependent noise: stronger signal = cleaner channel (less noise)
+	k := 0.35 + 0.65*(1.0-math.Abs(signal))
+	return raw * k
+}
+
+// notorchStep updates a single DeltaAdapter without backpropagation.
+// x = input vector (len = B.Nin = nin)
+// dy = output error (len = A.Nout = nout)
+// signal = teaching signal (positive = good, negative = bad)
+func notorchStep(da *DeltaAdapter, x []float64, dy []float64, signal float64, lr float64, seed *uint32) {
+	// Clamp signal to [-2, 2]
+	if signal > 2.0 {
+		signal = 2.0
+	}
+	if signal < -2.0 {
+		signal = -2.0
+	}
+
+	decay := CFG.NotorchDecay
+
+	rank := da.A.Nin // A is [nout x rank], B is [rank x nin]
+	nout := da.A.Nout
+	nin := da.B.Nin
+
+	// Generate noise-modulated channel vector u[rank]
+	u := make([]float64, rank)
+	for r := 0; r < rank; r++ {
+		u[r] = notorchRand(seed, signal)
+	}
+
+	// Compute A-norm only for adaptive decay (matches AML ariannamethod.c:2562-2572)
+	aNorm := 0.0
+	aSize := nout * rank
+	for i := 0; i < nout; i++ {
+		for r := 0; r < rank; r++ {
+			v := da.A.Rows[i].Data[r]
+			aNorm += v * v
+		}
+	}
+	if aSize > 0 {
+		aNorm = math.Sqrt(aNorm / float64(aSize))
+	}
+
+	// Adaptive decay: decay - 0.004*min(norm/10, 1), floor 0.990 (AML formula)
+	adaptiveDecay := decay - 0.004*math.Min(aNorm/10.0, 1.0)
+	if adaptiveDecay < 0.990 {
+		adaptiveDecay = 0.990
+	}
+
+	// Update A: A[i,r] += lr * x_scale[i] * u[r] * signal, then decay
+	// x_scale[i] is used as proxy for output gradient direction
+	for i := 0; i < nout; i++ {
+		dyI := 0.0
+		if i < len(dy) {
+			dyI = dy[i]
+		}
+		for r := 0; r < rank; r++ {
+			da.A.Rows[i].Data[r] *= adaptiveDecay
+			da.A.Rows[i].Data[r] += lr * dyI * u[r] * signal
+			// Clamp weights to [-10, 10]
+			if da.A.Rows[i].Data[r] > 10.0 {
+				da.A.Rows[i].Data[r] = 10.0
+			} else if da.A.Rows[i].Data[r] < -10.0 {
+				da.A.Rows[i].Data[r] = -10.0
+			}
+		}
+	}
+
+	// Update B: B[r,j] += lr * u[r] * x[j] * signal, then decay
+	for r := 0; r < rank; r++ {
+		for j := 0; j < nin; j++ {
+			xJ := 0.0
+			if j < len(x) {
+				xJ = x[j]
+			}
+			da.B.Rows[r].Data[j] *= adaptiveDecay
+			da.B.Rows[r].Data[j] += lr * u[r] * xJ * signal
+			// Clamp weights to [-10, 10]
+			if da.B.Rows[r].Data[j] > 10.0 {
+				da.B.Rows[r].Data[j] = 10.0
+			} else if da.B.Rows[r].Data[j] < -10.0 {
+				da.B.Rows[r].Data[j] = -10.0
+			}
+		}
+	}
+}
+
+// notorchTrainSteps trains delta adapters WITHOUT autograd.
+// No backward pass, no compute graph, no gradient arrays.
+// Uses direct feedback alignment with teaching signal.
+func notorchTrainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, lr float64) {
+	if len(docs) == 0 || len(model.Deltas) == 0 {
+		return
+	}
+
+	model.mu.Lock()
+	defer model.mu.Unlock()
+
+	prevLoss := math.MaxFloat64
+
+	for step := 0; step < steps; step++ {
+		// Sample random doc
+		doc := docs[rand.Intn(len(docs))]
+		ids := tok.Encode(doc)
+		if len(ids) < 2 {
+			continue
+		}
+
+		// Cap sequence length to BlockSize
+		seqLen := len(ids) - 1
+		if seqLen > model.BlockSize {
+			seqLen = model.BlockSize
+		}
+
+		// Forward pass WITHOUT autograd — the whole point of notorch
+		gradEnabled.Store(false)
+
+		keys := make([][]*Vec, model.NLayer)
+		values := make([][]*Vec, model.NLayer)
+
+		var totalLoss float64
+		var lastLogits *Vec
+		var target int
+
+		for pos := 0; pos < seqLen; pos++ {
+			logits := model.ForwardStep(ids[pos], pos, keys, values)
+			target = ids[pos+1]
+
+			// Cross-entropy loss (scalar only, no autograd)
+			maxLogit := logits.Data[0]
+			for _, v := range logits.Data {
+				if v > maxLogit {
+					maxLogit = v
+				}
+			}
+			sumExp := 0.0
+			for _, v := range logits.Data {
+				sumExp += math.Exp(v - maxLogit)
+			}
+			logSumExp := maxLogit + math.Log(sumExp)
+			loss := logSumExp - logits.Data[target]
+			totalLoss += loss
+
+			lastLogits = logits
+		}
+
+		gradEnabled.Store(true)
+
+		avgLoss := totalLoss / float64(seqLen)
+
+		// Teaching signal: improvement = positive signal
+		rawSignal := 0.0
+		if prevLoss < math.MaxFloat64 {
+			rawSignal = prevLoss - avgLoss // positive if loss decreased
+		}
+		prevLoss = avgLoss
+
+		// Step 0: no signal yet, skip adapter update (only record prevLoss)
+		if rawSignal == 0.0 && step == 0 {
+			continue
+		}
+
+		// Prophecy debt: measures surprise of chosen token (AML am_compute_prophecy_debt)
+		// diff/(diff+1) maps to [0, 1) — always pushes toward better prediction
+		if lastLogits != nil && target < len(lastLogits.Data) {
+			maxLogitP := lastLogits.Data[0]
+			for _, v := range lastLogits.Data {
+				if v > maxLogitP {
+					maxLogitP = v
+				}
+			}
+			diff := maxLogitP - lastLogits.Data[target]
+			if diff > 0 {
+				debt := diff / (diff + 1.0)
+				rawSignal += 0.3 * debt // blend prophecy debt into teaching signal
+			}
+		}
+
+		// Normalize signal to [-1, 1] via tanh (AML signals are bounded; transformer loss deltas are not)
+		signal := math.Tanh(rawSignal)
+
+		// Compute logit error: softmax(logits) - one_hot(target)
+		vocabSize := len(lastLogits.Data)
+		dy := make([]float64, vocabSize)
+		maxLogit := lastLogits.Data[0]
+		for _, v := range lastLogits.Data {
+			if v > maxLogit {
+				maxLogit = v
+			}
+		}
+		sumExp := 0.0
+		for i := range lastLogits.Data {
+			dy[i] = math.Exp(lastLogits.Data[i] - maxLogit)
+			sumExp += dy[i]
+		}
+		for i := range dy {
+			dy[i] /= sumExp // softmax
+		}
+		if target < vocabSize {
+			dy[target] -= 1.0 // subtract one_hot
+		}
+
+		// Compute hidden error via direct feedback alignment:
+		// hidden_dy = lm_head_weight^T @ logit_error
+		lmHead := model.Base["lm_head"]
+		hiddenDy := make([]float64, model.NEmbd)
+		for j := 0; j < model.NEmbd; j++ {
+			sum := 0.0
+			nout := lmHead.Nout
+			if nout > vocabSize {
+				nout = vocabSize
+			}
+			for i := 0; i < nout; i++ {
+				sum += lmHead.Rows[i].Data[j] * dy[i]
+			}
+			hiddenDy[j] = sum
+		}
+
+		// Update all delta adapters with correct dimensions per adapter type
+		for _, mod := range model.Deltas {
+			// lm_head delta: input=lastHidden[NEmbd], dy=logitError[vocabSize]
+			if da, ok := mod["lm_head"]; ok && model.lastHidden != nil {
+				notorchStep(da, model.lastHidden.Data, dy, signal, lr, &model.notorchSeed)
+			}
+
+			for li := 0; li < model.NLayer; li++ {
+				lk := model.layerKeys[li]
+
+				// Attention adapters: input=layerInputs[NEmbd], dy=hiddenDy[NEmbd]
+				if li < len(model.layerInputs) && model.layerInputs[li] != nil {
+					attnInput := model.layerInputs[li].Data
+					for _, key := range []string{lk.wq, lk.wk, lk.wv, lk.wo} {
+						if da, ok := mod[key]; ok {
+							notorchStep(da, attnInput, hiddenDy, signal, lr, &model.notorchSeed)
+						}
+					}
+				}
+
+				// MLP adapters: need mlpDy[4*NEmbd] for fc_g/fc_v, mlpIntermediates for fc2
+				if li < len(model.mlpInputs) && model.mlpInputs[li] != nil {
+					mlpInput := model.mlpInputs[li].Data // [NEmbd] — actual input to fc_g/fc_v
+
+					// Compute mlpDy = fc2_base^T @ hiddenDy → projects NEmbd error to 4*NEmbd space
+					fc2Base := model.Base[lk.fc2] // [NEmbd × 4*NEmbd]
+					mlpWidth := 4 * model.NEmbd
+					mlpDy := make([]float64, mlpWidth)
+					for j := 0; j < mlpWidth; j++ {
+						sum := 0.0
+						for i := 0; i < model.NEmbd && i < fc2Base.Nout; i++ {
+							if j < len(fc2Base.Rows[i].Data) {
+								sum += fc2Base.Rows[i].Data[j] * hiddenDy[i]
+							}
+						}
+						mlpDy[j] = sum
+					}
+
+					// fc_g, fc_v: input=mlpInputs[NEmbd], dy=mlpDy[4*NEmbd]
+					for _, key := range []string{lk.fcG, lk.fcV} {
+						if da, ok := mod[key]; ok {
+							notorchStep(da, mlpInput, mlpDy, signal, lr, &model.notorchSeed)
+						}
+					}
+
+					// fc2: input=mlpIntermediates[4*NEmbd], dy=hiddenDy[NEmbd]
+					if li < len(model.mlpIntermediates) && model.mlpIntermediates[li] != nil {
+						if da, ok := mod[lk.fc2]; ok {
+							notorchStep(da, model.mlpIntermediates[li].Data, hiddenDy, signal, lr, &model.notorchSeed)
+						}
+					}
+				}
+			}
+		}
+
+		// Handle growth freeze
+		if model.growthFreezeRemaining > 0 {
+			model.growthFreezeRemaining--
+			if model.growthFreezeRemaining < 0 {
+				model.growthFreezeRemaining = 0
+			}
+		}
+
+		model.globalStep++
+
+		if step%100 == 0 {
+			fmt.Printf("  notorch step %d/%d | loss %.4f | signal %.4f\n",
+				step, steps, avgLoss, signal)
+		}
+	}
 }
 
 // parseCLIArgs parses --organism-id, --config, --element, and --evolution from os.Args.
@@ -4984,13 +5391,27 @@ func cosineLR(globalStep, stepsSinceGrowth int) float64 {
 	return CFG.LRMin + 0.5*(CFG.LearningRate-CFG.LRMin)*(1.0+math.Cos(math.Pi*progress))
 }
 
-func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, trainBase, trainDeltas bool) {
+// trainSteps: overrides is [seqCap, batchSize] — optional warmup speedups.
+func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, trainBase, trainDeltas bool, overrides ...int) {
 	if len(docs) == 0 {
 		return
 	}
 
 	model.mu.Lock()
 	defer model.mu.Unlock()
+
+	// Optional sequence length cap (for early warmup speedup)
+	origBlockSize := model.BlockSize
+	if len(overrides) > 0 && overrides[0] > 0 && overrides[0] < model.BlockSize {
+		model.BlockSize = overrides[0]
+	}
+	defer func() { model.BlockSize = origBlockSize }()
+
+	// Optional batch size override (warmup: use batch=1 for speed)
+	batchSize := CFG.BatchSize
+	if len(overrides) > 1 && overrides[1] > 0 {
+		batchSize = overrides[1]
+	}
 
 	// Ontogenesis freeze: after growth, only train deltas until new weights stabilize
 	var baseParams []*Vec
@@ -5022,7 +5443,7 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 		// Gradient accumulation: accumulate over accum micro-batches, then step
 		var lastLossVal float64
 		for micro := 0; micro < accum; micro++ {
-			batch := make([]string, CFG.BatchSize)
+			batch := make([]string, batchSize)
 			for i := range batch {
 				batch[i] = docs[rand.Intn(len(docs))]
 			}
@@ -5059,7 +5480,7 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 			model.AdamStep(deltaParams, "delta", lr)
 		}
 
-		if step%100 == 0 {
+		if step%10 == 0 {
 			fmt.Printf("  train step %d/%d | loss %.4f | lr %.5f\n", step, steps, lastLossVal, lr)
 		}
 	}
@@ -5094,7 +5515,9 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		// Rebuild field from current corpus (the organism re-reads its own physics)
 		if len(docs) > 0 {
 			field.BuildFromCorpus(tok, docs)
+			model.mu.Lock()
 			model.corpusField = field // share with GenerateSentence for adaptive blend
+			model.mu.Unlock()
 		}
 
 		// Tokenizer evolution
@@ -5103,29 +5526,59 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		if bpeEnabled || bpeRetrained {
 			model.mu.Lock()
 			model.MaybeExpandVocab(tok.VocabSize)
-			model.mu.Unlock()
 			SaveCheckpoint(model, tok, "")
+			model.mu.Unlock()
 		}
 
 		// Per-stage warmup: if model grew since last warmup, train before continuing
 		currentStage := model.CurrentGrowthStage()
 		if currentStage > model.lastWarmupStage && len(docs) > 0 {
+			// Optional warmup coordination through training queue (for Mac 8GB)
+			warmupLocked := false
+			if CFG.CoordinateWarmup && swarm != nil {
+				for !swarm.AcquireTrainingLock() {
+					time.Sleep(5 * time.Second)
+				}
+				warmupLocked = true
+			}
+
 			embryoEmbd := CFG.GrowthStages[0][1]
-			warmupScale := model.NEmbd / embryoEmbd
+			warmupScale := int(math.Ceil(math.Sqrt(float64(model.NEmbd) / float64(embryoEmbd))))
 			if warmupScale < 1 {
 				warmupScale = 1
 			}
 			effectiveWarmup := CFG.WarmupSteps * warmupScale
-			fmt.Printf("[trainer] warmup for stage %d (embd=%d) — %d steps (scaled %dx)\n",
-				currentStage, model.NEmbd, effectiveWarmup, warmupScale)
-			trainSteps(model, tok, docs, effectiveWarmup, true, true)
+			backpropSteps := int(float64(effectiveWarmup) * 0.6)
+			notorchDeltaSteps := effectiveWarmup - backpropSteps
+			fmt.Printf("[trainer] warmup for stage %d (embd=%d) — %d steps total (%d backprop + %d notorch, sqrt-scaled %dx)\n",
+				currentStage, model.NEmbd, effectiveWarmup, backpropSteps, notorchDeltaSteps, warmupScale)
+			// Phase A: backprop with progressive sequence length (short→full)
+			earlySteps := int(float64(backpropSteps) * 0.4)
+			midSteps := int(float64(backpropSteps) * 0.3)
+			lateSteps := backpropSteps - earlySteps - midSteps
+			trainSteps(model, tok, docs, earlySteps, true, true, 8, 1)   // very short seqs, batch=1
+			trainSteps(model, tok, docs, midSteps, true, true, 16, 1)    // short seqs, batch=1
+			trainSteps(model, tok, docs, lateSteps, true, true, 32, 1)   // medium seqs, batch=1
+			// Phase B: notorch for delta adapters (40%, no autograd = much faster)
+			notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)
+			model.mu.Lock()
 			model.lastWarmupStage = currentStage
 			SaveCheckpoint(model, tok, "")
+			model.mu.Unlock()
+
+			if warmupLocked && swarm != nil {
+				swarm.ReleaseTrainingLock()
+			}
 			dbLogGrowth(db, model, tok, docs, 0.0, fmt.Sprintf("warmup_stage_%d", currentStage))
 			fmt.Printf("[trainer] warmup complete at stage %d. base may freeze now, like a proud fossil.\n", currentStage)
 		}
 
 		if model.lastWarmupStage >= 0 && qbuf.ShouldTrigger() && len(docs) > 0 {
+			// Training queue: acquire lock before micro-burst (swarm coordination)
+			if swarm != nil && !swarm.AcquireTrainingLock() {
+				continue // someone else is training, skip this tick
+			}
+
 			snapBytes, snapNovelty := qbuf.SnapshotStats()
 			fmt.Printf("[trainer] micro-train burst (%d bytes, novelty %.2f) — and lo, it feeds again.\n",
 				snapBytes, snapNovelty)
@@ -5147,27 +5600,19 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// IMMUNE SYSTEM: snapshot before burst
 			preDirection, preMag := model.GammaContrastiveProjection()
 			deltaSnap := model.SnapshotDeltas()
-			model.mu.Unlock()
 
-			// Apply syntropy-adjusted learning rate + accum override
-			originalLR := CFG.LearningRate
-			CFG.LearningRate = originalLR * lrMul
-			originalAccum := CFG.AccumSteps
-			if decision.AccumOverride > 0 {
-				CFG.AccumSteps = decision.AccumOverride
-			}
-
-			// Update temperature bridge (thread-safe via model lock already released)
+			// Update temperature bridge (under model.mu — fix race)
 			model.syntropyTempOff = decision.TempOffset
 
-			// Measure loss before burst for self-meta-learning
+			// Measure loss before burst (under model.mu — fix race on lastHidden/layerInputs)
 			lossBefore := model.QuickLoss(tok, docs, 4)
+			model.mu.Unlock()
 
-			trainBase := !CFG.FreezeBaseAfterWarm
-			trainSteps(model, tok, docs, CFG.MicroSteps, trainBase, true)
+			// Apply syntropy-adjusted learning rate for notorch (local var, not mutating CFG)
+			burstLR := CFG.NotorchLR * lrMul
 
-			CFG.LearningRate = originalLR   // restore
-			CFG.AccumSteps = originalAccum  // restore
+			// notorch: gradient-free delta training (no backward pass, no compute graph)
+			notorchTrainSteps(model, tok, docs, CFG.MicroSteps, burstLR)
 
 			model.mu.Lock()
 			// Measure loss after burst
@@ -5194,6 +5639,11 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			}
 			model.mu.Unlock()
 
+			// Training queue: release lock after burst completes
+			if swarm != nil {
+				swarm.ReleaseTrainingLock()
+			}
+
 			qbuf.Reset()
 
 			// Delta module growth — influenced by syntropy
@@ -5206,8 +5656,8 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				fmt.Printf("[trainer] growing new delta module (total: %d) — new soul appended.\n", len(model.Deltas)+1)
 				model.mu.Lock()
 				model.AddDeltaModule(1.0)
-				model.mu.Unlock()
 				SaveCheckpoint(model, tok, "")
+				model.mu.Unlock()
 			}
 
 			// Ecology: mitosis / hibernation
@@ -5232,12 +5682,14 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// Write: generate and share with ecology
 			dnaWrite(element, model, tok, field, docs, tickCount)
 			// Read: consume other organisms' output → corpus grows → ontogenesis unlocks
-			if consumed := dnaRead(element, CFG.CorpusPath); consumed > 0 {
+			if consumed := dnaRead(element, CFG.CorpusPath, qbuf, tok); consumed > 0 {
 				// Reload corpus with new food
 				docs = loadCorpusLines(CFG.CorpusPath)
 				if len(docs) > 0 {
 					field.BuildFromCorpus(tok, docs)
+					model.mu.Lock()
 					model.corpusField = field
+					model.mu.Unlock()
 				}
 			}
 		}
@@ -5250,6 +5702,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				corpusChars = int(fi.Size())
 			}
 			model.mu.Lock()
+			fmt.Printf("[debug-onto] tick=%d corpus=%d stage=%d freeze=%d\n", tickCount, corpusChars, model.CurrentGrowthStage(), model.growthFreezeRemaining)
 			if model.MaybeGrowArchitecture(corpusChars) {
 				SaveCheckpoint(model, tok, "")
 				nP := 0
@@ -5264,11 +5717,13 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 		// Swarm heartbeat (every 10 ticks)
 		if swarm != nil && tickCount%10 == 0 {
+			model.mu.Lock()
 			stage := model.CurrentGrowthStage()
 			nP := 0
 			for _, m := range model.Base {
 				nP += m.Nout * m.Nin
 			}
+			model.mu.Unlock()
 			lastEntropy := 0.0
 			if len(syntracker.EntropyHistory) > 0 {
 				lastEntropy = syntracker.EntropyHistory[len(syntracker.EntropyHistory)-1]
@@ -5449,16 +5904,26 @@ func main() {
 			if stage >= 0 && stage < len(stageNames) {
 				stageName = stageNames[stage]
 			}
-			// Train warmup at current stage (scaled by embedding ratio)
+			// Train warmup at current stage (sqrt scaling + split warmup)
 			embryoEmbd := CFG.GrowthStages[0][1]
-			warmupScale := model.NEmbd / embryoEmbd
+			warmupScale := int(math.Ceil(math.Sqrt(float64(model.NEmbd) / float64(embryoEmbd))))
 			if warmupScale < 1 {
 				warmupScale = 1
 			}
 			effectiveWarmup := CFG.WarmupSteps * warmupScale
-			fmt.Printf("[init] Stage %d (%s): embd=%d, layer=%d, head=%d — warmup %d steps (scaled %dx)\n",
-				stage, stageName, model.NEmbd, model.NLayer, model.NHead, effectiveWarmup, warmupScale)
-			trainSteps(model, tok, docs, effectiveWarmup, true, true)
+			backpropSteps := int(float64(effectiveWarmup) * 0.6)
+			notorchDeltaSteps := effectiveWarmup - backpropSteps
+			fmt.Printf("[init] Stage %d (%s): embd=%d, layer=%d, head=%d — warmup %d steps (%d backprop + %d notorch, sqrt-scaled %dx)\n",
+				stage, stageName, model.NEmbd, model.NLayer, model.NHead, effectiveWarmup, backpropSteps, notorchDeltaSteps, warmupScale)
+			// Phase A: backprop with progressive sequence length (short→full)
+			earlySteps := int(float64(backpropSteps) * 0.4)
+			midSteps := int(float64(backpropSteps) * 0.3)
+			lateSteps := backpropSteps - earlySteps - midSteps
+			trainSteps(model, tok, docs, earlySteps, true, true, 8, 1)   // very short seqs, batch=1
+			trainSteps(model, tok, docs, midSteps, true, true, 16, 1)    // short seqs, batch=1
+			trainSteps(model, tok, docs, lateSteps, true, true, 32, 1)   // medium seqs, batch=1
+			// Phase B: notorch for delta adapters (40%, no autograd = much faster)
+			notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)
 			model.lastWarmupStage = stage
 			SaveCheckpoint(model, tok, "")
 
@@ -5574,6 +6039,9 @@ func main() {
 		freshDocs := loadCorpusLines(CFG.CorpusPath)
 		if len(freshDocs) > 0 {
 			cooccur.BuildFromCorpus(tok, freshDocs)
+			model.mu.Lock()
+			model.corpusField = cooccur // sync REPL cooccur with model.corpusField
+			model.mu.Unlock()
 		}
 
 		// Self-enrichment: user input enriches corpus field (AFTER rebuild, so it's not wiped)
@@ -5624,8 +6092,11 @@ func main() {
 		// Low entropy = coherent speech = higher weight (Stanley's resonance weighting)
 		if len(answer) > 3 {
 			selfWeight := 1.0
-			if model.lastGenEntropy > 0 {
-				selfWeight = 2.0 - model.lastGenEntropy
+			model.mu.Lock()
+			lastEnt := model.lastGenEntropy
+			model.mu.Unlock()
+			if lastEnt > 0 {
+				selfWeight = 2.0 - lastEnt
 				if selfWeight < 0.3 {
 					selfWeight = 0.3
 				}
@@ -5642,6 +6113,8 @@ func main() {
 	}
 
 	close(stop)
+	model.mu.Lock()
 	SaveCheckpoint(model, tok, "")
+	model.mu.Unlock()
 	swarm.Unregister()
 }
