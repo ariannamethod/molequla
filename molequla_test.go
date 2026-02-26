@@ -635,7 +635,9 @@ func TestDnaReadWriteFilesystem(t *testing.T) {
 	os.Chdir(workDir)
 
 	// dnaRead looks for ../dna/output/{elem}/ relative to cwd
-	added := dnaRead("earth", corpusPath)
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	added := dnaRead("earth", corpusPath, qb, tok)
 
 	if added <= 0 {
 		t.Errorf("dnaRead should have consumed air's DNA, got added=%d", added)
@@ -672,7 +674,9 @@ func TestDnaReadSkipsSelf(t *testing.T) {
 	os.Chdir(workDir)
 
 	// Earth should NOT consume its own DNA
-	added := dnaRead("earth", corpusPath)
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	added := dnaRead("earth", corpusPath, qb, tok)
 	if added != 0 {
 		t.Errorf("earth should not consume its own DNA, got added=%d", added)
 	}
@@ -700,7 +704,9 @@ func TestDnaReadSkipsShortFiles(t *testing.T) {
 	defer os.Chdir(origWd)
 	os.Chdir(workDir)
 
-	added := dnaRead("earth", corpusPath)
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	added := dnaRead("earth", corpusPath, qb, tok)
 	if added != 0 {
 		t.Errorf("short files (<10 chars) should be skipped, got added=%d", added)
 	}
@@ -713,7 +719,9 @@ func TestDnaReadSkipsShortFiles(t *testing.T) {
 }
 
 func TestDnaReadEmptyElement(t *testing.T) {
-	added := dnaRead("", "/dev/null")
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	added := dnaRead("", "/dev/null", qb, tok)
 	if added != 0 {
 		t.Errorf("empty element should return 0, got %d", added)
 	}
@@ -1034,5 +1042,1530 @@ func TestDeltaAdapterGrowDims(t *testing.T) {
 	}
 	if da.B.Nin != 5 {
 		t.Errorf("B.Nin should be 5 after grow, got %d", da.B.Nin)
+	}
+}
+
+// ============================================================
+// AUTOGRAD GRADIENT FLOW — the beating heart of backprop
+// ============================================================
+
+func TestVecAddGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{1, 2, 3})
+	b := NewVec([]float64{4, 5, 6})
+	c := a.Add(b)
+	// Forward check
+	if c.Data[0] != 5 || c.Data[1] != 7 || c.Data[2] != 9 {
+		t.Fatalf("Add forward wrong: %v", c.Data)
+	}
+	// Backward
+	c.Grad = []float64{1, 1, 1}
+	Backward(c)
+	for i := 0; i < 3; i++ {
+		if a.Grad[i] != 1.0 {
+			t.Errorf("a.Grad[%d]=%f, want 1.0", i, a.Grad[i])
+		}
+		if b.Grad[i] != 1.0 {
+			t.Errorf("b.Grad[%d]=%f, want 1.0", i, b.Grad[i])
+		}
+	}
+}
+
+func TestVecSubGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{5, 7})
+	b := NewVec([]float64{2, 3})
+	c := a.Sub(b)
+	if c.Data[0] != 3 || c.Data[1] != 4 {
+		t.Fatalf("Sub forward wrong: %v", c.Data)
+	}
+	c.Grad = []float64{1, 1}
+	Backward(c)
+	if a.Grad[0] != 1.0 || a.Grad[1] != 1.0 {
+		t.Errorf("a.Grad wrong: %v", a.Grad)
+	}
+	if b.Grad[0] != -1.0 || b.Grad[1] != -1.0 {
+		t.Errorf("b.Grad wrong (should be -1): %v", b.Grad)
+	}
+}
+
+func TestVecNegGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{3, -2})
+	c := a.Neg()
+	if c.Data[0] != -3 || c.Data[1] != 2 {
+		t.Fatalf("Neg forward wrong: %v", c.Data)
+	}
+	c.Grad = []float64{1, 1}
+	Backward(c)
+	if a.Grad[0] != -1.0 || a.Grad[1] != -1.0 {
+		t.Errorf("a.Grad wrong: %v (want [-1,-1])", a.Grad)
+	}
+}
+
+func TestVecMulVecGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{2, 3})
+	b := NewVec([]float64{4, 5})
+	c := a.MulVec(b)
+	if c.Data[0] != 8 || c.Data[1] != 15 {
+		t.Fatalf("MulVec forward wrong: %v", c.Data)
+	}
+	c.Grad = []float64{1, 1}
+	Backward(c)
+	// d(a*b)/da = b, d(a*b)/db = a
+	if a.Grad[0] != 4.0 || a.Grad[1] != 5.0 {
+		t.Errorf("a.Grad wrong: %v (want [4,5])", a.Grad)
+	}
+	if b.Grad[0] != 2.0 || b.Grad[1] != 3.0 {
+		t.Errorf("b.Grad wrong: %v (want [2,3])", b.Grad)
+	}
+}
+
+func TestVecScaleGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{2, 3})
+	c := a.Scale(5.0)
+	if c.Data[0] != 10 || c.Data[1] != 15 {
+		t.Fatalf("Scale forward wrong: %v", c.Data)
+	}
+	c.Grad = []float64{1, 1}
+	Backward(c)
+	if a.Grad[0] != 5.0 || a.Grad[1] != 5.0 {
+		t.Errorf("a.Grad wrong: %v (want [5,5])", a.Grad)
+	}
+}
+
+func TestVecAddScalarGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{1, 2})
+	c := a.AddScalar(10.0)
+	if c.Data[0] != 11 || c.Data[1] != 12 {
+		t.Fatalf("AddScalar forward wrong: %v", c.Data)
+	}
+	c.Grad = []float64{1, 1}
+	Backward(c)
+	if a.Grad[0] != 1.0 || a.Grad[1] != 1.0 {
+		t.Errorf("a.Grad wrong: %v (want [1,1])", a.Grad)
+	}
+}
+
+func TestVecReLUGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{3, -2, 0, 5})
+	c := a.ReLU()
+	expected := []float64{3, 0, 0, 5}
+	for i, v := range c.Data {
+		if v != expected[i] {
+			t.Errorf("ReLU[%d]=%f, want %f", i, v, expected[i])
+		}
+	}
+	c.Grad = []float64{1, 1, 1, 1}
+	Backward(c)
+	expectedGrad := []float64{1, 0, 0, 1} // grad passes only where input > 0
+	for i, g := range a.Grad {
+		if g != expectedGrad[i] {
+			t.Errorf("ReLU grad[%d]=%f, want %f", i, g, expectedGrad[i])
+		}
+	}
+}
+
+func TestVecSiLUGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{0.0})
+	c := a.SiLU()
+	// SiLU(0) = 0 * sigmoid(0) = 0 * 0.5 = 0
+	if math.Abs(c.Data[0]) > 1e-10 {
+		t.Errorf("SiLU(0)=%f, want 0", c.Data[0])
+	}
+	c.Grad = []float64{1.0}
+	Backward(c)
+	// d/dx[x*sigma(x)] at x=0 = sigma(0)(1 + 0*(1-sigma(0))) = 0.5
+	if math.Abs(a.Grad[0]-0.5) > 1e-6 {
+		t.Errorf("SiLU grad at 0=%f, want 0.5", a.Grad[0])
+	}
+}
+
+func TestVecDotGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{1, 2, 3})
+	b := NewVec([]float64{4, 5, 6})
+	c := a.Dot(b)
+	// 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+	if c.Data != 32 {
+		t.Fatalf("Dot forward wrong: %f (want 32)", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	// d(a.b)/da = b, d(a.b)/db = a
+	for i := 0; i < 3; i++ {
+		if a.Grad[i] != b.Data[i] {
+			t.Errorf("a.Grad[%d]=%f, want %f", i, a.Grad[i], b.Data[i])
+		}
+		if b.Grad[i] != a.Data[i] {
+			t.Errorf("b.Grad[%d]=%f, want %f", i, b.Grad[i], a.Data[i])
+		}
+	}
+}
+
+func TestVecMeanSqGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{3, 4})
+	c := a.MeanSq()
+	// (9+16)/2 = 12.5
+	if math.Abs(c.Data-12.5) > 1e-10 {
+		t.Fatalf("MeanSq forward wrong: %f (want 12.5)", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	// d/da[mean(a^2)] = 2*a/n
+	if math.Abs(a.Grad[0]-3.0) > 1e-10 { // 2*3/2 = 3
+		t.Errorf("a.Grad[0]=%f, want 3.0", a.Grad[0])
+	}
+	if math.Abs(a.Grad[1]-4.0) > 1e-10 { // 2*4/2 = 4
+		t.Errorf("a.Grad[1]=%f, want 4.0", a.Grad[1])
+	}
+}
+
+func TestVecElementGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{10, 20, 30})
+	c := a.Element(1)
+	if c.Data != 20 {
+		t.Fatalf("Element(1)=%f, want 20", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	if a.Grad[0] != 0 || a.Grad[1] != 1 || a.Grad[2] != 0 {
+		t.Errorf("Element grad wrong: %v (want [0,1,0])", a.Grad)
+	}
+}
+
+func TestVecSliceGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{1, 2, 3, 4, 5})
+	c := a.Slice(1, 4)
+	if len(c.Data) != 3 || c.Data[0] != 2 || c.Data[1] != 3 || c.Data[2] != 4 {
+		t.Fatalf("Slice wrong: %v", c.Data)
+	}
+	// Dot with weight vector creates scalar -> Backward sets scalar grad=1
+	w := NewVec([]float64{10, 20, 30})
+	loss := c.Dot(w)
+	Backward(loss)
+	expected := []float64{0, 10, 20, 30, 0}
+	for i, g := range a.Grad {
+		if math.Abs(g-expected[i]) > 1e-10 {
+			t.Errorf("Slice grad[%d]=%f, want %f", i, g, expected[i])
+		}
+	}
+}
+
+func TestConcatGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewVec([]float64{1, 2})
+	b := NewVec([]float64{3, 4, 5})
+	c := Concat([]*Vec{a, b})
+	if len(c.Data) != 5 {
+		t.Fatalf("Concat len=%d, want 5", len(c.Data))
+	}
+	if c.Data[0] != 1 || c.Data[2] != 3 || c.Data[4] != 5 {
+		t.Fatalf("Concat data wrong: %v", c.Data)
+	}
+	w := NewVec([]float64{10, 20, 30, 40, 50})
+	loss := c.Dot(w)
+	Backward(loss)
+	if a.Grad[0] != 10 || a.Grad[1] != 20 {
+		t.Errorf("a.Grad wrong: %v (want [10,20])", a.Grad)
+	}
+	if b.Grad[0] != 30 || b.Grad[1] != 40 || b.Grad[2] != 50 {
+		t.Errorf("b.Grad wrong: %v (want [30,40,50])", b.Grad)
+	}
+}
+
+func TestScalarAddSGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewScalar(3.0)
+	b := NewScalar(4.0)
+	c := a.AddS(b)
+	if c.Data != 7.0 {
+		t.Fatalf("AddS forward: %f, want 7", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	if a.Grad != 1.0 || b.Grad != 1.0 {
+		t.Errorf("AddS grad: a=%f b=%f, want 1,1", a.Grad, b.Grad)
+	}
+}
+
+func TestScalarMulSGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewScalar(3.0)
+	b := NewScalar(4.0)
+	c := a.MulS(b)
+	if c.Data != 12.0 {
+		t.Fatalf("MulS forward: %f, want 12", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	if a.Grad != 4.0 {
+		t.Errorf("a.Grad=%f, want 4", a.Grad)
+	}
+	if b.Grad != 3.0 {
+		t.Errorf("b.Grad=%f, want 3", b.Grad)
+	}
+}
+
+func TestScalarMulFGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewScalar(5.0)
+	c := a.MulF(3.0)
+	if c.Data != 15.0 {
+		t.Fatalf("MulF forward: %f, want 15", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	if a.Grad != 3.0 {
+		t.Errorf("a.Grad=%f, want 3", a.Grad)
+	}
+}
+
+func TestScalarSigmoidGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	a := NewScalar(0.0)
+	c := a.Sigmoid()
+	if math.Abs(c.Data-0.5) > 1e-10 {
+		t.Fatalf("Sigmoid(0)=%f, want 0.5", c.Data)
+	}
+	c.Grad = 1.0
+	Backward(c)
+	// d/dx sigmoid(x) at x=0 = sigma(0)*(1-sigma(0)) = 0.25
+	if math.Abs(a.Grad-0.25) > 1e-10 {
+		t.Errorf("Sigmoid grad at 0=%f, want 0.25", a.Grad)
+	}
+}
+
+func TestBackwardChainRule(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	// Test chain: c = (a + b) * a  where a=2, b=3
+	// c = (2+3)*2 = 10
+	// dc/da = (a+b) + a = 5+2 = 7
+	// dc/db = a = 2
+	a := NewVec([]float64{2})
+	b := NewVec([]float64{3})
+	sum := a.Add(b)
+	c := sum.MulVec(a)
+	c.Grad = []float64{1}
+	Backward(c)
+	if math.Abs(a.Grad[0]-7.0) > 1e-10 {
+		t.Errorf("chain rule: da=%f, want 7", a.Grad[0])
+	}
+	if math.Abs(b.Grad[0]-2.0) > 1e-10 {
+		t.Errorf("chain rule: db=%f, want 2", b.Grad[0])
+	}
+}
+
+func TestMatvecGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	// 2x3 matrix, 3-vec input
+	m := NewMatrixParam(2, 3, 0.0)
+	m.Rows[0] = NewVecWithGrad([]float64{1, 0, 0})
+	m.Rows[1] = NewVecWithGrad([]float64{0, 1, 0})
+	x := NewVec([]float64{3, 7, 11})
+	out := m.Matvec(x)
+	// out = [3, 7]
+	if out.Data[0] != 3.0 || out.Data[1] != 7.0 {
+		t.Fatalf("Matvec forward: %v, want [3,7]", out.Data)
+	}
+	out.Grad = []float64{1, 1}
+	Backward(out)
+	// d(loss)/d(x) = W^T @ grad_out = [[1,0],[0,1],[0,0]]^T @ [1,1] = [1,1,0]
+	if x.Grad[0] != 1.0 || x.Grad[1] != 1.0 || x.Grad[2] != 0.0 {
+		t.Errorf("Matvec x.Grad: %v, want [1,1,0]", x.Grad)
+	}
+	// d(loss)/d(W[0]) = grad_out[0] * x = 1 * [3,7,11] = [3,7,11]
+	if m.Rows[0].Grad[0] != 3.0 || m.Rows[0].Grad[1] != 7.0 {
+		t.Errorf("Matvec W[0].Grad: %v, want [3,7,11]", m.Rows[0].Grad)
+	}
+}
+
+func TestNewVecNoGradWhenDisabled(t *testing.T) {
+	gradEnabled.Store(false)
+	defer gradEnabled.Store(true)
+
+	v := NewVec([]float64{1, 2, 3})
+	if v.Grad != nil {
+		t.Error("NewVec should not allocate grad when gradEnabled=false")
+	}
+}
+
+func TestNewVecWithGradAlwaysAllocates(t *testing.T) {
+	gradEnabled.Store(false)
+	defer gradEnabled.Store(true)
+
+	v := NewVecWithGrad([]float64{1, 2, 3})
+	if v.Grad == nil {
+		t.Error("NewVecWithGrad should always allocate grad")
+	}
+	if len(v.Grad) != 3 {
+		t.Errorf("NewVecWithGrad grad len=%d, want 3", len(v.Grad))
+	}
+}
+
+// Test loss computation gradient flows through to logits
+func TestCrossEntropyLossGrad(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	logits := NewVec([]float64{1.0, 2.0, 3.0})
+	loss := CrossEntropyLoss(logits, 2) // target = class 2
+	loss.Grad = 1.0
+	Backward(loss)
+
+	// softmax probs for [1,2,3]: p = [0.09, 0.245, 0.665]
+	// grad for CE: p - one_hot(target) = [0.09, 0.245, -0.335]
+	// grad[target] should be negative (push logit up)
+	if logits.Grad[2] >= 0 {
+		t.Errorf("grad for correct class should be negative (push logit up), got %f", logits.Grad[2])
+	}
+	// grad for wrong classes should be positive (push logits down)
+	if logits.Grad[0] <= 0 || logits.Grad[1] <= 0 {
+		t.Errorf("grad for wrong classes should be positive, got [%f, %f]", logits.Grad[0], logits.Grad[1])
+	}
+	// Sum of softmax grads = 0
+	gradSum := logits.Grad[0] + logits.Grad[1] + logits.Grad[2]
+	if math.Abs(gradSum) > 1e-6 {
+		t.Errorf("CE grad sum should be ~0, got %f", gradSum)
+	}
+}
+
+// ============================================================
+// TOKENIZER BPE
+// ============================================================
+
+func TestNewEvolvingTokenizerBaseVocab(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"hello"})
+	// 256 byte tokens + BOS + EOS + PAD = 259
+	if tok.VocabSize != 259 {
+		t.Errorf("base vocab size=%d, want 259", tok.VocabSize)
+	}
+	if tok.Stoi["<BOS>"] != 256 {
+		t.Errorf("BOS id=%d, want 256", tok.Stoi["<BOS>"])
+	}
+	if tok.Stoi["<EOS>"] != 257 {
+		t.Errorf("EOS id=%d, want 257", tok.Stoi["<EOS>"])
+	}
+	if tok.Stoi["<PAD>"] != 258 {
+		t.Errorf("PAD id=%d, want 258", tok.Stoi["<PAD>"])
+	}
+}
+
+func TestEncodeDecodeRoundTrip(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"test"})
+	text := "Hello, World!"
+	ids := tok.Encode(text)
+	decoded := tok.Decode(ids)
+	if decoded != text {
+		t.Errorf("roundtrip failed: encoded %q, decoded %q", text, decoded)
+	}
+}
+
+func TestEncodeHasBOSEOS(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"test"})
+	ids := tok.Encode("hi")
+	if ids[0] != tok.Stoi["<BOS>"] {
+		t.Errorf("first token should be BOS, got %d", ids[0])
+	}
+	if ids[len(ids)-1] != tok.Stoi["<EOS>"] {
+		t.Errorf("last token should be EOS, got %d", ids[len(ids)-1])
+	}
+}
+
+func TestEncodeEmptyString(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"test"})
+	ids := tok.Encode("")
+	// Should just be BOS + EOS
+	if len(ids) != 2 {
+		t.Errorf("empty string should encode to [BOS, EOS], got len=%d", len(ids))
+	}
+}
+
+func TestTokenToBytes(t *testing.T) {
+	tests := []struct {
+		tok  string
+		want []byte
+	}{
+		{"0x48", []byte{0x48}},       // 'H'
+		{"0x65", []byte{0x65}},       // 'e'
+		{"0x48+0x65", []byte{0x48, 0x65}}, // "He"
+		{"<BOS>", nil},                // special token
+	}
+	for _, tt := range tests {
+		got := tokenToBytes(tt.tok)
+		if tt.want == nil && got != nil {
+			t.Errorf("tokenToBytes(%q)=%v, want nil", tt.tok, got)
+		} else if tt.want != nil {
+			if len(got) != len(tt.want) {
+				t.Errorf("tokenToBytes(%q) len=%d, want %d", tt.tok, len(got), len(tt.want))
+			} else {
+				for i := range got {
+					if got[i] != tt.want[i] {
+						t.Errorf("tokenToBytes(%q)[%d]=%d, want %d", tt.tok, i, got[i], tt.want[i])
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestUnicodeSegment(t *testing.T) {
+	segs := unicodeSegment("Hello 42!")
+	// "Hello" = letters, " " = space, "42" = digits, "!" = punctuation
+	if len(segs) != 4 {
+		t.Fatalf("unicodeSegment(\"Hello 42!\") = %d segments, want 4", len(segs))
+	}
+	if string(segs[0]) != "Hello" {
+		t.Errorf("seg[0]=%q, want \"Hello\"", string(segs[0]))
+	}
+	if string(segs[1]) != " " {
+		t.Errorf("seg[1]=%q, want \" \"", string(segs[1]))
+	}
+	if string(segs[2]) != "42" {
+		t.Errorf("seg[2]=%q, want \"42\"", string(segs[2]))
+	}
+	if string(segs[3]) != "!" {
+		t.Errorf("seg[3]=%q, want \"!\"", string(segs[3]))
+	}
+}
+
+func TestUnicodeSegmentEmpty(t *testing.T) {
+	segs := unicodeSegment("")
+	if segs != nil {
+		t.Errorf("unicodeSegment(\"\") should return nil, got %v", segs)
+	}
+}
+
+func TestUnicodeSegmentUTF8(t *testing.T) {
+	segs := unicodeSegment("Привет")
+	// All letters — should be one segment
+	if len(segs) != 1 {
+		t.Errorf("unicodeSegment(\"Привет\") = %d segments, want 1", len(segs))
+	}
+	if string(segs[0]) != "Привет" {
+		t.Errorf("seg[0]=%q, want \"Привет\"", string(segs[0]))
+	}
+}
+
+func TestTrainBPEMergesTokens(t *testing.T) {
+	docs := []string{"aaaa bbbb aaaa bbbb aaaa"}
+	tok := NewEvolvingTokenizer(docs)
+	origVocab := tok.VocabSize
+	tok.TrainBPE(docs, 5)
+
+	if tok.VocabSize <= origVocab {
+		t.Errorf("BPE should add tokens: vocab was %d, now %d", origVocab, tok.VocabSize)
+	}
+	if len(tok.Merges) == 0 {
+		t.Error("BPE should produce merges")
+	}
+}
+
+func TestBPEEncodeDecodeRoundTrip(t *testing.T) {
+	docs := []string{"the cat sat on the mat the cat sat on the mat"}
+	tok := NewEvolvingTokenizer(docs)
+	tok.TrainBPE(docs, 20)
+	tok.BPEEnabled = true
+
+	text := "the cat"
+	ids := tok.Encode(text)
+	decoded := tok.Decode(ids)
+	if decoded != text {
+		t.Errorf("BPE roundtrip failed: %q -> %v -> %q", text, ids, decoded)
+	}
+}
+
+func TestBPECompressionRatio(t *testing.T) {
+	text := "abcabc abcabc abcabc abcabc"
+	docs := []string{text}
+	tok := NewEvolvingTokenizer(docs)
+
+	// Without BPE: each byte = 1 token (plus BOS+EOS)
+	idsNoBPE := tok.Encode(text)
+	noBPELen := len(idsNoBPE)
+
+	// Train BPE and re-encode
+	tok.TrainBPE(docs, 30)
+	tok.BPEEnabled = true
+	idsWithBPE := tok.Encode(text)
+	withBPELen := len(idsWithBPE)
+
+	if withBPELen >= noBPELen {
+		t.Errorf("BPE should compress: without=%d, with=%d", noBPELen, withBPELen)
+	}
+}
+
+func TestMaybeEnableBPE(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.EnableBPEAfterChars = 100
+	CFG.BPENumMerges = 10
+
+	smallDoc := "short"
+	tok := NewEvolvingTokenizer([]string{smallDoc})
+	enabled := tok.MaybeEnableBPE([]string{smallDoc})
+	if enabled {
+		t.Error("should not enable BPE with small corpus")
+	}
+
+	bigDoc := make([]byte, 200)
+	for i := range bigDoc {
+		bigDoc[i] = 'a' + byte(i%26)
+	}
+	tok2 := NewEvolvingTokenizer([]string{string(bigDoc)})
+	enabled2 := tok2.MaybeEnableBPE([]string{string(bigDoc)})
+	if !enabled2 {
+		t.Error("should enable BPE with large corpus")
+	}
+	if !tok2.BPEEnabled {
+		t.Error("BPEEnabled should be true after MaybeEnableBPE returns true")
+	}
+}
+
+// ============================================================
+// SAMPLING
+// ============================================================
+
+func TestSoftmaxProbsSumToOne(t *testing.T) {
+	probs := SoftmaxProbs([]float64{1, 2, 3, 4})
+	sum := 0.0
+	for _, p := range probs {
+		sum += p
+	}
+	if math.Abs(sum-1.0) > 1e-10 {
+		t.Errorf("softmax probs sum=%f, want 1.0", sum)
+	}
+}
+
+func TestSoftmaxProbsMonotone(t *testing.T) {
+	probs := SoftmaxProbs([]float64{1, 2, 3})
+	if probs[0] >= probs[1] || probs[1] >= probs[2] {
+		t.Errorf("softmax should be monotone increasing: %v", probs)
+	}
+}
+
+func TestSoftmaxProbsNumericalStability(t *testing.T) {
+	// Very large logits should not cause NaN/Inf
+	probs := SoftmaxProbs([]float64{1000, 1001, 1002})
+	for i, p := range probs {
+		if math.IsNaN(p) || math.IsInf(p, 0) {
+			t.Errorf("softmax[%d] = %f with large logits", i, p)
+		}
+	}
+	sum := 0.0
+	for _, p := range probs {
+		sum += p
+	}
+	if math.Abs(sum-1.0) > 1e-6 {
+		t.Errorf("softmax sum with large logits=%f", sum)
+	}
+}
+
+func TestTopKTopPSampleRespectsTopK(t *testing.T) {
+	// Uniform probs, k=1 should always pick the first (highest)
+	probs := []float64{0.4, 0.3, 0.2, 0.1}
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		idx := TopKTopPSample(probs, 1, 1.0, 0.0, 1.0)
+		counts[idx]++
+	}
+	if counts[0] != 100 {
+		t.Errorf("top-k=1 should always pick idx 0, got counts: %v", counts)
+	}
+}
+
+func TestTopKTopPSampleRespectsTopP(t *testing.T) {
+	// With p=0.5, only first token (0.6) should be in nucleus
+	probs := []float64{0.6, 0.2, 0.1, 0.1}
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		idx := TopKTopPSample(probs, 0, 0.5, 0.0, 1.0)
+		counts[idx]++
+	}
+	if counts[0] != 100 {
+		t.Errorf("top-p=0.5 with probs[0]=0.6 should always pick idx 0, got: %v", counts)
+	}
+}
+
+func TestTopKTopPSampleRespectsMinP(t *testing.T) {
+	// minP=0.5 means only tokens with prob >= 0.5 * max_prob are kept
+	probs := []float64{0.8, 0.1, 0.05, 0.05}
+	// threshold = 0.5 * 0.8 = 0.4, only probs[0] passes
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		idx := TopKTopPSample(probs, 0, 1.0, 0.5, 1.0)
+		counts[idx]++
+	}
+	if counts[0] != 100 {
+		t.Errorf("minP=0.5 should filter to only idx 0, got: %v", counts)
+	}
+}
+
+func TestTopKTopPSampleValidIndex(t *testing.T) {
+	probs := SoftmaxProbs([]float64{1, 2, 3, 4, 5})
+	for i := 0; i < 50; i++ {
+		idx := TopKTopPSample(probs, 3, 0.9, 0.05, 0.95)
+		if idx < 0 || idx >= len(probs) {
+			t.Fatalf("sample returned invalid index %d for len=%d", idx, len(probs))
+		}
+	}
+}
+
+func TestTopKTopPSampleZeroProbs(t *testing.T) {
+	probs := []float64{0, 0, 0, 0}
+	// Should not panic, return some valid index
+	idx := TopKTopPSample(probs, 0, 1.0, 0.0, 1.0)
+	if idx < 0 || idx >= len(probs) {
+		t.Fatalf("zero probs: invalid index %d", idx)
+	}
+}
+
+func TestClipParams(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	v := NewVec([]float64{1, 2})
+	v.Grad = []float64{5.0, -3.0}
+	ClipParams([]*Vec{v}, 2.0)
+	if v.Grad[0] != 2.0 {
+		t.Errorf("grad[0] should be clipped to 2.0, got %f", v.Grad[0])
+	}
+	if v.Grad[1] != -2.0 {
+		t.Errorf("grad[1] should be clipped to -2.0, got %f", v.Grad[1])
+	}
+}
+
+func TestClipParamsNoop(t *testing.T) {
+	gradEnabled.Store(true)
+	defer gradEnabled.Store(false)
+
+	v := NewVec([]float64{1})
+	v.Grad = []float64{0.5}
+	ClipParams([]*Vec{v}, 1.0)
+	if v.Grad[0] != 0.5 {
+		t.Errorf("grad should not be clipped when within range: %f", v.Grad[0])
+	}
+}
+
+// ============================================================
+// SYNTROPY TRACKER
+// ============================================================
+
+func TestNewSyntropyTracker(t *testing.T) {
+	st := NewSyntropyTracker()
+	if st.LastAction != "none" {
+		t.Errorf("initial action=%q, want \"none\"", st.LastAction)
+	}
+	if len(st.BurstHistory) != 0 {
+		t.Errorf("initial BurstHistory len=%d, want 0", len(st.BurstHistory))
+	}
+}
+
+func TestSyntropyTrackerRecordBurst(t *testing.T) {
+	st := NewSyntropyTracker()
+	st.RecordBurst("boost", 3.0, 2.5)
+	st.RecordBurst("dampen", 2.5, 2.3)
+	if len(st.BurstHistory) != 2 {
+		t.Errorf("BurstHistory len=%d, want 2", len(st.BurstHistory))
+	}
+	if st.BurstHistory[0].Action != "boost" {
+		t.Errorf("burst[0].Action=%q, want \"boost\"", st.BurstHistory[0].Action)
+	}
+}
+
+func TestSyntropyTrackerBurstHistoryCap(t *testing.T) {
+	st := NewSyntropyTracker()
+	for i := 0; i < 20; i++ {
+		st.RecordBurst("test", float64(i), float64(i-1))
+	}
+	if len(st.BurstHistory) != 16 {
+		t.Errorf("BurstHistory should cap at 16, got %d", len(st.BurstHistory))
+	}
+}
+
+func TestSyntropyTrackerActionEffectiveness(t *testing.T) {
+	st := NewSyntropyTracker()
+	st.RecordBurst("boost", 3.0, 2.0) // delta = -1.0
+	st.RecordBurst("boost", 2.0, 1.5) // delta = -0.5
+	st.RecordBurst("dampen", 1.5, 1.6) // delta = +0.1
+
+	mean, count := st.ActionEffectiveness("boost")
+	if count != 2 {
+		t.Errorf("boost count=%d, want 2", count)
+	}
+	// mean = (-1.0 + -0.5) / 2 = -0.75
+	if math.Abs(mean-(-0.75)) > 1e-10 {
+		t.Errorf("boost mean delta=%f, want -0.75", mean)
+	}
+
+	mean2, count2 := st.ActionEffectiveness("dampen")
+	if count2 != 1 || math.Abs(mean2-0.1) > 1e-10 {
+		t.Errorf("dampen: mean=%f count=%d, want 0.1/1", mean2, count2)
+	}
+
+	_, count3 := st.ActionEffectiveness("unknown")
+	if count3 != 0 {
+		t.Errorf("unknown action count=%d, want 0", count3)
+	}
+}
+
+func TestSyntropyDecideActionSteady(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	st := NewSyntropyTracker()
+	st.SyntropyTrend = 0.0 // flat
+	st.FieldDeviation = 1.0 // in sweet spot
+	st.PurposeAlignment = 0.0
+
+	d := st.DecideAction()
+	if d.Action != "steady" {
+		t.Errorf("expected steady, got %q", d.Action)
+	}
+	if d.LRMultiplier != 1.0 {
+		t.Errorf("steady LR multiplier=%f, want 1.0", d.LRMultiplier)
+	}
+}
+
+func TestSyntropyDecideActionDampen(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	st := NewSyntropyTracker()
+	st.SyntropyTrend = -0.05 // dissolving
+	st.FieldDeviation = 1.0
+	st.PurposeAlignment = 0.0
+
+	d := st.DecideAction()
+	if d.Action != "dampen" {
+		t.Errorf("expected dampen, got %q", d.Action)
+	}
+	if d.LRMultiplier >= 1.0 {
+		t.Errorf("dampen should reduce LR, got %f", d.LRMultiplier)
+	}
+}
+
+func TestSyntropyDecideActionGround(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	st := NewSyntropyTracker()
+	st.SyntropyTrend = 0.0
+	st.FieldDeviation = 100.0 // way too high
+	st.PurposeAlignment = 0.0
+
+	d := st.DecideAction()
+	if d.Action != "ground" {
+		t.Errorf("expected ground (high deviation), got %q", d.Action)
+	}
+}
+
+func TestSyntropyDecideActionExplore(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	st := NewSyntropyTracker()
+	st.SyntropyTrend = 0.0
+	st.FieldDeviation = 0.001 // too low = parroting
+	st.PurposeAlignment = 0.0
+
+	d := st.DecideAction()
+	if d.Action != "explore" {
+		t.Errorf("expected explore (low deviation), got %q", d.Action)
+	}
+}
+
+func TestSyntropyDecideActionRealign(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	st := NewSyntropyTracker()
+	st.SyntropyTrend = 0.0
+	st.FieldDeviation = 1.0
+	st.PurposeAlignment = -0.5 // purpose opposes gamma
+
+	d := st.DecideAction()
+	if d.Action != "realign" {
+		t.Errorf("expected realign (negative purpose alignment), got %q", d.Action)
+	}
+	if d.LRMultiplier >= 1.0 {
+		t.Errorf("realign should halve LR, got %f", d.LRMultiplier)
+	}
+}
+
+func TestSyntropyDecideActionSelfMetaLearning(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	st := NewSyntropyTracker()
+	// Record history showing "boost" consistently makes things worse
+	for i := 0; i < 4; i++ {
+		st.RecordBurst("boost", 2.0, 2.2) // loss went UP
+	}
+
+	// Set up conditions for "boost"
+	st.SyntropyTrend = 0.05 // rising
+	st.FieldDeviation = 1.0 // sweet spot
+	st.PurposeAlignment = 0.1 // not enough for amplify
+
+	d := st.DecideAction()
+	// Self-meta-learning should downgrade "boost" to "steady" since it historically hurts
+	if d.Action != "steady" {
+		t.Errorf("self-meta-learning should downgrade boost to steady, got %q", d.Action)
+	}
+}
+
+func TestSyntropyIsSustainedOverload(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.SyntropyWindow = 8
+	CFG.EntropyHigh = 1.5
+
+	st := NewSyntropyTracker()
+	// Not enough history
+	if st.isSustainedOverload() {
+		t.Error("should not be overloaded with no history")
+	}
+
+	// Fill with high entropy
+	for i := 0; i < 8; i++ {
+		st.EntropyHistory = append(st.EntropyHistory, 2.0) // all above EntropyHigh
+	}
+	st.SyntropyTrend = -0.05 // dissolving
+
+	if !st.isSustainedOverload() {
+		t.Error("should detect sustained overload")
+	}
+}
+
+func TestSyntropyShouldHibernateNoPeers(t *testing.T) {
+	st := NewSyntropyTracker()
+	// No SwarmInfo
+	if st.shouldHibernate() {
+		t.Error("should not hibernate without peers")
+	}
+}
+
+// ============================================================
+// QUANTUM BUFFER
+// ============================================================
+
+func TestNewQuantumBuffer(t *testing.T) {
+	qb := NewQuantumBuffer()
+	if qb.AccumulatedBytes != 0 {
+		t.Errorf("initial AccumulatedBytes=%d, want 0", qb.AccumulatedBytes)
+	}
+	if qb.TotalTokens != 0 {
+		t.Errorf("initial TotalTokens=%d, want 0", qb.TotalTokens)
+	}
+}
+
+func TestQuantumBufferFeed(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	qb.Feed("hello world", tok)
+	if qb.AccumulatedBytes != 11 {
+		t.Errorf("AccumulatedBytes=%d, want 11", qb.AccumulatedBytes)
+	}
+	if qb.TotalTokens == 0 {
+		t.Error("TotalTokens should be > 0 after Feed")
+	}
+	if len(qb.UniqueTokens) == 0 {
+		t.Error("UniqueTokens should be > 0 after Feed")
+	}
+}
+
+func TestQuantumBufferNovelty(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+
+	// All unique text -> high novelty
+	qb.Feed("abcdefghij", tok)
+	bytes1, novelty1 := qb.SnapshotStats()
+	if bytes1 != 10 {
+		t.Errorf("bytes=%d, want 10", bytes1)
+	}
+	if novelty1 < 0.5 {
+		t.Errorf("novelty should be high for unique text, got %f", novelty1)
+	}
+
+	// Repeated text -> lower novelty
+	qb2 := NewQuantumBuffer()
+	qb2.Feed("aaaaaaaaaa", tok)
+	_, novelty2 := qb2.SnapshotStats()
+	if novelty2 >= novelty1 {
+		t.Errorf("repeated text should have lower novelty: %f >= %f", novelty2, novelty1)
+	}
+}
+
+func TestQuantumBufferShouldTrigger(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.QBMinBytes = 100
+	CFG.QBMinNovelty = 0.99
+	CFG.QBCooldownSeconds = 0.0 // no cooldown for testing
+
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	qb.Feed("aaaa", tok)
+	if qb.ShouldTrigger() {
+		t.Error("should not trigger with < QBMinBytes and low novelty")
+	}
+
+	// Feed enough bytes
+	bigText := make([]byte, 200)
+	for i := range bigText {
+		bigText[i] = byte('a' + i%26)
+	}
+	qb2 := NewQuantumBuffer()
+	qb2.Feed(string(bigText), tok)
+	if !qb2.ShouldTrigger() {
+		t.Error("should trigger with enough bytes")
+	}
+}
+
+func TestQuantumBufferReset(t *testing.T) {
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	qb.Feed("hello world this is a test", tok)
+	if qb.AccumulatedBytes == 0 {
+		t.Fatal("should have bytes before reset")
+	}
+	qb.Reset()
+	if qb.AccumulatedBytes != 0 {
+		t.Errorf("AccumulatedBytes=%d after reset, want 0", qb.AccumulatedBytes)
+	}
+	if qb.TotalTokens != 0 {
+		t.Errorf("TotalTokens=%d after reset, want 0", qb.TotalTokens)
+	}
+	if len(qb.UniqueTokens) != 0 {
+		t.Errorf("UniqueTokens len=%d after reset, want 0", len(qb.UniqueTokens))
+	}
+}
+
+func TestQuantumBufferCooldown(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.QBMinBytes = 10
+	CFG.QBCooldownSeconds = 9999.0 // very long cooldown
+
+	tok := NewEvolvingTokenizer([]string{"test"})
+	qb := NewQuantumBuffer()
+	qb.Reset() // sets LastBurstTime to now
+	qb.Feed("this is enough bytes for trigger", tok)
+
+	if qb.ShouldTrigger() {
+		t.Error("should not trigger during cooldown")
+	}
+}
+
+// ============================================================
+// COOCCUR FIELD
+// ============================================================
+
+func TestNewCooccurField(t *testing.T) {
+	cf := NewCooccurField()
+	if cf.Built {
+		t.Error("new CooccurField should not be built")
+	}
+	if cf.Unigram == nil || cf.BigramByFirst == nil || cf.TrigramByContext == nil {
+		t.Error("maps should be initialized")
+	}
+}
+
+func TestCooccurFieldBuildFromCorpus(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 3
+
+	tok := NewEvolvingTokenizer([]string{"the cat sat"})
+	cf := NewCooccurField()
+	cf.BuildFromCorpus(tok, []string{"the cat sat"})
+
+	if !cf.Built {
+		t.Error("field should be built after BuildFromCorpus")
+	}
+	if len(cf.Unigram) == 0 {
+		t.Error("unigram counts should not be empty")
+	}
+	if len(cf.BigramByFirst) == 0 {
+		t.Error("bigram counts should not be empty")
+	}
+}
+
+func TestCooccurFieldIngestTokens(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	ids := []int{1, 2, 3, 1, 2}
+	cf.IngestTokens(ids)
+
+	// Unigram: 1 appears 2x, 2 appears 2x, 3 appears 1x
+	if cf.Unigram[1] != 2 {
+		t.Errorf("unigram[1]=%f, want 2", cf.Unigram[1])
+	}
+	if cf.Unigram[3] != 1 {
+		t.Errorf("unigram[3]=%f, want 1", cf.Unigram[3])
+	}
+
+	// Bigram: (1,2) appears 2x
+	if cf.BigramByFirst[1] == nil || cf.BigramByFirst[1][2] != 2 {
+		t.Errorf("bigram[1][2] should be 2")
+	}
+}
+
+func TestCooccurFieldIngestTokensWeighted(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	ids := []int{10, 20}
+	cf.IngestTokensWeighted(ids, 3.0)
+
+	if cf.Unigram[10] != 3.0 {
+		t.Errorf("weighted unigram[10]=%f, want 3", cf.Unigram[10])
+	}
+	if cf.BigramByFirst[10][20] != 3.0 {
+		t.Errorf("weighted bigram[10][20]=%f, want 3", cf.BigramByFirst[10][20])
+	}
+}
+
+func TestCooccurFieldAbsorbUserWords(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.UserBoostStrength = 1.0
+	CFG.UserBoostDecay = 0.7
+
+	cf := NewCooccurField()
+	cf.AbsorbUserWords([]int{5, 10})
+
+	if cf.UserBoost[5] != 1.0 {
+		t.Errorf("UserBoost[5]=%f, want 1.0", cf.UserBoost[5])
+	}
+	if cf.UserBoost[10] != 1.0 {
+		t.Errorf("UserBoost[10]=%f, want 1.0", cf.UserBoost[10])
+	}
+}
+
+func TestCooccurFieldDecayUserBoost(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.UserBoostDecay = 0.5
+
+	cf := NewCooccurField()
+	cf.UserBoost = map[int]float64{
+		1: 1.0,
+		2: 0.01, // will decay below 0.01 threshold
+	}
+
+	cf.DecayUserBoost()
+
+	if math.Abs(cf.UserBoost[1]-0.5) > 1e-10 {
+		t.Errorf("UserBoost[1]=%f after decay, want 0.5", cf.UserBoost[1])
+	}
+	if _, exists := cf.UserBoost[2]; exists {
+		t.Error("UserBoost[2] should be deleted (decayed below threshold)")
+	}
+}
+
+func TestCooccurFieldSampleNextBigram(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	// Set up strong bigram: after token 5, token 10 always follows
+	cf.BigramByFirst = map[int]map[int]float64{
+		5: {10: 100.0},
+	}
+	cf.Unigram = map[int]float64{5: 1, 10: 1}
+
+	// With context ending in 5, should strongly prefer 10
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		next := cf.SampleNext([]int{5}, 20, 0.5)
+		counts[next]++
+	}
+	if counts[10] < 90 {
+		t.Errorf("strong bigram should dominate sampling: got token 10 only %d/100 times", counts[10])
+	}
+}
+
+func TestCooccurFieldSampleNextTrigram(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	// Strong trigram: [3,5] -> 7
+	cf.TrigramByContext = map[[2]int]map[int]float64{
+		{3, 5}: {7: 100.0},
+	}
+	cf.Unigram = map[int]float64{3: 1, 5: 1, 7: 1}
+
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		next := cf.SampleNext([]int{3, 5}, 20, 0.5)
+		counts[next]++
+	}
+	if counts[7] < 90 {
+		t.Errorf("strong trigram should dominate: got token 7 only %d/100 times", counts[7])
+	}
+}
+
+func TestCooccurFieldSampleNextFourgram(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	cf.FourgramByCtx = map[[3]int]map[int]float64{
+		{1, 2, 3}: {4: 100.0},
+	}
+	cf.Unigram = map[int]float64{1: 1, 2: 1, 3: 1, 4: 1}
+
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		next := cf.SampleNext([]int{1, 2, 3}, 20, 0.5)
+		counts[next]++
+	}
+	if counts[4] < 90 {
+		t.Errorf("strong fourgram should dominate: got token 4 only %d/100 times", counts[4])
+	}
+}
+
+func TestCooccurFieldSampleNextFallbackToUnigram(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	cf.Unigram = map[int]float64{0: 100.0} // token 0 dominates
+
+	counts := make(map[int]int)
+	for i := 0; i < 100; i++ {
+		next := cf.SampleNext([]int{99}, 10, 0.5) // no bigrams for 99
+		counts[next]++
+	}
+	if counts[0] < 80 {
+		t.Errorf("unigram fallback should prefer token 0: got %d/100", counts[0])
+	}
+}
+
+func TestCooccurFieldSampleNextUserBoost(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	cf.Unigram = map[int]float64{1: 1.0, 2: 1.0}
+	cf.UserBoost = map[int]float64{2: 10.0} // massive boost to token 2
+
+	counts := make(map[int]int)
+	for i := 0; i < 200; i++ {
+		next := cf.SampleNext([]int{99}, 10, 1.0)
+		counts[next]++
+	}
+	if counts[2] < counts[1] {
+		t.Errorf("user boost should favor token 2: got 1=%d, 2=%d", counts[1], counts[2])
+	}
+}
+
+func TestCooccurFieldSampleNextValidIndex(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.CooccurWindowSize = 2
+
+	cf := NewCooccurField()
+	cf.Unigram = map[int]float64{0: 1, 1: 1, 2: 1}
+	vocabSize := 5
+	for i := 0; i < 50; i++ {
+		idx := cf.SampleNext([]int{0}, vocabSize, 1.0)
+		if idx < 0 || idx >= vocabSize {
+			t.Fatalf("SampleNext returned invalid index %d for vocabSize=%d", idx, vocabSize)
+		}
+	}
+}
+
+// ============================================================
+// RoPE (Rotary Position Embedding)
+// ============================================================
+
+func TestRoPERotatePreservesNorm(t *testing.T) {
+	gradEnabled.Store(false)
+	defer gradEnabled.Store(true)
+
+	// RoPE is a rotation — it should approximately preserve vector norm
+	data := []float64{1, 0, 0, 1, 1, 0, 0, 1}
+	x := NewVec(data)
+	normBefore := 0.0
+	for _, v := range x.Data {
+		normBefore += v * v
+	}
+
+	rotated := RoPERotate(x, 5, 8)
+	normAfter := 0.0
+	for _, v := range rotated.Data {
+		normAfter += v * v
+	}
+
+	if math.Abs(normBefore-normAfter) > 1e-6 {
+		t.Errorf("RoPE should preserve norm: before=%f, after=%f", normBefore, normAfter)
+	}
+}
+
+func TestRoPERotatePosition0IsIdentity(t *testing.T) {
+	gradEnabled.Store(false)
+	defer gradEnabled.Store(true)
+
+	// At position 0, cos=1 sin=0, so rotation should be identity
+	data := []float64{1, 2, 3, 4}
+	x := NewVec(data)
+	rotated := RoPERotate(x, 0, 4)
+
+	for i := range data {
+		if math.Abs(rotated.Data[i]-data[i]) > 1e-10 {
+			t.Errorf("RoPE at pos=0 should be identity: [%d] %f vs %f", i, rotated.Data[i], data[i])
+		}
+	}
+}
+
+func TestRoPERotateDifferentPositions(t *testing.T) {
+	gradEnabled.Store(false)
+	defer gradEnabled.Store(true)
+
+	data := []float64{1, 0, 1, 0, 1, 0, 1, 0}
+	x := NewVec(data)
+	r1 := RoPERotate(x, 1, 8)
+	r2 := RoPERotate(x, 2, 8)
+
+	different := false
+	for i := range r1.Data {
+		if math.Abs(r1.Data[i]-r2.Data[i]) > 1e-10 {
+			different = true
+			break
+		}
+	}
+	if !different {
+		t.Error("RoPE at different positions should produce different vectors")
+	}
+}
+
+// ============================================================
+// DELTA ADAPTER — more thorough tests
+// ============================================================
+
+func TestDeltaAdapterApplyZeroIsIdentity(t *testing.T) {
+	gradEnabled.Store(false)
+	defer gradEnabled.Store(true)
+
+	// Zero-initialized adapter should produce zero output
+	da := NewDeltaAdapter(4, 3, 2, 0.0)
+	x := NewVec([]float64{1, 2, 3})
+	out := da.Apply(x)
+	for i, v := range out.Data {
+		if v != 0 {
+			t.Errorf("zero adapter output[%d]=%f, want 0", i, v)
+		}
+	}
+}
+
+func TestDeltaAdapterDimensions(t *testing.T) {
+	da := NewDeltaAdapter(8, 4, 2, 0.08)
+	if da.A.Nout != 8 || da.A.Nin != 2 {
+		t.Errorf("A dims: %dx%d, want 8x2", da.A.Nout, da.A.Nin)
+	}
+	if da.B.Nout != 2 || da.B.Nin != 4 {
+		t.Errorf("B dims: %dx%d, want 2x4", da.B.Nout, da.B.Nin)
+	}
+}
+
+func TestDeltaAdapterParams(t *testing.T) {
+	da := NewDeltaAdapter(4, 3, 2, 0.08)
+	params := da.Params()
+	// A has 4 rows, B has 2 rows = 6 total Vec params
+	if len(params) != 6 {
+		t.Errorf("Params len=%d, want 6", len(params))
+	}
+}
+
+func TestDeltaAdapterMaybeGrowOut(t *testing.T) {
+	da := NewDeltaAdapter(4, 3, 2, 0.08)
+	da.MaybeGrowOut(6)
+	if da.A.Nout != 6 {
+		t.Errorf("A.Nout=%d after MaybeGrowOut(6), want 6", da.A.Nout)
+	}
+	// B should not change
+	if da.B.Nout != 2 {
+		t.Errorf("B.Nout should stay 2, got %d", da.B.Nout)
+	}
+}
+
+// ============================================================
+// CORPUS UTILITIES
+// ============================================================
+
+func TestNormalizeText(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"  hello  world  ", "hello world"},
+		{"line1\nline2", "line1 line2"},
+		{"tabs\there", "tabs here"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := normalizeText(tt.in)
+		if got != tt.want {
+			t.Errorf("normalizeText(%q)=%q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestLoadCorpusLines(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "corpus.txt")
+	os.WriteFile(tmpFile, []byte("line1\nline2\nline3\n"), 0644)
+
+	lines := loadCorpusLines(tmpFile)
+	if len(lines) != 3 {
+		t.Errorf("loadCorpusLines: got %d lines, want 3", len(lines))
+	}
+	if lines[0] != "line1" || lines[2] != "line3" {
+		t.Errorf("loadCorpusLines: wrong content: %v", lines)
+	}
+}
+
+func TestLoadCorpusLinesNonexistent(t *testing.T) {
+	lines := loadCorpusLines("/nonexistent/path/file.txt")
+	if lines != nil {
+		t.Errorf("nonexistent file should return nil, got %v", lines)
+	}
+}
+
+func TestSaveCorpusLines(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "out.txt")
+	lines := []string{"alpha", "beta", "gamma"}
+	saveCorpusLines(tmpFile, lines)
+
+	// Read back
+	loaded := loadCorpusLines(tmpFile)
+	if len(loaded) != 3 {
+		t.Fatalf("saved %d lines, loaded %d", len(lines), len(loaded))
+	}
+	for i := range lines {
+		if loaded[i] != lines[i] {
+			t.Errorf("line[%d]: got %q, want %q", i, loaded[i], lines[i])
+		}
+	}
+}
+
+func TestReservoirMixKeep(t *testing.T) {
+	existing := []string{"a", "b", "c"}
+	newSents := []string{"d", "e"}
+	result := reservoirMixKeep(existing, newSents, 5)
+
+	if len(result) > 5 {
+		t.Errorf("reservoir should cap at maxLines=5, got %d", len(result))
+	}
+	if len(result) < 3 {
+		t.Errorf("should have at least existing lines, got %d", len(result))
+	}
+	// All existing lines should be preserved when room allows
+	for _, e := range existing {
+		found := false
+		for _, r := range result {
+			if r == e {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("existing line %q should be preserved when maxLines > existing", e)
+		}
+	}
+}
+
+func TestReservoirMixKeepSmallMax(t *testing.T) {
+	existing := []string{"a", "b", "c", "d", "e"}
+	newSents := []string{"x"}
+	result := reservoirMixKeep(existing, newSents, 3)
+
+	if len(result) != 3 {
+		t.Errorf("reservoir should cap at maxLines=3, got %d", len(result))
+	}
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+func TestSliceEqual(t *testing.T) {
+	if !sliceEqual([]int{1, 2, 3}, []int{1, 2, 3}) {
+		t.Error("equal slices should be equal")
+	}
+	if sliceEqual([]int{1, 2}, []int{1, 3}) {
+		t.Error("different slices should not be equal")
+	}
+	if sliceEqual([]int{1}, []int{1, 2}) {
+		t.Error("different length slices should not be equal")
+	}
+	if sliceEqual(nil, nil) != true {
+		t.Error("nil slices should be equal")
+	}
+}
+
+func TestIntPtr(t *testing.T) {
+	p := intPtr(42)
+	if *p != 42 {
+		t.Errorf("intPtr(42)=%d, want 42", *p)
 	}
 }
