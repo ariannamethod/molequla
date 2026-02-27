@@ -5556,9 +5556,9 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			earlySteps := int(float64(backpropSteps) * 0.4)
 			midSteps := int(float64(backpropSteps) * 0.3)
 			lateSteps := backpropSteps - earlySteps - midSteps
-			trainSteps(model, tok, docs, earlySteps, true, true, 8, 1)   // very short seqs, batch=1
-			trainSteps(model, tok, docs, midSteps, true, true, 16, 1)    // short seqs, batch=1
-			trainSteps(model, tok, docs, lateSteps, true, true, 32, 1)   // medium seqs, batch=1
+			amlTrainSteps(model, tok, docs, earlySteps, 8)   // very short seqs, batch=1
+			amlTrainSteps(model, tok, docs, midSteps, 16)    // short seqs, batch=1
+			amlTrainSteps(model, tok, docs, lateSteps, 32)   // medium seqs, batch=1
 			// Phase B: notorch for delta adapters (40%, no autograd = much faster)
 			// notorchTrainSteps DISABLED in warmup — diverges at stage 5 (loss 3.5→116)
 			// notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)
@@ -5613,7 +5613,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			burstLR := CFG.NotorchLR * lrMul
 
 			// notorch: gradient-free delta training (no backward pass, no compute graph)
-			notorchTrainSteps(model, tok, docs, CFG.MicroSteps, burstLR)
+			amlBurstTrain(model, tok, docs, CFG.MicroSteps, burstLR)
 
 			model.mu.Lock()
 			// Measure loss after burst
@@ -5920,9 +5920,9 @@ func main() {
 			earlySteps := int(float64(backpropSteps) * 0.4)
 			midSteps := int(float64(backpropSteps) * 0.3)
 			lateSteps := backpropSteps - earlySteps - midSteps
-			trainSteps(model, tok, docs, earlySteps, true, true, 8, 1)   // very short seqs, batch=1
-			trainSteps(model, tok, docs, midSteps, true, true, 16, 1)    // short seqs, batch=1
-			trainSteps(model, tok, docs, lateSteps, true, true, 32, 1)   // medium seqs, batch=1
+			amlTrainSteps(model, tok, docs, earlySteps, 8)   // very short seqs, batch=1
+			amlTrainSteps(model, tok, docs, midSteps, 16)    // short seqs, batch=1
+			amlTrainSteps(model, tok, docs, lateSteps, 32)   // medium seqs, batch=1
 			// Phase B: notorch for delta adapters (40%, no autograd = much faster)
 			// notorchTrainSteps DISABLED in warmup — diverges at stage 5 (loss 3.5→116)
 			// notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)

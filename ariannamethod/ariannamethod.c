@@ -31,17 +31,24 @@
 #include <strings.h> // for strcasecmp
 #include <stddef.h>  // for offsetof
 #include <time.h>    // for real calendar computation
-
-// BLAS acceleration (Apple Accelerate on macOS, OpenBLAS on Linux)
-#ifdef USE_BLAS
-  #ifdef ACCELERATE
-    #include <Accelerate/Accelerate.h>
-  #else
-    #include <cblas.h>
-  #endif
+#ifdef _OPENMP
+#include <omp.h>
 #endif
 #ifndef AM_BLOOD_DISABLED
 #include <dlfcn.h>   // for dlopen, dlsym, dlclose (Blood compiler)
+#endif
+
+// Lilith I/O — named pipes (FIFO) for data infrastructure
+#ifndef AM_IO_DISABLED
+#include <fcntl.h>     // for open(), O_RDONLY, O_WRONLY, O_NONBLOCK
+#include <unistd.h>    // for read(), write(), close(), unlink()
+#include <sys/stat.h>  // for mkfifo()
+#include <errno.h>     // for EAGAIN, ENXIO
+#endif
+
+// Async — pthreads for SPAWN/AWAIT
+#ifndef AM_ASYNC_DISABLED
+#include <pthread.h>
 #endif
 
 // Platform detection for Blood compiler
@@ -53,6 +60,27 @@
   #define AM_BLOOD_FLAGS "-shared -fPIC"
 #endif
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLAS ACCELERATION — optional hardware-accelerated matmul for Delta Voice
+// and NOTORCH Hebbian plasticity.
+//
+// Compile with -DUSE_BLAS to enable:
+//   macOS:  -DUSE_BLAS -DACCELERATE -framework Accelerate  (Apple AMX/Neural Engine)
+//   Linux:  -DUSE_BLAS -lopenblas                           (OpenBLAS)
+//
+// Without USE_BLAS: pure scalar C loops (portable, correct, slower on large dims)
+// With USE_BLAS: cblas_sgemv for delta, cblas_sger for notorch
+//
+// Evolved in molequla (github.com/ariannamethod/molequla), ported back to core.
+// ═══════════════════════════════════════════════════════════════════════════════
+#ifdef USE_BLAS
+  #ifdef ACCELERATE
+    #include <Accelerate/Accelerate.h>
+  #else
+    #include <cblas.h>
+  #endif
+#endif
+
 // See ariannamethod.h for struct definitions and pack flags
 
 static AM_State G;
@@ -62,6 +90,27 @@ static AM_BloodModule g_blood_modules[AM_BLOOD_MAX_MODULES];
 static int g_blood_count = 0;
 static char g_blood_dir[256] = {0};
 static char g_blood_cc[64] = {0};
+
+// Lilith I/O globals (named pipes for data infrastructure)
+#ifndef AM_IO_DISABLED
+static AM_Pipe g_pipes[AM_MAX_PIPES];
+static int g_pipe_count = 0;
+static float g_pipe_last_value = 0.0f;
+static char g_pipe_read_buf[AM_PIPE_BUF_SIZE] = {0};
+#endif
+
+// Async — SPAWN/AWAIT/CHANNEL globals
+#ifndef AM_ASYNC_DISABLED
+static AM_SpawnSlot   g_spawns[AM_MAX_SPAWNS];
+static int            g_spawn_count = 0;
+static pthread_t      g_spawn_threads[AM_MAX_SPAWNS];
+static pthread_mutex_t g_spawn_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static AM_ChannelSlot g_channels[AM_MAX_CHANNELS];
+static int            g_channel_count = 0;
+static pthread_mutex_t g_channel_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  g_channel_cond = PTHREAD_COND_INITIALIZER;
+#endif
 
 // Janus transformer integration (function pointers set by host)
 #ifndef AM_JANUS_DISABLED
@@ -428,7 +477,24 @@ static void update_effective_temp(void) {
 // PUBLIC API — the breath
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Forward declarations for tape cleanup (defined after tape section)
+static void am_tape_destroy(void);
+
+// Forward declarations for async cleanup (defined after async section)
+#ifndef AM_ASYNC_DISABLED
+static void am_spawn_reset(void);
+static void am_channel_reset(void);
+#endif
+
+// Forward declarations for persistent globals (defined after am_init)
+static int g_persistent_enabled;
+static AML_Symtab g_persistent_globals;
+void am_persistent_clear(void);
+
 void am_init(void) {
+  // Clean up tape from previous session
+  am_tape_destroy();
+
   memset(&G, 0, sizeof(G));
 
   // prophecy physics defaults
@@ -559,6 +625,205 @@ void am_init(void) {
 
   // blood compiler
   am_blood_init();
+
+  // persistent globals — clear on full init
+  am_persistent_clear();
+  g_persistent_enabled = 0;
+
+  // lilith I/O
+#ifndef AM_IO_DISABLED
+  am_pipe_close_all();
+  g_pipe_last_value = 0.0f;
+  g_pipe_read_buf[0] = 0;
+#endif
+
+  // async — SPAWN/AWAIT/CHANNEL
+#ifndef AM_ASYNC_DISABLED
+  am_spawn_await_all();   // join any running threads first
+  am_spawn_reset();
+  am_channel_reset();
+#endif
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PERSISTENT GLOBALS — survive across am_exec() calls
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Forward declarations for symtab functions (defined later in file)
+static float*   symtab_get(AML_Symtab* tab, const char* name);
+static AML_Var* symtab_get_var(AML_Symtab* tab, const char* name);
+static int      symtab_set(AML_Symtab* tab, const char* name, float value);
+static int      symtab_set_array(AML_Symtab* tab, const char* name, AM_Array* arr);
+
+void am_persistent_mode(int enable) {
+    if (!enable && g_persistent_enabled) {
+        // Turning off — free all persistent arrays
+        am_persistent_clear();
+    }
+    g_persistent_enabled = enable;
+}
+
+void am_persistent_clear(void) {
+    for (int i = 0; i < g_persistent_globals.count; i++) {
+        if (g_persistent_globals.vars[i].type == AML_TYPE_ARRAY &&
+            g_persistent_globals.vars[i].array) {
+            am_array_free(g_persistent_globals.vars[i].array);
+            g_persistent_globals.vars[i].array = NULL;
+        }
+    }
+    g_persistent_globals.count = 0;
+}
+
+// Restore persistent globals into execution context
+static void persistent_restore(AML_Symtab* dst) {
+    if (!g_persistent_enabled) return;
+    for (int i = 0; i < g_persistent_globals.count; i++) {
+        AML_Var* pv = &g_persistent_globals.vars[i];
+        if (pv->type == AML_TYPE_ARRAY && pv->array) {
+            // Clone array: exec ctx gets its own copy, persistent keeps original
+            AM_Array* clone = am_array_new(pv->array->len);
+            if (clone) {
+                memcpy(clone->data, pv->array->data,
+                       pv->array->len * sizeof(float));
+                clone->rows = pv->array->rows;
+                clone->cols = pv->array->cols;
+                symtab_set_array(dst, pv->name, clone);
+            }
+        } else {
+            symtab_set(dst, pv->name, pv->value);
+        }
+    }
+}
+
+// Save execution context globals back to persistent storage.
+// Two-phase approach:
+//   Phase 1: Update variables that already exist in persistent
+//   Phase 2: Add NEW variables that aren't in persistent yet
+// This means the first am_exec creates persistent vars, and subsequent calls
+// update them. Intermediates created by later scripts get saved once (unavoidable)
+// but since they have fixed names, the count stabilizes.
+static void persistent_save(AML_Symtab* src) {
+    static int save_call_count = 0;
+    save_call_count++;
+    if (!g_persistent_enabled) return;
+
+    // Phase 1: Update existing persistent variables from exec ctx
+    for (int i = 0; i < g_persistent_globals.count; i++) {
+        AML_Var* pv = &g_persistent_globals.vars[i];
+        AML_Var* sv = NULL;
+        for (int j = 0; j < src->count; j++) {
+            if (strcmp(src->vars[j].name, pv->name) == 0) {
+                sv = &src->vars[j];
+                break;
+            }
+        }
+        if (!sv) continue;
+
+        if (sv->type == AML_TYPE_ARRAY && sv->array) {
+            AM_Array* clone = am_array_new(sv->array->len);
+            if (clone) {
+                memcpy(clone->data, sv->array->data,
+                       sv->array->len * sizeof(float));
+                clone->rows = sv->array->rows;
+                clone->cols = sv->array->cols;
+                if (pv->type == AML_TYPE_ARRAY && pv->array) {
+                    am_array_free(pv->array);
+                }
+                pv->type = AML_TYPE_ARRAY;
+                pv->array = clone;
+                pv->value = 0;
+            }
+        } else {
+            if (pv->type == AML_TYPE_ARRAY && pv->array) {
+                am_array_free(pv->array);
+                pv->array = NULL;
+            }
+            pv->type = AML_TYPE_FLOAT;
+            pv->value = sv->value;
+        }
+    }
+
+    // Phase 2: Add NEW variables from exec ctx that aren't in persistent yet
+    for (int j = 0; j < src->count; j++) {
+        AML_Var* sv = &src->vars[j];
+        int found = 0;
+        for (int i = 0; i < g_persistent_globals.count; i++) {
+            if (strcmp(g_persistent_globals.vars[i].name, sv->name) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (found) continue;
+
+        if (sv->type == AML_TYPE_ARRAY && sv->array) {
+            AM_Array* clone = am_array_new(sv->array->len);
+            if (clone) {
+                memcpy(clone->data, sv->array->data,
+                       sv->array->len * sizeof(float));
+                clone->rows = sv->array->rows;
+                clone->cols = sv->array->cols;
+                symtab_set_array(&g_persistent_globals, sv->name, clone);
+            }
+        } else {
+            symtab_set(&g_persistent_globals, sv->name, sv->value);
+        }
+    // DIAGNOSTIC: print persistent storage stats every 50 calls
+    if (save_call_count % 50 == 0) {
+        long total_bytes = 0;
+        int n_arrays = 0;
+        for (int i = 0; i < g_persistent_globals.count; i++) {
+            if (g_persistent_globals.vars[i].type == AML_TYPE_ARRAY && 
+                g_persistent_globals.vars[i].array) {
+                total_bytes += g_persistent_globals.vars[i].array->len * sizeof(float);
+                n_arrays++;
+            }
+        }
+        fprintf(stderr, "[DIAG] persistent_save #%d: %d vars (%d arrays), %ld bytes (%.1f MB), src: %d vars\n",
+            save_call_count, g_persistent_globals.count, n_arrays, total_bytes, total_bytes / 1048576.0, src->count);
+    }
+    }
+}
+
+int am_set_var_array(const char* name, const float* data, int len) {
+    if (!name || !data || len <= 0 || len > AM_MAX_ARRAY_SIZE) return 1;
+    // Force persistent mode on
+    g_persistent_enabled = 1;
+    AM_Array* arr = am_array_new(len);
+    if (!arr) return 2;
+    memcpy(arr->data, data, len * sizeof(float));
+    return symtab_set_array(&g_persistent_globals, name, arr);
+}
+
+int am_set_var_matrix(const char* name, const float* data, int rows, int cols) {
+    if (!name || !data || rows <= 0 || cols <= 0) return 1;
+    int len = rows * cols;
+    if (len > AM_MAX_ARRAY_SIZE) return 1;
+    g_persistent_enabled = 1;
+    AM_Array* arr = am_array_new(len);
+    if (!arr) return 2;
+    memcpy(arr->data, data, len * sizeof(float));
+    arr->rows = rows;
+    arr->cols = cols;
+    return symtab_set_array(&g_persistent_globals, name, arr);
+}
+
+const float* am_get_var_array(const char* name, int* len) {
+    if (!name) return NULL;
+    AML_Var* v = symtab_get_var(&g_persistent_globals, name);
+    if (!v || v->type != AML_TYPE_ARRAY || !v->array) return NULL;
+    if (len) *len = v->array->len;
+    return v->array->data;
+}
+
+float am_get_var_float(const char* name) {
+    if (!name) return 0.0f;
+    AML_Var* v = symtab_get_var(&g_persistent_globals, name);
+    if (!v) return 0.0f;
+    if (v->type == AML_TYPE_FLOAT) return v->value;
+    // Array with 1 element → treat as scalar
+    if (v->type == AML_TYPE_ARRAY && v->array && v->array->len >= 1)
+        return v->array->data[0];
+    return 0.0f;
 }
 
 // enable/disable packs
@@ -711,6 +976,927 @@ static int read_field(const char* name, float* out) {
     return 0;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARRAY MEMORY MANAGEMENT (v4.0)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+AM_Array* am_array_new(int len) {
+    if (len <= 0 || len > AM_MAX_ARRAY_SIZE) return NULL;
+    AM_Array* arr = (AM_Array*)malloc(sizeof(AM_Array));
+    if (!arr) return NULL;
+    arr->data = (float*)calloc(len, sizeof(float));
+    if (!arr->data) { free(arr); return NULL; }
+    arr->len = len;
+    arr->refcount = 1;
+    arr->rows = 0;
+    arr->cols = 0;
+    return arr;
+}
+
+// Create a 2D matrix (flat array with shape tracking)
+static AM_Array* am_matrix_new(int rows, int cols) {
+    if (rows <= 0 || cols <= 0) return NULL;
+    int total = rows * cols;
+    if (total > AM_MAX_ARRAY_SIZE) return NULL;
+    AM_Array* arr = am_array_new(total);
+    if (!arr) return NULL;
+    arr->rows = rows;
+    arr->cols = cols;
+    return arr;
+}
+
+void am_array_free(AM_Array* arr) {
+    if (!arr) return;
+    arr->refcount--;
+    if (arr->refcount <= 0) {
+        free(arr->data);
+        free(arr);
+    }
+}
+
+AM_Array* am_array_ref(AM_Array* arr) {
+    if (arr) arr->refcount++;
+    return arr;
+}
+
+// Clone an array (deep copy, preserves shape)
+static AM_Array* am_array_clone(const AM_Array* src) {
+    if (!src) return NULL;
+    AM_Array* dst = am_array_new(src->len);
+    if (!dst) return NULL;
+    memcpy(dst->data, src->data, src->len * sizeof(float));
+    dst->rows = src->rows;
+    dst->cols = src->cols;
+    return dst;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUTOGRAD TAPE (v4.0 Phase 3) — reverse-mode automatic differentiation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static AM_Tape g_tape = {0};
+
+void am_tape_start(void) {
+    // Clear any existing tape state
+    am_tape_clear();
+    g_tape.active = 1;
+}
+
+void am_tape_clear(void) {
+    // Free non-param outputs and all grads
+    for (int i = 0; i < g_tape.count; i++) {
+        if (!g_tape.entries[i].is_param && g_tape.entries[i].output) {
+            am_array_free(g_tape.entries[i].output);
+        }
+        if (g_tape.entries[i].grad) {
+            am_array_free(g_tape.entries[i].grad);
+            g_tape.entries[i].grad = NULL;
+        }
+    }
+    g_tape.count = 0;
+    g_tape.n_params = 0;  // Reset param count so adam states get reused (not leaked)
+    g_tape.active = 0;
+    // NOTE: adam states and n_params survive clear — they persist across steps
+}
+
+// Full tape reset — frees ALL resources including params and adam states
+static void am_tape_destroy(void) {
+    // Free all tape entries including params
+    for (int i = 0; i < g_tape.count; i++) {
+        if (g_tape.entries[i].output) {
+            am_array_free(g_tape.entries[i].output);
+            g_tape.entries[i].output = NULL;
+        }
+        if (g_tape.entries[i].grad) {
+            am_array_free(g_tape.entries[i].grad);
+            g_tape.entries[i].grad = NULL;
+        }
+    }
+    // Free adam states
+    for (int i = 0; i < g_tape.n_params; i++) {
+        if (g_tape.adam[i].m) { am_array_free(g_tape.adam[i].m); g_tape.adam[i].m = NULL; }
+        if (g_tape.adam[i].v) { am_array_free(g_tape.adam[i].v); g_tape.adam[i].v = NULL; }
+        g_tape.adam[i].t = 0;
+    }
+    memset(&g_tape, 0, sizeof(g_tape));
+}
+
+int am_tape_is_active(void) { return g_tape.active; }
+AM_Tape* am_tape_get(void) { return &g_tape; }
+
+// Record a computation on the tape. Returns entry index.
+int am_tape_record(AM_Array* output, int op, int p1, int p2, float aux) {
+    if (!g_tape.active || g_tape.count >= AM_TAPE_MAX_ENTRIES) return -1;
+    int idx = g_tape.count;
+    AM_TapeEntry* e = &g_tape.entries[idx];
+    e->output = output;
+    am_array_ref(output); // tape owns a reference
+    e->grad = NULL;
+    e->op = op;
+    e->parent1 = p1;
+    e->parent2 = p2;
+    e->parent3 = -1;
+    e->aux = aux;
+    e->aux2 = 0;
+    e->is_param = 0;
+    g_tape.count++;
+    return idx;
+}
+
+// Record with 3 parents + 2 aux values (for seq ops like causal_attention)
+int am_tape_record3(AM_Array* output, int op, int p1, int p2, int p3, float aux, float aux2) {
+    if (!g_tape.active || g_tape.count >= AM_TAPE_MAX_ENTRIES) return -1;
+    int idx = g_tape.count;
+    AM_TapeEntry* e = &g_tape.entries[idx];
+    e->output = output;
+    am_array_ref(output);
+    e->grad = NULL;
+    e->op = op;
+    e->parent1 = p1;
+    e->parent2 = p2;
+    e->parent3 = p3;
+    e->aux = aux;
+    e->aux2 = aux2;
+    e->is_param = 0;
+    g_tape.count++;
+    return idx;
+}
+
+// Record a parameter (trainable weight). Returns entry index.
+// Adam state is allocated on first call for this param.
+int am_tape_record_param(AM_Array* param) {
+    if (!g_tape.active || g_tape.count >= AM_TAPE_MAX_ENTRIES) return -1;
+    int idx = g_tape.count;
+    AM_TapeEntry* e = &g_tape.entries[idx];
+    e->output = param;
+    am_array_ref(param);
+    e->grad = NULL;
+    e->op = AM_OP_NONE;
+    e->parent1 = -1;
+    e->parent2 = -1;
+    e->parent3 = -1;
+    e->aux = 0;
+    e->aux2 = 0;
+    e->is_param = 1;
+
+    // Register for Adam if not already registered
+    // Use pointer comparison to find existing registration
+    int found = -1;
+    for (int i = 0; i < g_tape.n_params; i++) {
+        // adam[i] corresponds to the i-th unique param
+        // We need a way to match — use the data pointer
+        // (params share the same data pointer across tape recordings)
+        if (g_tape.adam[i].m && g_tape.adam[i].m->len == param->len) {
+            // Already has an adam state of the right size — reuse index
+            // NOTE: this is a simplification. In practice we'd track by pointer.
+        }
+    }
+    if (found < 0 && g_tape.n_params < AM_TAPE_MAX_PARAMS) {
+        int pi = g_tape.n_params;
+        if (!g_tape.adam[pi].m) {
+            g_tape.adam[pi].m = am_array_new(param->len);
+            g_tape.adam[pi].v = am_array_new(param->len);
+            g_tape.adam[pi].t = 0;
+        }
+        g_tape.n_params++;
+    }
+
+    g_tape.count++;
+    return idx;
+}
+
+// Accumulate gradient into an entry
+static void tape_acc_grad(int idx, const float* grad, int len) {
+    if (idx < 0 || idx >= g_tape.count) return;
+    AM_TapeEntry* e = &g_tape.entries[idx];
+    if (!e->grad) {
+        e->grad = am_array_new(len);
+        if (!e->grad) return;
+    }
+    int n = e->grad->len < len ? e->grad->len : len;
+    for (int i = 0; i < n; i++) e->grad->data[i] += grad[i];
+}
+
+// Backward pass: propagate gradients from loss to all parents
+void am_tape_backward(int loss_idx) {
+    if (loss_idx < 0 || loss_idx >= g_tape.count) return;
+
+    // Initialize loss gradient to 1.0
+    AM_TapeEntry* loss = &g_tape.entries[loss_idx];
+    if (!loss->grad) {
+        loss->grad = am_array_new(loss->output->len);
+    }
+    for (int i = 0; i < loss->grad->len; i++) loss->grad->data[i] = 1.0f;
+
+    // Reverse topological order (entries are already in forward order)
+    for (int idx = loss_idx; idx >= 0; idx--) {
+        AM_TapeEntry* e = &g_tape.entries[idx];
+        if (!e->grad) continue;
+        float* dout = e->grad->data;
+        int out_len = e->output->len;
+
+        switch (e->op) {
+        case AM_OP_ADD: {
+            // y = a + b → da += dout, db += dout
+            if (e->parent1 >= 0) tape_acc_grad(e->parent1, dout, out_len);
+            if (e->parent2 >= 0) tape_acc_grad(e->parent2, dout, out_len);
+            break;
+        }
+        case AM_OP_MUL: {
+            // y = a * b → da += dout * b, db += dout * a
+            if (e->parent1 >= 0 && e->parent2 >= 0) {
+                AM_TapeEntry* pa = &g_tape.entries[e->parent1];
+                AM_TapeEntry* pb = &g_tape.entries[e->parent2];
+                float* ga = (float*)calloc(out_len, sizeof(float));
+                float* gb = (float*)calloc(out_len, sizeof(float));
+                if (ga && gb) {
+                    for (int i = 0; i < out_len; i++) {
+                        ga[i] = dout[i] * pb->output->data[i];
+                        gb[i] = dout[i] * pa->output->data[i];
+                    }
+                    tape_acc_grad(e->parent1, ga, out_len);
+                    tape_acc_grad(e->parent2, gb, out_len);
+                }
+                free(ga); free(gb);
+            }
+            break;
+        }
+        case AM_OP_SCALE: {
+            // y = a * scalar → da += dout * scalar
+            if (e->parent1 >= 0) {
+                float* ga = (float*)calloc(out_len, sizeof(float));
+                if (ga) {
+                    for (int i = 0; i < out_len; i++) ga[i] = dout[i] * e->aux;
+                    tape_acc_grad(e->parent1, ga, out_len);
+                }
+                free(ga);
+            }
+            break;
+        }
+        case AM_OP_MATVEC: {
+            // y = W @ x → dW += dout ⊗ x, dx += W^T @ dout
+            if (e->parent1 >= 0 && e->parent2 >= 0) {
+                AM_TapeEntry* pw = &g_tape.entries[e->parent1]; // W
+                AM_TapeEntry* px = &g_tape.entries[e->parent2]; // x
+                int rows = pw->output->rows;
+                int cols = pw->output->cols;
+                if (rows > 0 && cols > 0) {
+                    // dW: outer product dout ⊗ x (rows × cols)
+                    float* dw = (float*)calloc(rows * cols, sizeof(float));
+                    if (dw) {
+                        for (int i = 0; i < rows; i++)
+                            for (int j = 0; j < cols; j++)
+                                dw[i * cols + j] = dout[i] * px->output->data[j];
+                        tape_acc_grad(e->parent1, dw, rows * cols);
+                    }
+                    free(dw);
+                    // dx: W^T @ dout
+                    float* dx = (float*)calloc(cols, sizeof(float));
+                    if (dx) {
+                        for (int j = 0; j < cols; j++)
+                            for (int i = 0; i < rows; i++)
+                                dx[j] += pw->output->data[i * cols + j] * dout[i];
+                        tape_acc_grad(e->parent2, dx, cols);
+                    }
+                    free(dx);
+                }
+            }
+            break;
+        }
+        case AM_OP_SILU: {
+            // y = x * sigmoid(x) → dy/dx = sigmoid(x) * (1 + x * (1 - sigmoid(x)))
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* px = &g_tape.entries[e->parent1];
+                float* gx = (float*)calloc(out_len, sizeof(float));
+                if (gx) {
+                    for (int i = 0; i < out_len; i++) {
+                        float x = px->output->data[i];
+                        float sig = 1.0f / (1.0f + expf(-x));
+                        gx[i] = dout[i] * sig * (1.0f + x * (1.0f - sig));
+                    }
+                    tape_acc_grad(e->parent1, gx, out_len);
+                }
+                free(gx);
+            }
+            break;
+        }
+        case AM_OP_SOFTMAX: {
+            // y = softmax(x) → Jacobian: diag(y) - y⊗y
+            // dsoftmax_i = y_i * (dout_i - sum(dout * y))
+            if (e->parent1 >= 0) {
+                float dot_dy = 0;
+                for (int i = 0; i < out_len; i++)
+                    dot_dy += dout[i] * e->output->data[i];
+                float* gx = (float*)calloc(out_len, sizeof(float));
+                if (gx) {
+                    for (int i = 0; i < out_len; i++)
+                        gx[i] = e->output->data[i] * (dout[i] - dot_dy);
+                    tape_acc_grad(e->parent1, gx, out_len);
+                }
+                free(gx);
+            }
+            break;
+        }
+        case AM_OP_RMSNORM: {
+            // y = x / rms, rms = sqrt(mean(x^2) + eps)
+            // Simplified gradient: similar to LayerNorm but without mean subtraction
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* px = &g_tape.entries[e->parent1];
+                int n = out_len;
+                float ss = 0;
+                for (int i = 0; i < n; i++) ss += px->output->data[i] * px->output->data[i];
+                float rms = sqrtf(ss / n + 1e-6f);
+                float rms3 = rms * rms * rms;
+                float sum_dout_x = 0;
+                for (int i = 0; i < n; i++)
+                    sum_dout_x += dout[i] * px->output->data[i];
+                float* gx = (float*)calloc(n, sizeof(float));
+                if (gx) {
+                    for (int i = 0; i < n; i++)
+                        gx[i] = (dout[i] / rms) - (px->output->data[i] * sum_dout_x / (n * rms3));
+                    tape_acc_grad(e->parent1, gx, n);
+                }
+                free(gx);
+            }
+            break;
+        }
+        case AM_OP_CROSS_ENT: {
+            // loss = -log(softmax(logits)[target])
+            // d_logits = softmax(logits) - one_hot(target)
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* pl = &g_tape.entries[e->parent1]; // logits
+                int n = pl->output->len;
+                int target = (int)e->aux;
+                // Compute softmax of logits
+                float mx = pl->output->data[0];
+                for (int i = 1; i < n; i++)
+                    if (pl->output->data[i] > mx) mx = pl->output->data[i];
+                float* sm = (float*)calloc(n, sizeof(float));
+                if (sm) {
+                    float sum = 0;
+                    for (int i = 0; i < n; i++) {
+                        sm[i] = expf(pl->output->data[i] - mx);
+                        sum += sm[i];
+                    }
+                    for (int i = 0; i < n; i++) sm[i] /= sum;
+                    // gradient = softmax - one_hot
+                    if (target >= 0 && target < n) sm[target] -= 1.0f;
+                    // Scale by dout (which is 1.0 for loss)
+                    for (int i = 0; i < n; i++) sm[i] *= dout[0];
+                    tape_acc_grad(e->parent1, sm, n);
+                }
+                free(sm);
+            }
+            break;
+        }
+        case AM_OP_EMB_LOOKUP: {
+            // y = wte[token_id, :] → d_wte[token_id, :] += dout
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* pw = &g_tape.entries[e->parent1]; // wte
+                int token_id = (int)e->aux;
+                int cols = pw->output->cols;
+                if (cols > 0 && token_id >= 0 && token_id < pw->output->rows) {
+                    // Need full-size gradient for wte
+                    float* gw = (float*)calloc(pw->output->len, sizeof(float));
+                    if (gw) {
+                        for (int i = 0; i < cols && i < out_len; i++)
+                            gw[token_id * cols + i] = dout[i];
+                        tape_acc_grad(e->parent1, gw, pw->output->len);
+                    }
+                    free(gw);
+                }
+            }
+            break;
+        }
+        // ── Phase 5: sequence-level backward ──
+
+        case AM_OP_SEQ_EMBED: {
+            // h[t*D+d] = wte[tok*D+d] + wpe[pos*D+d]
+            // d_wte[tok*D+d] += dout[t*D+d], d_wpe[pos*D+d] += dout[t*D+d]
+            if (e->parent1 >= 0 && e->parent3 >= 0) {
+                AM_TapeEntry* pwte = &g_tape.entries[e->parent1];
+                AM_TapeEntry* pwpe = &g_tape.entries[e->parent2];
+                AM_TapeEntry* ptok = &g_tape.entries[e->parent3]; // tokens array
+                int T = (int)e->aux;
+                int D = (int)e->aux2;
+                float* dwte = (float*)calloc(pwte->output->len, sizeof(float));
+                float* dwpe = (float*)calloc(pwpe->output->len, sizeof(float));
+                if (dwte && dwpe) {
+                    for (int t = 0; t < T; t++) {
+                        int tok = (int)ptok->output->data[t];
+                        if (tok < 0) tok = 0;
+                        if (tok >= pwte->output->rows) tok = pwte->output->rows - 1;
+                        int pos = t < pwpe->output->rows ? t : pwpe->output->rows - 1;
+                        for (int d = 0; d < D; d++) {
+                            dwte[tok * D + d] += dout[t * D + d];
+                            dwpe[pos * D + d] += dout[t * D + d];
+                        }
+                    }
+                    tape_acc_grad(e->parent1, dwte, pwte->output->len);
+                    tape_acc_grad(e->parent2, dwpe, pwpe->output->len);
+                }
+                free(dwte); free(dwpe);
+            }
+            break;
+        }
+
+        case AM_OP_SEQ_MATVEC: {
+            // Y[t*out+i] = sum_j W[i*in+j] * X[t*in+j]
+            // dW[i*in+j] += sum_t dout[t*out+i] * X[t*in+j]
+            // dX[t*in+j] += sum_i W[i*in+j] * dout[t*out+i]
+            if (e->parent1 >= 0 && e->parent2 >= 0) {
+                AM_TapeEntry* pw = &g_tape.entries[e->parent1]; // W
+                AM_TapeEntry* px = &g_tape.entries[e->parent2]; // X
+                int T = (int)e->aux;
+                int out_d = pw->output->rows;
+                int in_d = pw->output->cols;
+                float* dw = (float*)calloc(pw->output->len, sizeof(float));
+                float* dx = (float*)calloc(px->output->len, sizeof(float));
+                if (dw && dx) {
+                    float* Wd = pw->output->data;
+                    float* Xd = px->output->data;
+                    // dX: each position t independent → parallelize over t
+                    #ifdef _OPENMP
+                    #pragma omp parallel for schedule(static) if(T > 16)
+                    #endif
+                    for (int t = 0; t < T; t++) {
+                        float* dout_t = dout + t * out_d;
+                        // dX_t += W^T @ dout_t
+                        for (int j = 0; j < in_d; j++)
+                            for (int i = 0; i < out_d; i++)
+                                dx[t * in_d + j] += Wd[i * in_d + j] * dout_t[i];
+                    }
+                    // dW: accumulates across T → can't trivially parallelize outer loop
+                    for (int t = 0; t < T; t++) {
+                        float* dout_t = dout + t * out_d;
+                        float* x_t = Xd + t * in_d;
+                        for (int i = 0; i < out_d; i++)
+                            for (int j = 0; j < in_d; j++)
+                                dw[i * in_d + j] += dout_t[i] * x_t[j];
+                    }
+                    tape_acc_grad(e->parent1, dw, pw->output->len);
+                    tape_acc_grad(e->parent2, dx, px->output->len);
+                }
+                free(dw); free(dx);
+            }
+            break;
+        }
+
+        case AM_OP_SEQ_RMSNORM: {
+            // For each position t: y_t = x_t / rms_t where rms_t = sqrt(mean(x_t^2) + eps)
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* px = &g_tape.entries[e->parent1];
+                int T = (int)e->aux;
+                int D = (int)e->aux2;
+                float* gx = (float*)calloc(T * D, sizeof(float));
+                if (gx) {
+                    float* Xrn = px->output->data;
+                    #ifdef _OPENMP
+                    #pragma omp parallel for schedule(static) if(T > 32)
+                    #endif
+                    for (int t = 0; t < T; t++) {
+                        float* x_t = Xrn + t * D;
+                        float* dout_t = dout + t * D;
+                        float ss = 0;
+                        for (int d = 0; d < D; d++) ss += x_t[d] * x_t[d];
+                        float rms = sqrtf(ss / D + 1e-6f);
+                        float rms3 = rms * rms * rms;
+                        float sum_dx = 0;
+                        for (int d = 0; d < D; d++) sum_dx += dout_t[d] * x_t[d];
+                        for (int d = 0; d < D; d++)
+                            gx[t * D + d] = (dout_t[d] / rms) - (x_t[d] * sum_dx / (D * rms3));
+                    }
+                    tape_acc_grad(e->parent1, gx, T * D);
+                }
+                free(gx);
+            }
+            break;
+        }
+
+        case AM_OP_CAUSAL_ATTN: {
+            // Causal self-attention backward
+            // Forward: for each i: scores_j = q_i·k_j/sqrt(D), attn = softmax(scores), out_i = sum attn_j * v_j
+            if (e->parent1 >= 0 && e->parent2 >= 0 && e->parent3 >= 0) {
+                AM_TapeEntry* pq = &g_tape.entries[e->parent1]; // Q
+                AM_TapeEntry* pk = &g_tape.entries[e->parent2]; // K
+                AM_TapeEntry* pv = &g_tape.entries[e->parent3]; // V
+                int T = (int)e->aux;
+                int D = (int)e->aux2;
+                float sc = 1.0f / sqrtf((float)D);
+                float* dq = (float*)calloc(T * D, sizeof(float));
+                float* dk = (float*)calloc(T * D, sizeof(float));
+                float* dv = (float*)calloc(T * D, sizeof(float));
+                if (dq && dk && dv) {
+                    for (int i = 0; i < T; i++) {
+                        float* qi = pq->output->data + i * D;
+                        float* dout_i = dout + i * D;
+                        // Recompute attention weights for position i
+                        float* scores = (float*)calloc(i + 1, sizeof(float));
+                        float* attn = (float*)calloc(i + 1, sizeof(float));
+                        if (!scores || !attn) { free(scores); free(attn); continue; }
+                        float mx = -1e30f;
+                        for (int j = 0; j <= i; j++) {
+                            float* kj = pk->output->data + j * D;
+                            float dot = 0;
+                            for (int d = 0; d < D; d++) dot += qi[d] * kj[d];
+                            scores[j] = dot * sc;
+                            if (scores[j] > mx) mx = scores[j];
+                        }
+                        float sm = 0;
+                        for (int j = 0; j <= i; j++) { attn[j] = expf(scores[j] - mx); sm += attn[j]; }
+                        if (sm > 0) for (int j = 0; j <= i; j++) attn[j] /= sm;
+
+                        // d_attn[j] = dout_i · v_j
+                        float* d_attn = (float*)calloc(i + 1, sizeof(float));
+                        if (d_attn) {
+                            for (int j = 0; j <= i; j++) {
+                                float* vj = pv->output->data + j * D;
+                                for (int d = 0; d < D; d++) d_attn[j] += dout_i[d] * vj[d];
+                            }
+                            // dv[j] += attn[j] * dout_i
+                            for (int j = 0; j <= i; j++) {
+                                float* dvj = dv + j * D;
+                                for (int d = 0; d < D; d++) dvj[d] += attn[j] * dout_i[d];
+                            }
+                            // softmax backward: dscore[j] = attn[j] * (d_attn[j] - sum(d_attn * attn))
+                            float dot_da = 0;
+                            for (int j = 0; j <= i; j++) dot_da += d_attn[j] * attn[j];
+                            for (int j = 0; j <= i; j++) {
+                                float ds = attn[j] * (d_attn[j] - dot_da) * sc;
+                                // dq_i += ds * k_j, dk_j += ds * q_i
+                                float* kj = pk->output->data + j * D;
+                                for (int d = 0; d < D; d++) {
+                                    dq[i * D + d] += ds * kj[d];
+                                    dk[j * D + d] += ds * qi[d];
+                                }
+                            }
+                        }
+                        free(scores); free(attn); free(d_attn);
+                    }
+                    tape_acc_grad(e->parent1, dq, T * D);
+                    tape_acc_grad(e->parent2, dk, T * D);
+                    tape_acc_grad(e->parent3, dv, T * D);
+                }
+                free(dq); free(dk); free(dv);
+            }
+            break;
+        }
+
+        case AM_OP_MH_CAUSAL_ATTN: {
+            // Multi-head causal self-attention backward
+            // aux = T, aux2 = head_dim. D recovered from output->len / T.
+            if (e->parent1 >= 0 && e->parent2 >= 0 && e->parent3 >= 0) {
+                AM_TapeEntry* pq = &g_tape.entries[e->parent1]; // Q
+                AM_TapeEntry* pk = &g_tape.entries[e->parent2]; // K
+                AM_TapeEntry* pv = &g_tape.entries[e->parent3]; // V
+                int T = (int)e->aux;
+                int head_dim = (int)e->aux2;
+                int D = e->output->len / T;
+                int n_heads = D / head_dim;
+                float sc = 1.0f / sqrtf((float)head_dim);
+                float* dq = (float*)calloc(T * D, sizeof(float));
+                float* dk = (float*)calloc(T * D, sizeof(float));
+                float* dv = (float*)calloc(T * D, sizeof(float));
+                if (dq && dk && dv) {
+                    for (int h = 0; h < n_heads; h++) {
+                        int ho = h * head_dim;
+                        for (int i = 0; i < T; i++) {
+                            float* qi = pq->output->data + i * D + ho;
+                            float* dout_i = dout + i * D + ho;
+                            float* scores = (float*)calloc(i + 1, sizeof(float));
+                            float* attn = (float*)calloc(i + 1, sizeof(float));
+                            if (!scores || !attn) { free(scores); free(attn); continue; }
+                            float mx = -1e30f;
+                            for (int j = 0; j <= i; j++) {
+                                float* kj = pk->output->data + j * D + ho;
+                                float dot = 0;
+                                for (int d = 0; d < head_dim; d++) dot += qi[d] * kj[d];
+                                scores[j] = dot * sc;
+                                if (scores[j] > mx) mx = scores[j];
+                            }
+                            float sm = 0;
+                            for (int j = 0; j <= i; j++) { attn[j] = expf(scores[j] - mx); sm += attn[j]; }
+                            if (sm > 0) for (int j = 0; j <= i; j++) attn[j] /= sm;
+                            float* d_attn = (float*)calloc(i + 1, sizeof(float));
+                            if (d_attn) {
+                                for (int j = 0; j <= i; j++) {
+                                    float* vj = pv->output->data + j * D + ho;
+                                    for (int d = 0; d < head_dim; d++) d_attn[j] += dout_i[d] * vj[d];
+                                }
+                                for (int j = 0; j <= i; j++) {
+                                    float* dvj = dv + j * D + ho;
+                                    for (int d = 0; d < head_dim; d++) dvj[d] += attn[j] * dout_i[d];
+                                }
+                                float dot_da = 0;
+                                for (int j = 0; j <= i; j++) dot_da += d_attn[j] * attn[j];
+                                for (int j = 0; j <= i; j++) {
+                                    float ds = attn[j] * (d_attn[j] - dot_da) * sc;
+                                    float* kj = pk->output->data + j * D + ho;
+                                    for (int d = 0; d < head_dim; d++) {
+                                        dq[i * D + ho + d] += ds * kj[d];
+                                        dk[j * D + ho + d] += ds * qi[d];
+                                    }
+                                }
+                            }
+                            free(scores); free(attn); free(d_attn);
+                        }
+                    }
+                    tape_acc_grad(e->parent1, dq, T * D);
+                    tape_acc_grad(e->parent2, dk, T * D);
+                    tape_acc_grad(e->parent3, dv, T * D);
+                }
+                free(dq); free(dk); free(dv);
+            }
+            break;
+        }
+
+        case AM_OP_SEQ_CROSSENT: {
+            // loss = mean over t of -log(softmax(logits_t)[target_t])
+            // d_logits[t*V+j] = (softmax[j] - one_hot[target]) / T
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* pl = &g_tape.entries[e->parent1]; // logits
+                AM_TapeEntry* pt = &g_tape.entries[e->parent2]; // targets
+                int T = (int)e->aux;
+                int V = (int)e->aux2;
+                float* dl = (float*)calloc(T * V, sizeof(float));
+                if (dl && pt) {
+                    for (int t = 0; t < T; t++) {
+                        float* logits_t = pl->output->data + t * V;
+                        int target = (int)pt->output->data[t];
+                        if (target < 0 || target >= V) target = 0;
+                        float mx = logits_t[0];
+                        for (int j = 1; j < V; j++)
+                            if (logits_t[j] > mx) mx = logits_t[j];
+                        float sum = 0;
+                        for (int j = 0; j < V; j++) {
+                            dl[t * V + j] = expf(logits_t[j] - mx);
+                            sum += dl[t * V + j];
+                        }
+                        for (int j = 0; j < V; j++) dl[t * V + j] /= sum;
+                        dl[t * V + target] -= 1.0f;
+                        // Scale by dout[0] / T
+                        float s = dout[0] / T;
+                        for (int j = 0; j < V; j++) dl[t * V + j] *= s;
+                    }
+                    tape_acc_grad(e->parent1, dl, T * V);
+                }
+                free(dl);
+            }
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+}
+
+// Adam optimizer step: update all parameters using their accumulated gradients
+void am_tape_adam_step(float lr) {
+    float beta1 = 0.9f, beta2 = 0.999f, eps = 1e-8f;
+    int param_idx = 0;
+
+    for (int i = 0; i < g_tape.count && param_idx < g_tape.n_params; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->grad) continue;
+
+        AM_AdamState* as = &g_tape.adam[param_idx];
+        if (!as->m || !as->v) { param_idx++; continue; }
+
+        as->t++;
+        int n = e->output->len;
+        if (as->m->len < n) n = as->m->len;
+
+        for (int j = 0; j < n; j++) {
+            float g = e->grad->data[j];
+            as->m->data[j] = beta1 * as->m->data[j] + (1.0f - beta1) * g;
+            as->v->data[j] = beta2 * as->v->data[j] + (1.0f - beta2) * g * g;
+            float m_hat = as->m->data[j] / (1.0f - powf(beta1, (float)as->t));
+            float v_hat = as->v->data[j] / (1.0f - powf(beta2, (float)as->t));
+            e->output->data[j] -= lr * m_hat / (sqrtf(v_hat) + eps);
+        }
+        param_idx++;
+    }
+}
+
+// Find tape entry index by array pointer (-1 if not found)
+static int tape_find_entry(AM_Array* arr) {
+    if (!arr) return -1;
+    for (int i = g_tape.count - 1; i >= 0; i--) {
+        if (g_tape.entries[i].output && g_tape.entries[i].output->data == arr->data)
+            return i;
+    }
+    return -1;
+}
+
+// Ensure array is on tape. If not found, record as a non-trainable leaf.
+// Returns entry index.
+static int tape_ensure_entry(AM_Array* arr) {
+    if (!arr || !g_tape.active) return -1;
+    int idx = tape_find_entry(arr);
+    if (idx >= 0) return idx;
+    // Record as leaf (OP_NONE, not a param — just for backward data access)
+    return am_tape_record(arr, AM_OP_NONE, -1, -1, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ASYNC — SPAWN/AWAIT/CHANNEL (v4.0 Phase 4)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef AM_ASYNC_DISABLED
+
+// Thread argument: holds the AML script to execute
+typedef struct {
+    char* script;       // heap-allocated AML script text
+    int   slot_idx;     // index into g_spawns
+} AM_SpawnArg;
+
+// Thread entry point: runs an AML script in its own context
+static void* am_spawn_thread_fn(void* arg) {
+    AM_SpawnArg* sa = (AM_SpawnArg*)arg;
+
+    // Execute the script (am_exec creates its own AML_ExecCtx)
+    int rc = am_exec(sa->script);
+
+    // Mark slot as done
+    pthread_mutex_lock(&g_spawn_mutex);
+    if (sa->slot_idx >= 0 && sa->slot_idx < AM_MAX_SPAWNS) {
+        g_spawns[sa->slot_idx].active = 0;
+        g_spawns[sa->slot_idx].result = rc;
+    }
+    pthread_mutex_unlock(&g_spawn_mutex);
+
+    free(sa->script);
+    free(sa);
+    return NULL;
+}
+
+// Launch a spawn: create thread running the given AML script
+int am_spawn_launch(const char* name, const char* script) {
+    if (g_spawn_count >= AM_MAX_SPAWNS) return -1;
+
+    int idx = g_spawn_count;
+    snprintf(g_spawns[idx].name, AM_SPAWN_NAME_LEN, "%s", name);
+    g_spawns[idx].active = 1;
+    g_spawns[idx].joined = 0;
+    g_spawns[idx].result = 0;
+
+    AM_SpawnArg* arg = (AM_SpawnArg*)malloc(sizeof(AM_SpawnArg));
+    if (!arg) return -1;
+    arg->script = strdup(script);
+    if (!arg->script) { free(arg); return -1; }
+    arg->slot_idx = idx;
+
+    int err = pthread_create(&g_spawn_threads[idx], NULL, am_spawn_thread_fn, arg);
+    if (err != 0) {
+        free(arg->script);
+        free(arg);
+        g_spawns[idx].active = 0;
+        return -1;
+    }
+
+    g_spawn_count++;
+    return idx;
+}
+
+// Await a specific spawn by name. Returns result code.
+int am_spawn_await(const char* name) {
+    for (int i = 0; i < g_spawn_count; i++) {
+        if (strcmp(g_spawns[i].name, name) == 0 && !g_spawns[i].joined) {
+            pthread_join(g_spawn_threads[i], NULL);
+            g_spawns[i].joined = 1;
+            return g_spawns[i].result;
+        }
+    }
+    return -1;
+}
+
+// Await all spawns
+void am_spawn_await_all(void) {
+    for (int i = 0; i < g_spawn_count; i++) {
+        if (!g_spawns[i].joined) {
+            pthread_join(g_spawn_threads[i], NULL);
+            g_spawns[i].joined = 1;
+        }
+    }
+}
+
+int am_spawn_count(void) {
+    int n = 0;
+    for (int i = 0; i < g_spawn_count; i++)
+        if (g_spawns[i].active) n++;
+    return n;
+}
+
+// Reset spawn state (called from am_init)
+static void am_spawn_reset(void) {
+    am_spawn_await_all();
+    g_spawn_count = 0;
+    memset(g_spawns, 0, sizeof(g_spawns));
+}
+
+// --- CHANNEL ---
+
+// Find channel by name (-1 if not found)
+static int channel_find(const char* name) {
+    for (int i = 0; i < g_channel_count; i++)
+        if (g_channels[i].active && strcmp(g_channels[i].name, name) == 0)
+            return i;
+    return -1;
+}
+
+// Create a channel with given capacity
+int am_channel_create(const char* name, int capacity) {
+    if (g_channel_count >= AM_MAX_CHANNELS || capacity <= 0) return -1;
+    if (capacity > AM_CHANNEL_BUF) capacity = AM_CHANNEL_BUF;
+
+    int idx = g_channel_count;
+    memset(&g_channels[idx], 0, sizeof(AM_ChannelSlot));
+    snprintf(g_channels[idx].name, AM_SPAWN_NAME_LEN, "%s", name);
+    g_channels[idx].capacity = capacity;
+    g_channels[idx].active = 1;
+    g_channel_count++;
+    return idx;
+}
+
+// Write a float to a channel (blocking if full)
+int am_channel_write(const char* name, float value) {
+    pthread_mutex_lock(&g_channel_mutex);
+    int idx = channel_find(name);
+    if (idx < 0) { pthread_mutex_unlock(&g_channel_mutex); return -1; }
+
+    // Wait until not full (with timeout to prevent deadlock)
+    int tries = 0;
+    while (g_channels[idx].count >= g_channels[idx].capacity && tries < 1000) {
+        pthread_mutex_unlock(&g_channel_mutex);
+        struct timespec ts = {0, 1000000}; // 1ms
+        nanosleep(&ts, NULL);
+        pthread_mutex_lock(&g_channel_mutex);
+        tries++;
+    }
+    if (g_channels[idx].count >= g_channels[idx].capacity) {
+        pthread_mutex_unlock(&g_channel_mutex);
+        return -1; // channel full, timeout
+    }
+
+    g_channels[idx].data[g_channels[idx].tail] = value;
+    g_channels[idx].tail = (g_channels[idx].tail + 1) % g_channels[idx].capacity;
+    g_channels[idx].count++;
+    pthread_cond_broadcast(&g_channel_cond);
+    pthread_mutex_unlock(&g_channel_mutex);
+    return 0;
+}
+
+// Read a float from a channel (blocking if empty, with timeout)
+int am_channel_read(const char* name, float* out) {
+    pthread_mutex_lock(&g_channel_mutex);
+    int idx = channel_find(name);
+    if (idx < 0) { pthread_mutex_unlock(&g_channel_mutex); return -1; }
+
+    // Wait until not empty (with timeout)
+    int tries = 0;
+    while (g_channels[idx].count == 0 && tries < 1000) {
+        pthread_mutex_unlock(&g_channel_mutex);
+        struct timespec ts = {0, 1000000}; // 1ms
+        nanosleep(&ts, NULL);
+        pthread_mutex_lock(&g_channel_mutex);
+        tries++;
+    }
+    if (g_channels[idx].count == 0) {
+        pthread_mutex_unlock(&g_channel_mutex);
+        return -1; // channel empty, timeout
+    }
+
+    *out = g_channels[idx].data[g_channels[idx].head];
+    g_channels[idx].head = (g_channels[idx].head + 1) % g_channels[idx].capacity;
+    g_channels[idx].count--;
+    pthread_cond_broadcast(&g_channel_cond);
+    pthread_mutex_unlock(&g_channel_mutex);
+    return 0;
+}
+
+int am_channel_count(void) {
+    int n = 0;
+    for (int i = 0; i < g_channel_count; i++)
+        if (g_channels[i].active) n++;
+    return n;
+}
+
+void am_channel_close_all(void) {
+    pthread_mutex_lock(&g_channel_mutex);
+    for (int i = 0; i < g_channel_count; i++)
+        g_channels[i].active = 0;
+    g_channel_count = 0;
+    pthread_mutex_unlock(&g_channel_mutex);
+}
+
+// Reset channels (called from am_init)
+static void am_channel_reset(void) {
+    am_channel_close_all();
+}
+
+#endif // AM_ASYNC_DISABLED
+
 // Symbol table operations
 static float* symtab_get(AML_Symtab* tab, const char* name) {
     for (int i = 0; i < tab->count; i++) {
@@ -720,18 +1906,77 @@ static float* symtab_get(AML_Symtab* tab, const char* name) {
     return NULL;
 }
 
+// Get full variable record (needed for array access)
+static AML_Var* symtab_get_var(AML_Symtab* tab, const char* name) {
+    for (int i = 0; i < tab->count; i++) {
+        if (strcmp(tab->vars[i].name, name) == 0)
+            return &tab->vars[i];
+    }
+    return NULL;
+}
+
 static int symtab_set(AML_Symtab* tab, const char* name, float value) {
     for (int i = 0; i < tab->count; i++) {
         if (strcmp(tab->vars[i].name, name) == 0) {
+            // If overwriting an array with a float, free the array
+            if (tab->vars[i].type == AML_TYPE_ARRAY && tab->vars[i].array) {
+                am_array_free(tab->vars[i].array);
+                tab->vars[i].array = NULL;
+            }
+            tab->vars[i].type = AML_TYPE_FLOAT;
             tab->vars[i].value = value;
             return 0;
         }
     }
     if (tab->count >= AML_MAX_VARS) return 1;
     snprintf(tab->vars[tab->count].name, AML_MAX_NAME, "%s", name);
+    tab->vars[tab->count].type = AML_TYPE_FLOAT;
     tab->vars[tab->count].value = value;
+    tab->vars[tab->count].array = NULL;
     tab->count++;
     return 0;
+}
+
+// Set an array variable (takes ownership of arr's refcount)
+static int symtab_set_array(AML_Symtab* tab, const char* name, AM_Array* arr) {
+    for (int i = 0; i < tab->count; i++) {
+        if (strcmp(tab->vars[i].name, name) == 0) {
+            // Free old array if any
+            if (tab->vars[i].type == AML_TYPE_ARRAY && tab->vars[i].array) {
+                am_array_free(tab->vars[i].array);
+            }
+            tab->vars[i].type = AML_TYPE_ARRAY;
+            tab->vars[i].value = 0;
+            tab->vars[i].array = arr;
+            return 0;
+        }
+    }
+    if (tab->count >= AML_MAX_VARS) return 1;
+    snprintf(tab->vars[tab->count].name, AML_MAX_NAME, "%s", name);
+    tab->vars[tab->count].type = AML_TYPE_ARRAY;
+    tab->vars[tab->count].value = 0;
+    tab->vars[tab->count].array = arr;
+    tab->count++;
+    return 0;
+}
+
+// Free all arrays in a symbol table (for scope cleanup)
+static void symtab_clear_arrays(AML_Symtab* tab) {
+    for (int i = 0; i < tab->count; i++) {
+        if (tab->vars[i].type == AML_TYPE_ARRAY && tab->vars[i].array) {
+            am_array_free(tab->vars[i].array);
+            tab->vars[i].array = NULL;
+        }
+    }
+}
+
+// Resolve full variable (AML_Var*): locals → globals
+static AML_Var* resolve_var_full(AML_ExecCtx* ctx, const char* name) {
+    if (ctx->call_depth > 0) {
+        AML_Var* v = symtab_get_var(&ctx->locals[ctx->call_depth - 1], name);
+        if (v) return v;
+    }
+    return symtab_get_var(&ctx->globals, name);
 }
 
 // Resolve variable: locals → globals → field map
@@ -766,6 +2011,9 @@ static void expr_skip_ws(AML_Expr* e) {
     while (*e->p && isspace((unsigned char)*e->p)) e->p++;
 }
 
+// Forward declarations for user function calls from expressions
+static int aml_call_func(AML_ExecCtx* ctx, AML_Func* f, float* args, int nargs, int lineno);
+
 static float expr_primary(AML_Expr* e) {
     expr_skip_ws(e);
     if (e->error) return 0;
@@ -798,8 +2046,92 @@ static float expr_primary(AML_Expr* e) {
 
         expr_skip_ws(e);
 
+        // v4.0: array indexing — name[index]
+        if (*e->p == '[') {
+            e->p++;
+            float idx_f = expr_or(e);
+            expr_skip_ws(e);
+            if (*e->p == ']') e->p++;
+            int idx = (int)idx_f;
+
+            if (e->ctx) {
+                AML_Var* var = resolve_var_full(e->ctx, name);
+                if (var && var->type == AML_TYPE_ARRAY && var->array) {
+                    if (idx >= 0 && idx < var->array->len)
+                        return var->array->data[idx];
+                }
+            }
+            return 0;
+        }
+
         // function call
         if (*e->p == '(') {
+            // v4.0: array scalar-returning builtins need raw arg names
+            // Parse them BEFORE evaluating args as expressions
+            if (e->ctx && (strcasecmp(name, "len") == 0 ||
+                           strcasecmp(name, "sum") == 0 ||
+                           strcasecmp(name, "dot") == 0 ||
+                           strcasecmp(name, "rows") == 0 ||
+                           strcasecmp(name, "cols") == 0)) {
+                // Parse argument names (identifiers), not evaluated expressions
+                e->p++; // skip '('
+                char arg_names[AML_MAX_PARAMS][AML_MAX_NAME];
+                int n_arg_names = 0;
+                expr_skip_ws(e);
+                while (*e->p != ')' && *e->p && n_arg_names < AML_MAX_PARAMS) {
+                    int ai = 0;
+                    while ((isalnum((unsigned char)*e->p) || *e->p == '_') && ai < AML_MAX_NAME - 1)
+                        arg_names[n_arg_names][ai++] = *e->p++;
+                    arg_names[n_arg_names][ai] = 0;
+                    n_arg_names++;
+                    expr_skip_ws(e);
+                    if (*e->p == ',') { e->p++; expr_skip_ws(e); }
+                }
+                if (*e->p == ')') e->p++;
+
+                if (strcasecmp(name, "len") == 0 && n_arg_names >= 1) {
+                    AML_Var* v = resolve_var_full(e->ctx, arg_names[0]);
+                    if (v && v->type == AML_TYPE_ARRAY && v->array)
+                        return (float)v->array->len;
+                    return 0;
+                }
+                if (strcasecmp(name, "sum") == 0 && n_arg_names >= 1) {
+                    AML_Var* v = resolve_var_full(e->ctx, arg_names[0]);
+                    if (v && v->type == AML_TYPE_ARRAY && v->array) {
+                        float s = 0;
+                        for (int j = 0; j < v->array->len; j++) s += v->array->data[j];
+                        return s;
+                    }
+                    return 0;
+                }
+                if (strcasecmp(name, "dot") == 0 && n_arg_names >= 2) {
+                    AML_Var* va = resolve_var_full(e->ctx, arg_names[0]);
+                    AML_Var* vb = resolve_var_full(e->ctx, arg_names[1]);
+                    if (va && va->type == AML_TYPE_ARRAY && va->array &&
+                        vb && vb->type == AML_TYPE_ARRAY && vb->array) {
+                        int n = va->array->len < vb->array->len ? va->array->len : vb->array->len;
+                        float d = 0;
+                        for (int j = 0; j < n; j++) d += va->array->data[j] * vb->array->data[j];
+                        return d;
+                    }
+                    return 0;
+                }
+                // Phase 2: rows(M), cols(M)
+                if (strcasecmp(name, "rows") == 0 && n_arg_names >= 1) {
+                    AML_Var* v = resolve_var_full(e->ctx, arg_names[0]);
+                    if (v && v->type == AML_TYPE_ARRAY && v->array)
+                        return (float)v->array->rows;
+                    return 0;
+                }
+                if (strcasecmp(name, "cols") == 0 && n_arg_names >= 1) {
+                    AML_Var* v = resolve_var_full(e->ctx, arg_names[0]);
+                    if (v && v->type == AML_TYPE_ARRAY && v->array)
+                        return (float)v->array->cols;
+                    return 0;
+                }
+                return 0;
+            }
+
             e->p++;
             float args[AML_MAX_PARAMS];
             int nargs = 0;
@@ -814,12 +2146,22 @@ static float expr_primary(AML_Expr* e) {
             expr_skip_ws(e);
             if (*e->p == ')') e->p++;
 
-            // look up user-defined function
+            // look up user-defined function — v4.0: actually call it and return value
             if (e->ctx) {
                 for (int fi = 0; fi < e->ctx->funcs.count; fi++) {
                     if (strcmp(e->ctx->funcs.funcs[fi].name, name) == 0) {
-                        // TODO: call user function from expression context
-                        // For now, return 0
+                        AML_Func* fn = &e->ctx->funcs.funcs[fi];
+                        aml_call_func(e->ctx, fn, args, nargs, 0);
+                        if (e->ctx->has_return) {
+                            float rv = e->ctx->return_value;
+                            // Only reset has_return for scalar returns.
+                            // Array returns stay flagged so the assignment handler
+                            // can pick them up from ctx->return_array.
+                            if (!e->ctx->return_array) {
+                                e->ctx->has_return = 0;
+                            }
+                            return rv;
+                        }
                         return 0;
                     }
                 }
@@ -1743,6 +3085,308 @@ static void aml_exec_level0(const char* cmd, const char* arg, AML_ExecCtx* ctx, 
 #endif
 
     // ─────────────────────────────────────────────────────────────────────────
+    // LILITH I/O — named pipes for data infrastructure
+    // "Та, которая была до Евы."
+    // ─────────────────────────────────────────────────────────────────────────
+
+#ifndef AM_IO_DISABLED
+    else if (!strcmp(t, "PIPE")) {
+      // PIPE CREATE <path>               — create FIFO at path
+      // PIPE OPEN <name> <path> <mode>   — open pipe (mode: READ or WRITE)
+      // PIPE WRITE <name> <message>      — write to pipe
+      // PIPE READ <name>                 — read from pipe (non-blocking)
+      // PIPE CLOSE <name>                — close pipe
+      // PIPE CLOSE_ALL                   — close all pipes
+      // PIPE LIST                        — list open pipes
+      char subcmd[32] = {0};
+      char rest[AML_MAX_LINE_LEN] = {0};
+      if (arg) sscanf(arg, "%31s %[^\n]", subcmd, rest);
+      upcase(subcmd);
+
+      if (!strcmp(subcmd, "CREATE")) {
+        // PIPE CREATE /tmp/lilith_idx1
+        char path[AM_PIPE_PATH_LEN] = {0};
+        sscanf(rest, "%255s", path);
+        if (path[0]) {
+          am_pipe_create(path);
+        } else if (ctx) {
+          set_error_at(ctx, lineno, "PIPE CREATE: path required");
+        }
+      }
+      else if (!strcmp(subcmd, "OPEN")) {
+        // PIPE OPEN idx1_cmd /tmp/lilith_idx1_cmd WRITE
+        char pname[AM_PIPE_NAME_LEN] = {0};
+        char path[AM_PIPE_PATH_LEN] = {0};
+        char mode_str[16] = {0};
+        if (sscanf(rest, "%31s %255s %15s", pname, path, mode_str) >= 2) {
+          upcase(mode_str);
+          int mode = AM_PIPE_MODE_READ;
+          if (!strcmp(mode_str, "WRITE") || !strcmp(mode_str, "W"))
+            mode = AM_PIPE_MODE_WRITE;
+          int idx = am_pipe_open(pname, path, mode);
+          if (idx < 0 && ctx)
+            set_error_at(ctx, lineno, "PIPE OPEN failed");
+        } else if (ctx) {
+          set_error_at(ctx, lineno, "PIPE OPEN: name and path required");
+        }
+      }
+      else if (!strcmp(subcmd, "WRITE")) {
+        // PIPE WRITE idx1_cmd "FETCH r/philosophy"
+        char pname[AM_PIPE_NAME_LEN] = {0};
+        char msg[AM_PIPE_BUF_SIZE] = {0};
+        // Parse: first token = name, rest = message (strip quotes)
+        char* space = strchr(rest, ' ');
+        if (space) {
+          int nlen = (int)(space - rest);
+          if (nlen >= AM_PIPE_NAME_LEN) nlen = AM_PIPE_NAME_LEN - 1;
+          memcpy(pname, rest, nlen);
+          pname[nlen] = 0;
+          // Skip space, strip surrounding quotes
+          const char* mp = space + 1;
+          while (*mp == ' ') mp++;
+          if (*mp == '"') {
+            mp++;
+            const char* end = strrchr(mp, '"');
+            if (end) {
+              int mlen = (int)(end - mp);
+              if (mlen >= AM_PIPE_BUF_SIZE) mlen = AM_PIPE_BUF_SIZE - 1;
+              memcpy(msg, mp, mlen);
+              msg[mlen] = 0;
+            } else {
+              snprintf(msg, sizeof(msg), "%s", mp);
+            }
+          } else {
+            snprintf(msg, sizeof(msg), "%s", mp);
+          }
+          am_pipe_write(pname, msg);
+        }
+      }
+      else if (!strcmp(subcmd, "READ")) {
+        // PIPE READ idx1_rsp
+        char pname[AM_PIPE_NAME_LEN] = {0};
+        sscanf(rest, "%31s", pname);
+        if (pname[0]) {
+          int n = am_pipe_read(pname, g_pipe_read_buf, AM_PIPE_BUF_SIZE);
+          if (n > 0) {
+            printf("[LILITH] %s: %s\n", pname, g_pipe_read_buf);
+            // Store numeric value in AML variable _pipe_value if ctx exists
+            if (ctx && ctx->call_depth > 0) {
+              symtab_set(&ctx->locals[ctx->call_depth - 1],
+                         "_pipe_value", g_pipe_last_value);
+            } else if (ctx) {
+              symtab_set(&ctx->globals, "_pipe_value", g_pipe_last_value);
+            }
+          }
+        }
+      }
+      else if (!strcmp(subcmd, "CLOSE")) {
+        char pname[AM_PIPE_NAME_LEN] = {0};
+        sscanf(rest, "%31s", pname);
+        upcase(pname);
+        if (!strcmp(pname, "ALL") || !strcmp(rest, "ALL")) {
+          am_pipe_close_all();
+        } else {
+          // Restore original case for name lookup
+          sscanf(rest, "%31s", pname);
+          am_pipe_close(pname);
+        }
+      }
+      else if (!strcmp(subcmd, "LIST")) {
+        printf("[LILITH] pipes (%d open):\n", am_pipe_count());
+        for (int i = 0; i < g_pipe_count; i++) {
+          if (g_pipes[i].active) {
+            printf("[LILITH]   %s → %s (%s)\n",
+                   g_pipes[i].name, g_pipes[i].path,
+                   g_pipes[i].mode == AM_PIPE_MODE_READ ? "READ" : "WRITE");
+          }
+        }
+      }
+    }
+
+    else if (!strcmp(t, "INDEX")) {
+      // INDEX <id> <subcmd> [args]  — high-level INDEX node management
+      // Sugar over PIPE commands. Uses convention:
+      //   pipe name = "idx<id>_cmd" (write) / "idx<id>_rsp" (read)
+      //   pipe path = "/tmp/lilith_idx<id>_cmd" / "/tmp/lilith_idx<id>_rsp"
+      char id_str[8] = {0};
+      char subcmd2[32] = {0};
+      char irest[AML_MAX_LINE_LEN] = {0};
+      if (arg) sscanf(arg, "%7s %31s %[^\n]", id_str, subcmd2, irest);
+      upcase(subcmd2);
+
+      if (id_str[0]) {
+        // Build pipe names from INDEX id
+        char cmd_name[AM_PIPE_NAME_LEN];
+        char rsp_name[AM_PIPE_NAME_LEN];
+        char cmd_path[AM_PIPE_PATH_LEN];
+        char rsp_path[AM_PIPE_PATH_LEN];
+        snprintf(cmd_name, sizeof(cmd_name), "idx%s_cmd", id_str);
+        snprintf(rsp_name, sizeof(rsp_name), "idx%s_rsp", id_str);
+        snprintf(cmd_path, sizeof(cmd_path), "/tmp/lilith_idx%s_cmd", id_str);
+        snprintf(rsp_path, sizeof(rsp_path), "/tmp/lilith_idx%s_rsp", id_str);
+
+        if (!strcmp(subcmd2, "INIT")) {
+          // INDEX 1 INIT — create pipes and open them
+          am_pipe_create(cmd_path);
+          am_pipe_create(rsp_path);
+          am_pipe_open(cmd_name, cmd_path, AM_PIPE_MODE_WRITE);
+          am_pipe_open(rsp_name, rsp_path, AM_PIPE_MODE_READ);
+          printf("[LILITH] INDEX %s initialized\n", id_str);
+        }
+        else if (!strcmp(subcmd2, "FETCH")) {
+          // INDEX 1 FETCH r/philosophy — tell index node to fetch
+          char fetch_cmd[AM_PIPE_BUF_SIZE];
+          snprintf(fetch_cmd, sizeof(fetch_cmd), "FETCH %s", irest);
+          am_pipe_write(cmd_name, fetch_cmd);
+        }
+        else if (!strcmp(subcmd2, "STATUS")) {
+          // INDEX 1 STATUS — request + read status
+          am_pipe_write(cmd_name, "STATUS");
+          // Try reading response (might not be immediate)
+          int n = am_pipe_read(rsp_name, g_pipe_read_buf, AM_PIPE_BUF_SIZE);
+          if (n > 0) {
+            printf("[LILITH] INDEX %s status: %s\n", id_str, g_pipe_read_buf);
+          } else {
+            printf("[LILITH] INDEX %s: no response yet\n", id_str);
+          }
+        }
+        else if (!strcmp(subcmd2, "STOP")) {
+          am_pipe_write(cmd_name, "STOP");
+        }
+        else if (!strcmp(subcmd2, "CLOSE")) {
+          am_pipe_close(cmd_name);
+          am_pipe_close(rsp_name);
+        }
+      }
+    }
+#endif // AM_IO_DISABLED
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TAPE — autograd (v4.0 Phase 3)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    else if (!strcmp(t, "TAPE")) {
+      char subcmd[32] = {0};
+      char rest[AML_MAX_LINE_LEN] = {0};
+      if (arg) sscanf(arg, "%31s %[^\n]", subcmd, rest);
+      upcase(subcmd);
+
+      if (!strcmp(subcmd, "START")) {
+        am_tape_start();
+      }
+      else if (!strcmp(subcmd, "CLEAR")) {
+        am_tape_clear();
+      }
+      else if (!strcmp(subcmd, "BACKWARD")) {
+        // TAPE BACKWARD <var_name> — backprop from loss variable
+        char vname[AML_MAX_NAME] = {0};
+        sscanf(rest, "%31s", vname);
+        if (vname[0] && ctx) {
+          AML_Var* v = resolve_var_full(ctx, vname);
+          if (v && v->type == AML_TYPE_ARRAY && v->array) {
+            int tidx = tape_find_entry(v->array);
+            if (tidx >= 0) am_tape_backward(tidx);
+          }
+        }
+      }
+      else if (!strcmp(subcmd, "ADAM_STEP") || !strcmp(subcmd, "ADAM")) {
+        // TAPE ADAM_STEP <lr> or TAPE ADAM <lr>
+        float lr = 0.001f;
+        if (rest[0]) lr = ctx_float(ctx, rest);
+        am_tape_adam_step(lr);
+      }
+      else if (!strcmp(subcmd, "PARAM")) {
+        // TAPE PARAM <var_name> — register variable as trainable parameter
+        char vname[AML_MAX_NAME] = {0};
+        sscanf(rest, "%31s", vname);
+        if (vname[0] && ctx) {
+          AML_Var* v = resolve_var_full(ctx, vname);
+          if (v && v->type == AML_TYPE_ARRAY && v->array) {
+            am_tape_record_param(v->array);
+          }
+        }
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ASYNC — SPAWN/AWAIT/CHANNEL (v4.0 Phase 4)
+    // ─────────────────────────────────────────────────────────────────────────
+
+#ifndef AM_ASYNC_DISABLED
+    else if (!strcmp(t, "AWAIT")) {
+      // AWAIT name1 name2 ... — wait for spawned threads
+      if (arg && *arg) {
+        char names[AML_MAX_LINE_LEN];
+        snprintf(names, sizeof(names), "%s", arg);
+        char* save = NULL;
+        char* tok = strtok_r(names, " \t", &save);
+        while (tok) {
+          am_spawn_await(tok);
+          tok = strtok_r(NULL, " \t", &save);
+        }
+      } else {
+        am_spawn_await_all();
+      }
+    }
+
+    else if (!strcmp(t, "CHANNEL")) {
+      char subcmd[32] = {0};
+      char rest[AML_MAX_LINE_LEN] = {0};
+      if (arg) sscanf(arg, "%31s %[^\n]", subcmd, rest);
+      upcase(subcmd);
+
+      if (!strcmp(subcmd, "CREATE")) {
+        // CHANNEL CREATE name capacity
+        char chname[AM_SPAWN_NAME_LEN] = {0};
+        int cap = AM_CHANNEL_BUF;
+        sscanf(rest, "%31s %d", chname, &cap);
+        if (cap <= 0) cap = AM_CHANNEL_BUF;
+        if (cap > AM_CHANNEL_BUF) cap = AM_CHANNEL_BUF;
+        if (chname[0]) am_channel_create(chname, cap);
+      }
+      else if (!strcmp(subcmd, "WRITE")) {
+        // CHANNEL WRITE name value_expr
+        char chname[AM_SPAWN_NAME_LEN] = {0};
+        char vexpr[AML_MAX_LINE_LEN] = {0};
+        sscanf(rest, "%31s %[^\n]", chname, vexpr);
+        if (chname[0] && vexpr[0] && ctx) {
+          float val = ctx_float(ctx, vexpr);
+          am_channel_write(chname, val);
+        }
+      }
+      else if (!strcmp(subcmd, "READ")) {
+        // CHANNEL READ name var_name
+        char chname[AM_SPAWN_NAME_LEN] = {0};
+        char vname[AML_MAX_NAME] = {0};
+        sscanf(rest, "%31s %31s", chname, vname);
+        if (chname[0] && vname[0] && ctx) {
+          float out = 0;
+          if (am_channel_read(chname, &out) == 0) {
+            int d = ctx->call_depth > 0 ? ctx->call_depth - 1 : 0;
+            symtab_set(&ctx->locals[d], vname, out);
+          }
+        }
+      }
+      else if (!strcmp(subcmd, "CLOSE")) {
+        // CHANNEL CLOSE name
+        char chname[AM_SPAWN_NAME_LEN] = {0};
+        sscanf(rest, "%31s", chname);
+        if (chname[0]) {
+          // close specific channel by zeroing it
+          for (int ci = 0; ci < g_channel_count; ci++) {
+            if (g_channels[ci].active && strcmp(g_channels[ci].name, chname) == 0) {
+              g_channels[ci].active = 0;
+              break;
+            }
+          }
+        } else {
+          am_channel_close_all();
+        }
+      }
+    }
+#endif // AM_ASYNC_DISABLED
+
+    // ─────────────────────────────────────────────────────────────────────────
     // UNKNOWN COMMANDS — ignored intentionally (future-proof + vibe)
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -1853,6 +3497,7 @@ static void aml_register_funcs(AML_ExecCtx* ctx) {
 
 // Call a user-defined function
 // lineno is the caller's line number (for error reporting)
+// v4.0: supports return values via ctx->has_return / return_value / return_array
 static int aml_call_func(AML_ExecCtx* ctx, AML_Func* f, float* args, int nargs, int lineno) {
     // Built-in functions: dispatch to C code directly
     if (f->is_builtin) {
@@ -1865,6 +3510,12 @@ static int aml_call_func(AML_ExecCtx* ctx, AML_Func* f, float* args, int nargs, 
         return 1;
     }
 
+    // Save caller's return state (nested calls must not clobber it)
+    int saved_has_return = ctx->has_return;
+    float saved_return_value = ctx->return_value;
+    AM_Array* saved_return_array = ctx->return_array;
+    int saved_return_type = ctx->return_type;
+
     // push local scope
     ctx->call_depth++;
     AML_Symtab* locals = &ctx->locals[ctx->call_depth - 1];
@@ -1875,22 +3526,753 @@ static int aml_call_func(AML_ExecCtx* ctx, AML_Func* f, float* args, int nargs, 
         symtab_set(locals, f->params[i], args[i]);
     }
 
+    // reset return state for this function
+    ctx->has_return = 0;
+    ctx->return_value = 0;
+    ctx->return_array = NULL;
+
     // execute body
     int rc = aml_exec_block(ctx, f->body_start, f->body_end);
 
+    // v4.0: clean up local arrays on scope exit
+    // BUT: if we're returning an array, bump its refcount first
+    if (ctx->has_return && ctx->return_array) {
+        am_array_ref(ctx->return_array);
+    }
+    symtab_clear_arrays(locals);
+
     // pop scope
     ctx->call_depth--;
+
+    // If this function didn't return, restore caller's return state
+    if (!ctx->has_return) {
+        ctx->has_return = saved_has_return;
+        ctx->return_value = saved_return_value;
+        ctx->return_array = saved_return_array;
+        ctx->return_type = saved_return_type;
+    }
+    // If this function DID return, has_return/return_value stay set for caller to read
+
     return rc;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// v4.0: ARRAY HELPER — try to parse RHS as array-producing expression
+// Returns newly allocated AM_Array*, or NULL if not an array expression.
+// Handles: zeros(n), randn(n, std), [1.0, 2.0, 3.0], add(a,b), mul(a,b),
+//          scale(a, s), and user function calls that return arrays.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
+    // skip whitespace
+    while (*rhs == ' ') rhs++;
+
+    // --- array literal: [1.0, 2.0, 3.0] ---
+    if (*rhs == '[') {
+        rhs++;
+        float vals[256];
+        int count = 0;
+        while (*rhs && *rhs != ']' && count < 256) {
+            while (*rhs == ' ' || *rhs == ',') rhs++;
+            if (*rhs == ']') break;
+            char* end;
+            vals[count++] = strtof(rhs, &end);
+            rhs = end;
+        }
+        if (count > 0) {
+            AM_Array* arr = am_array_new(count);
+            if (arr) memcpy(arr->data, vals, count * sizeof(float));
+            return arr;
+        }
+        return NULL;
+    }
+
+    // --- function call: name(args) ---
+    char fname[AML_MAX_NAME] = {0};
+    int fi = 0;
+    while ((isalnum((unsigned char)rhs[fi]) || rhs[fi] == '_') && fi < AML_MAX_NAME - 1) {
+        fname[fi] = rhs[fi]; fi++;
+    }
+    fname[fi] = 0;
+    const char* after_name = rhs + fi;
+    while (*after_name == ' ') after_name++;
+    if (*after_name != '(') return NULL;
+
+    // Parse arguments as raw text tokens (needed for variable names)
+    const char* ap = after_name + 1;
+    char arg_strs[AML_MAX_PARAMS][AML_MAX_NAME];
+    int nargs = 0;
+    while (*ap && *ap != ')' && nargs < AML_MAX_PARAMS) {
+        while (*ap == ' ' || *ap == ',') ap++;
+        if (*ap == ')') break;
+        int ai = 0;
+        // Capture the whole argument expression (may be a number or identifier)
+        int paren_depth = 0;
+        while (*ap && (paren_depth > 0 || (*ap != ',' && *ap != ')')) && ai < AML_MAX_NAME - 1) {
+            if (*ap == '(') paren_depth++;
+            if (*ap == ')') { if (paren_depth > 0) paren_depth--; else break; }
+            arg_strs[nargs][ai++] = *ap++;
+        }
+        // Trim trailing spaces
+        while (ai > 0 && arg_strs[nargs][ai-1] == ' ') ai--;
+        arg_strs[nargs][ai] = 0;
+        nargs++;
+    }
+
+    // zeros(n) — create zero-initialized array
+    if (strcasecmp(fname, "zeros") == 0 && nargs >= 1) {
+        int n = (int)aml_eval(ctx, arg_strs[0]);
+        if (n > 0 && n <= AM_MAX_ARRAY_SIZE) return am_array_new(n);
+        return NULL;
+    }
+
+    // randn(n, std) — random normal initialization
+    if (strcasecmp(fname, "randn") == 0 && nargs >= 1) {
+        int n = (int)aml_eval(ctx, arg_strs[0]);
+        float std = (nargs >= 2) ? aml_eval(ctx, arg_strs[1]) : 1.0f;
+        if (n <= 0 || n > AM_MAX_ARRAY_SIZE) return NULL;
+        AM_Array* arr = am_array_new(n);
+        if (!arr) return NULL;
+        // Box-Muller transform for normal distribution
+        for (int j = 0; j < n; j += 2) {
+            float u1 = ((float)rand() / (float)RAND_MAX) * 0.9998f + 0.0001f;
+            float u2 = ((float)rand() / (float)RAND_MAX);
+            float r = sqrtf(-2.0f * logf(u1));
+            arr->data[j] = r * cosf(2.0f * 3.14159265f * u2) * std;
+            if (j + 1 < n)
+                arr->data[j + 1] = r * sinf(2.0f * 3.14159265f * u2) * std;
+        }
+        return arr;
+    }
+
+    // add(a, b) — element-wise addition
+    if (strcasecmp(fname, "add") == 0 && nargs >= 2) {
+        AML_Var* va = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vb = resolve_var_full(ctx, arg_strs[1]);
+        if (va && va->type == AML_TYPE_ARRAY && va->array &&
+            vb && vb->type == AML_TYPE_ARRAY && vb->array) {
+            int n = va->array->len < vb->array->len ? va->array->len : vb->array->len;
+            AM_Array* arr = am_array_new(n);
+            if (!arr) return NULL;
+            for (int j = 0; j < n; j++)
+                arr->data[j] = va->array->data[j] + vb->array->data[j];
+            if (am_tape_is_active())
+                am_tape_record(arr, AM_OP_ADD, tape_ensure_entry(va->array), tape_ensure_entry(vb->array), 0);
+            return arr;
+        }
+        return NULL;
+    }
+
+    // mul(a, b) — element-wise multiplication
+    if (strcasecmp(fname, "mul") == 0 && nargs >= 2) {
+        AML_Var* va = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vb = resolve_var_full(ctx, arg_strs[1]);
+        if (va && va->type == AML_TYPE_ARRAY && va->array &&
+            vb && vb->type == AML_TYPE_ARRAY && vb->array) {
+            int n = va->array->len < vb->array->len ? va->array->len : vb->array->len;
+            AM_Array* arr = am_array_new(n);
+            if (!arr) return NULL;
+            for (int j = 0; j < n; j++)
+                arr->data[j] = va->array->data[j] * vb->array->data[j];
+            if (am_tape_is_active())
+                am_tape_record(arr, AM_OP_MUL, tape_ensure_entry(va->array), tape_ensure_entry(vb->array), 0);
+            return arr;
+        }
+        return NULL;
+    }
+
+    // scale(a, scalar) — scalar multiplication
+    if (strcasecmp(fname, "scale") == 0 && nargs >= 2) {
+        AML_Var* va = resolve_var_full(ctx, arg_strs[0]);
+        float scalar = aml_eval(ctx, arg_strs[1]);
+        if (va && va->type == AML_TYPE_ARRAY && va->array) {
+            AM_Array* arr = am_array_new(va->array->len);
+            if (!arr) return NULL;
+            for (int j = 0; j < va->array->len; j++)
+                arr->data[j] = va->array->data[j] * scalar;
+            if (am_tape_is_active())
+                am_tape_record(arr, AM_OP_SCALE, tape_ensure_entry(va->array), -1, scalar);
+            return arr;
+        }
+        return NULL;
+    }
+
+    // ── Phase 2: Matrix/Tensor operations ──
+
+    // matrix(rows, cols, std) — create matrix with random normal init
+    if (strcasecmp(fname, "matrix") == 0 && nargs >= 2) {
+        int rows = (int)aml_eval(ctx, arg_strs[0]);
+        int cols = (int)aml_eval(ctx, arg_strs[1]);
+        float std = (nargs >= 3) ? aml_eval(ctx, arg_strs[2]) : 0.08f;
+        AM_Array* arr = am_matrix_new(rows, cols);
+        if (!arr) return NULL;
+        for (int j = 0; j < arr->len; j += 2) {
+            float u1 = ((float)rand() / (float)RAND_MAX) * 0.9998f + 0.0001f;
+            float u2 = ((float)rand() / (float)RAND_MAX);
+            float r = sqrtf(-2.0f * logf(u1));
+            arr->data[j] = r * cosf(2.0f * 3.14159265f * u2) * std;
+            if (j + 1 < arr->len)
+                arr->data[j + 1] = r * sinf(2.0f * 3.14159265f * u2) * std;
+        }
+        return arr;
+    }
+
+    // matrix_zeros(rows, cols) — create zero-initialized matrix
+    if (strcasecmp(fname, "matrix_zeros") == 0 && nargs >= 2) {
+        int rows = (int)aml_eval(ctx, arg_strs[0]);
+        int cols = (int)aml_eval(ctx, arg_strs[1]);
+        return am_matrix_new(rows, cols);
+    }
+
+    // matvec(W, x) — matrix × vector → vector
+    if (strcasecmp(fname, "matvec") == 0 && nargs >= 2) {
+        AML_Var* vw = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[1]);
+        if (vw && vw->type == AML_TYPE_ARRAY && vw->array && vw->array->rows > 0 &&
+            vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            int rows = vw->array->rows;
+            int cols = vw->array->cols;
+            if (cols != vx->array->len) return NULL;
+            AM_Array* out = am_array_new(rows);
+            if (!out) return NULL;
+#ifdef USE_BLAS
+            cblas_sgemv(CblasRowMajor, CblasNoTrans, rows, cols,
+                        1.0f, vw->array->data, cols, vx->array->data, 1,
+                        0.0f, out->data, 1);
+#else
+            for (int i = 0; i < rows; i++) {
+                float s = 0;
+                for (int j = 0; j < cols; j++)
+                    s += vw->array->data[i * cols + j] * vx->array->data[j];
+                out->data[i] = s;
+            }
+#endif
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_MATVEC, tape_ensure_entry(vw->array), tape_ensure_entry(vx->array), 0);
+            return out;
+        }
+        return NULL;
+    }
+
+    // matmul(A, B) — matrix × matrix → matrix
+    if (strcasecmp(fname, "matmul") == 0 && nargs >= 2) {
+        AML_Var* va = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vb = resolve_var_full(ctx, arg_strs[1]);
+        if (va && va->type == AML_TYPE_ARRAY && va->array && va->array->rows > 0 &&
+            vb && vb->type == AML_TYPE_ARRAY && vb->array && vb->array->rows > 0) {
+            int m = va->array->rows, k = va->array->cols;
+            int k2 = vb->array->rows, n = vb->array->cols;
+            if (k != k2) return NULL;
+            AM_Array* out = am_matrix_new(m, n);
+            if (!out) return NULL;
+#ifdef USE_BLAS
+            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                        m, n, k, 1.0f,
+                        va->array->data, k, vb->array->data, n,
+                        0.0f, out->data, n);
+#else
+            for (int i = 0; i < m; i++)
+                for (int j = 0; j < n; j++) {
+                    float s = 0;
+                    for (int p = 0; p < k; p++)
+                        s += va->array->data[i * k + p] * vb->array->data[p * n + j];
+                    out->data[i * n + j] = s;
+                }
+#endif
+            return out;
+        }
+        return NULL;
+    }
+
+    // softmax(x) — softmax over 1D array
+    if (strcasecmp(fname, "softmax") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            int n = vx->array->len;
+            AM_Array* out = am_array_new(n);
+            if (!out) return NULL;
+            // Find max for numerical stability
+            float mx = vx->array->data[0];
+            for (int j = 1; j < n; j++)
+                if (vx->array->data[j] > mx) mx = vx->array->data[j];
+            float sum = 0;
+            for (int j = 0; j < n; j++) {
+                out->data[j] = expf(vx->array->data[j] - mx);
+                sum += out->data[j];
+            }
+            if (sum > 0) for (int j = 0; j < n; j++) out->data[j] /= sum;
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_SOFTMAX, tape_ensure_entry(vx->array), -1, 0);
+            return out;
+        }
+        return NULL;
+    }
+
+    // rmsnorm(x) — RMS normalization
+    if (strcasecmp(fname, "rmsnorm") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            int n = vx->array->len;
+            AM_Array* out = am_array_new(n);
+            if (!out) return NULL;
+            float ss = 0;
+            for (int j = 0; j < n; j++) ss += vx->array->data[j] * vx->array->data[j];
+            float rms = sqrtf(ss / n + 1e-6f);
+            for (int j = 0; j < n; j++) out->data[j] = vx->array->data[j] / rms;
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_RMSNORM, tape_ensure_entry(vx->array), -1, 0);
+            return out;
+        }
+        return NULL;
+    }
+
+    // silu(x) — SiLU/Swish activation: x * sigmoid(x)
+    if (strcasecmp(fname, "silu") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        AM_Array* input_arr = NULL;
+        int owns_input = 0;  // 1 if we created input_arr via recursive call
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            input_arr = vx->array;
+        } else {
+            // Try recursive evaluation: silu(seq_matvec(...)) etc.
+            input_arr = aml_try_array_expr(ctx, arg_strs[0]);
+            if (input_arr) owns_input = 1;
+        }
+        if (input_arr) {
+            int n = input_arr->len;
+            AM_Array* out = am_array_new(n);
+            if (!out) { if (owns_input) am_array_free(input_arr); return NULL; }
+            for (int j = 0; j < n; j++) {
+                float x = input_arr->data[j];
+                out->data[j] = x / (1.0f + expf(-x));
+            }
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_SILU, tape_ensure_entry(input_arr), -1, 0);
+            // Don't free input_arr even if owns_input — tape may reference it
+            return out;
+        }
+        return NULL;
+    }
+
+    // relu(x) — ReLU activation
+    if (strcasecmp(fname, "relu") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        AM_Array* input_arr = NULL;
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            input_arr = vx->array;
+        } else {
+            input_arr = aml_try_array_expr(ctx, arg_strs[0]);
+        }
+        if (input_arr) {
+            int n = input_arr->len;
+            AM_Array* out = am_array_new(n);
+            if (!out) return NULL;
+            for (int j = 0; j < n; j++)
+                out->data[j] = input_arr->data[j] > 0 ? input_arr->data[j] : 0;
+            return out;
+        }
+        return NULL;
+    }
+
+    // ── Phase 3: Autograd operations ──
+
+    // cross_entropy(logits, target_idx) — cross-entropy loss (returns 1-element array)
+    if (strcasecmp(fname, "cross_entropy") == 0 && nargs >= 2) {
+        AML_Var* vl = resolve_var_full(ctx, arg_strs[0]);
+        int target = (int)aml_eval(ctx, arg_strs[1]);
+        if (vl && vl->type == AML_TYPE_ARRAY && vl->array) {
+            int n = vl->array->len;
+            if (target < 0 || target >= n) return NULL;
+            // Compute softmax
+            float mx = vl->array->data[0];
+            for (int j = 1; j < n; j++)
+                if (vl->array->data[j] > mx) mx = vl->array->data[j];
+            float sum = 0;
+            for (int j = 0; j < n; j++)
+                sum += expf(vl->array->data[j] - mx);
+            float log_softmax = vl->array->data[target] - mx - logf(sum);
+            AM_Array* out = am_array_new(1);
+            if (!out) return NULL;
+            out->data[0] = -log_softmax;
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_CROSS_ENT, tape_ensure_entry(vl->array), -1, (float)target);
+            return out;
+        }
+        return NULL;
+    }
+
+    // embedding_lookup(wte, token_id) — extract row from embedding matrix (alias for row with tape)
+    if (strcasecmp(fname, "embedding_lookup") == 0 && nargs >= 2) {
+        AML_Var* vm = resolve_var_full(ctx, arg_strs[0]);
+        int token_id = (int)aml_eval(ctx, arg_strs[1]);
+        if (vm && vm->type == AML_TYPE_ARRAY && vm->array && vm->array->rows > 0) {
+            if (token_id < 0 || token_id >= vm->array->rows) return NULL;
+            int cols = vm->array->cols;
+            AM_Array* out = am_array_new(cols);
+            if (!out) return NULL;
+            memcpy(out->data, vm->array->data + token_id * cols, cols * sizeof(float));
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_EMB_LOOKUP, tape_ensure_entry(vm->array), -1, (float)token_id);
+            return out;
+        }
+        return NULL;
+    }
+
+    // row(M, i) — extract row i from matrix M as 1D array
+    if (strcasecmp(fname, "row") == 0 && nargs >= 2) {
+        AML_Var* vm = resolve_var_full(ctx, arg_strs[0]);
+        int ri = (int)aml_eval(ctx, arg_strs[1]);
+        if (vm && vm->type == AML_TYPE_ARRAY && vm->array && vm->array->rows > 0) {
+            if (ri < 0 || ri >= vm->array->rows) return NULL;
+            int cols = vm->array->cols;
+            AM_Array* out = am_array_new(cols);
+            if (!out) return NULL;
+            memcpy(out->data, vm->array->data + ri * cols, cols * sizeof(float));
+            return out;
+        }
+        return NULL;
+    }
+
+    // ── Phase 5: Sequence-level transformer operations ──
+
+    // seq_embed(wte, wpe, tokens, T) — embed a sequence of T tokens
+    // wte: matrix[vocab_size × D], wpe: matrix[seq_len × D], tokens: array[T] of float token IDs
+    // Returns: array[T*D] — concatenated embeddings for each position
+    if (strcasecmp(fname, "seq_embed") == 0 && nargs >= 4) {
+        AML_Var* vwte = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vwpe = resolve_var_full(ctx, arg_strs[1]);
+        AML_Var* vtok = resolve_var_full(ctx, arg_strs[2]);
+        int T = (int)aml_eval(ctx, arg_strs[3]);
+        if (vwte && vwte->type == AML_TYPE_ARRAY && vwte->array && vwte->array->rows > 0 &&
+            vwpe && vwpe->type == AML_TYPE_ARRAY && vwpe->array && vwpe->array->rows > 0 &&
+            vtok && vtok->type == AML_TYPE_ARRAY && vtok->array && T > 0) {
+            int D = vwte->array->cols;
+            if (vwpe->array->cols != D) return NULL;
+            if (T > vtok->array->len) T = vtok->array->len;
+            AM_Array* out = am_array_new(T * D);
+            if (!out) return NULL;
+            for (int t = 0; t < T; t++) {
+                int tok = (int)vtok->array->data[t];
+                if (tok < 0) tok = 0;
+                if (tok >= vwte->array->rows) tok = vwte->array->rows - 1;
+                int pos = t < vwpe->array->rows ? t : vwpe->array->rows - 1;
+                for (int d = 0; d < D; d++)
+                    out->data[t * D + d] = vwte->array->data[tok * D + d] + vwpe->array->data[pos * D + d];
+            }
+            if (am_tape_is_active())
+                am_tape_record3(out, AM_OP_SEQ_EMBED,
+                    tape_ensure_entry(vwte->array), tape_ensure_entry(vwpe->array),
+                    tape_ensure_entry(vtok->array), (float)T, (float)D);
+            return out;
+        }
+        return NULL;
+    }
+
+    // seq_matvec(W, X, T) — apply W to each of T vectors in X
+    // W: matrix[out_dim × in_dim], X: array[T*in_dim]
+    // Returns: array[T*out_dim]
+    if (strcasecmp(fname, "seq_matvec") == 0 && nargs >= 3) {
+        AML_Var* vw = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[1]);
+        int T = (int)aml_eval(ctx, arg_strs[2]);
+        if (vw && vw->type == AML_TYPE_ARRAY && vw->array && vw->array->rows > 0 &&
+            vx && vx->type == AML_TYPE_ARRAY && vx->array && T > 0) {
+            int out_dim = vw->array->rows;
+            int in_dim = vw->array->cols;
+            if (T * in_dim > vx->array->len) return NULL;
+            AM_Array* out = am_array_new(T * out_dim);
+            if (!out) return NULL;
+            float* W = vw->array->data;
+            float* X = vx->array->data;
+            float* Y = out->data;
+            #ifdef _OPENMP
+            #pragma omp parallel for schedule(static) if(T * out_dim > 4096)
+            #endif
+            for (int t = 0; t < T; t++) {
+                float* x_t = X + t * in_dim;
+                float* y_t = Y + t * out_dim;
+                for (int i = 0; i < out_dim; i++) {
+                    float s = 0;
+                    for (int j = 0; j < in_dim; j++)
+                        s += W[i * in_dim + j] * x_t[j];
+                    y_t[i] = s;
+                }
+            }
+            if (am_tape_is_active())
+                am_tape_record3(out, AM_OP_SEQ_MATVEC,
+                    tape_ensure_entry(vw->array), tape_ensure_entry(vx->array), -1,
+                    (float)T, 0);
+            return out;
+        }
+        return NULL;
+    }
+
+    // seq_rmsnorm(X, T, D) — RMSNorm each D-sized chunk of X independently
+    // X: array[T*D], returns array[T*D]
+    if (strcasecmp(fname, "seq_rmsnorm") == 0 && nargs >= 3) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        int T = (int)aml_eval(ctx, arg_strs[1]);
+        int D = (int)aml_eval(ctx, arg_strs[2]);
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array && T > 0 && D > 0) {
+            if (T * D > vx->array->len) return NULL;
+            AM_Array* out = am_array_new(T * D);
+            if (!out) return NULL;
+            float* Xr = vx->array->data;
+            float* Or = out->data;
+            #ifdef _OPENMP
+            #pragma omp parallel for schedule(static) if(T > 32)
+            #endif
+            for (int t = 0; t < T; t++) {
+                float* x_t = Xr + t * D;
+                float* o_t = Or + t * D;
+                float ss = 0;
+                for (int d = 0; d < D; d++) ss += x_t[d] * x_t[d];
+                float rms = sqrtf(ss / D + 1e-6f);
+                for (int d = 0; d < D; d++) o_t[d] = x_t[d] / rms;
+            }
+            if (am_tape_is_active())
+                am_tape_record3(out, AM_OP_SEQ_RMSNORM,
+                    tape_ensure_entry(vx->array), -1, -1, (float)T, (float)D);
+            return out;
+        }
+        return NULL;
+    }
+
+    // causal_attention(Q, K, V, T, D) — single-head causal self-attention
+    // Q, K, V: array[T*D], returns array[T*D]
+    // For each position i, attends to positions 0..i with softmax
+    if (strcasecmp(fname, "causal_attention") == 0 && nargs >= 5) {
+        AML_Var* vq = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vk = resolve_var_full(ctx, arg_strs[1]);
+        AML_Var* vv = resolve_var_full(ctx, arg_strs[2]);
+        int T = (int)aml_eval(ctx, arg_strs[3]);
+        int D = (int)aml_eval(ctx, arg_strs[4]);
+        if (vq && vq->type == AML_TYPE_ARRAY && vq->array &&
+            vk && vk->type == AML_TYPE_ARRAY && vk->array &&
+            vv && vv->type == AML_TYPE_ARRAY && vv->array && T > 0 && D > 0) {
+            if (T * D > vq->array->len || T * D > vk->array->len || T * D > vv->array->len)
+                return NULL;
+            float scale = 1.0f / sqrtf((float)D);
+            AM_Array* out = am_array_new(T * D);
+            if (!out) return NULL;
+            // For each query position
+            for (int i = 0; i < T; i++) {
+                float* qi = vq->array->data + i * D;
+                // Compute attention scores for positions 0..i
+                float* scores = (float*)calloc(i + 1, sizeof(float));
+                if (!scores) { am_array_free(out); return NULL; }
+                float mx = -1e30f;
+                for (int j = 0; j <= i; j++) {
+                    float* kj = vk->array->data + j * D;
+                    float dot = 0;
+                    for (int d = 0; d < D; d++) dot += qi[d] * kj[d];
+                    scores[j] = dot * scale;
+                    if (scores[j] > mx) mx = scores[j];
+                }
+                // Softmax
+                float sum = 0;
+                for (int j = 0; j <= i; j++) {
+                    scores[j] = expf(scores[j] - mx);
+                    sum += scores[j];
+                }
+                if (sum > 0) for (int j = 0; j <= i; j++) scores[j] /= sum;
+                // Weighted sum of V
+                float* oi = out->data + i * D;
+                for (int d = 0; d < D; d++) oi[d] = 0;
+                for (int j = 0; j <= i; j++) {
+                    float* vj = vv->array->data + j * D;
+                    for (int d = 0; d < D; d++) oi[d] += scores[j] * vj[d];
+                }
+                free(scores);
+            }
+            if (am_tape_is_active())
+                am_tape_record3(out, AM_OP_CAUSAL_ATTN,
+                    tape_ensure_entry(vq->array), tape_ensure_entry(vk->array),
+                    tape_ensure_entry(vv->array), (float)T, (float)D);
+            return out;
+        }
+        return NULL;
+    }
+
+    // multi_head_attention(Q, K, V, T, D, n_heads) — multi-head causal self-attention
+    // Q, K, V: array[T*D], splits D into n_heads heads of head_dim = D/n_heads
+    // Returns: array[T*D]
+    if (strcasecmp(fname, "multi_head_attention") == 0 && nargs >= 6) {
+        AML_Var* vq = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vk = resolve_var_full(ctx, arg_strs[1]);
+        AML_Var* vv = resolve_var_full(ctx, arg_strs[2]);
+        int T = (int)aml_eval(ctx, arg_strs[3]);
+        int D = (int)aml_eval(ctx, arg_strs[4]);
+        int n_heads = (int)aml_eval(ctx, arg_strs[5]);
+        if (vq && vq->type == AML_TYPE_ARRAY && vq->array &&
+            vk && vk->type == AML_TYPE_ARRAY && vk->array &&
+            vv && vv->type == AML_TYPE_ARRAY && vv->array &&
+            T > 0 && D > 0 && n_heads > 0 && (D % n_heads) == 0) {
+            if (T * D > vq->array->len || T * D > vk->array->len || T * D > vv->array->len)
+                return NULL;
+            int head_dim = D / n_heads;
+            float scale = 1.0f / sqrtf((float)head_dim);
+            AM_Array* out = am_array_new(T * D);
+            if (!out) return NULL;
+            float* Qd = vq->array->data;
+            float* Kd = vk->array->data;
+            float* Vd = vv->array->data;
+            float* Od = out->data;
+            #ifdef _OPENMP
+            #pragma omp parallel if(n_heads >= 2)
+            {
+            float* scores_buf = (float*)malloc(T * sizeof(float));
+            #pragma omp for schedule(static) collapse(2)
+            #else
+            float* scores_buf = (float*)malloc(T * sizeof(float));
+            #endif
+            for (int h = 0; h < n_heads; h++) {
+                for (int i = 0; i < T; i++) {
+                    int ho = h * head_dim;
+                    float* qi = Qd + i * D + ho;
+                    float mx = -1e30f;
+                    for (int j = 0; j <= i; j++) {
+                        float* kj = Kd + j * D + ho;
+                        float dot = 0;
+                        for (int d = 0; d < head_dim; d++) dot += qi[d] * kj[d];
+                        scores_buf[j] = dot * scale;
+                        if (scores_buf[j] > mx) mx = scores_buf[j];
+                    }
+                    float sum = 0;
+                    for (int j = 0; j <= i; j++) {
+                        scores_buf[j] = expf(scores_buf[j] - mx);
+                        sum += scores_buf[j];
+                    }
+                    if (sum > 0) for (int j = 0; j <= i; j++) scores_buf[j] /= sum;
+                    float* oi = Od + i * D + ho;
+                    for (int d = 0; d < head_dim; d++) oi[d] = 0;
+                    for (int j = 0; j <= i; j++) {
+                        float* vj = Vd + j * D + ho;
+                        for (int d = 0; d < head_dim; d++) oi[d] += scores_buf[j] * vj[d];
+                    }
+                }
+            }
+            #ifdef _OPENMP
+            free(scores_buf);
+            }
+            #else
+            free(scores_buf);
+            #endif
+            if (am_tape_is_active())
+                am_tape_record3(out, AM_OP_MH_CAUSAL_ATTN,
+                    tape_ensure_entry(vq->array), tape_ensure_entry(vk->array),
+                    tape_ensure_entry(vv->array), (float)T, (float)head_dim);
+            return out;
+        }
+        return NULL;
+    }
+
+    // seq_cross_entropy(logits, targets, T, V) — cross-entropy over T positions
+    // logits: array[T*V], targets: array[T] of float token IDs
+    // Returns: array[1] (mean loss over T positions)
+    if (strcasecmp(fname, "seq_cross_entropy") == 0 && nargs >= 4) {
+        AML_Var* vl = resolve_var_full(ctx, arg_strs[0]);
+        AML_Var* vt = resolve_var_full(ctx, arg_strs[1]);
+        int T = (int)aml_eval(ctx, arg_strs[2]);
+        int V = (int)aml_eval(ctx, arg_strs[3]);
+        if (vl && vl->type == AML_TYPE_ARRAY && vl->array &&
+            vt && vt->type == AML_TYPE_ARRAY && vt->array && T > 0 && V > 0) {
+            if (T * V > vl->array->len || T > vt->array->len) return NULL;
+            AM_Array* out = am_array_new(1);
+            if (!out) return NULL;
+            float total_loss = 0;
+            for (int t = 0; t < T; t++) {
+                float* logits_t = vl->array->data + t * V;
+                int target = (int)vt->array->data[t];
+                if (target < 0 || target >= V) target = 0;
+                // Softmax + log-loss
+                float mx = logits_t[0];
+                for (int j = 1; j < V; j++)
+                    if (logits_t[j] > mx) mx = logits_t[j];
+                float sum = 0;
+                for (int j = 0; j < V; j++) sum += expf(logits_t[j] - mx);
+                float log_prob = (logits_t[target] - mx) - logf(sum + 1e-10f);
+                total_loss -= log_prob;
+            }
+            out->data[0] = total_loss / T;
+            if (am_tape_is_active())
+                am_tape_record3(out, AM_OP_SEQ_CROSSENT,
+                    tape_ensure_entry(vl->array), tape_ensure_entry(vt->array), -1,
+                    (float)T, (float)V);
+            return out;
+        }
+        return NULL;
+    }
+
+    // NOTE: user-defined functions that return arrays are handled at
+    // the assignment level (aml_exec_line), not here. aml_try_array_expr
+    // only handles known array-producing builtins to avoid accidentally
+    // eating scalar returns from user functions.
+    return NULL;
 }
 
 // Execute a single line in Level 2 context
 static int aml_exec_line(AML_ExecCtx* ctx, int idx) {
     char* text = ctx->lines[idx].text;
 
+    // v4.0: propagate return — if has_return is set, stop executing
+    if (ctx->has_return) return ctx->nlines;
+
     // --- def: skip (already registered) ---
     if (strncmp(text, "def ", 4) == 0) {
         // skip body
         return aml_find_block_end(ctx->lines, ctx->nlines, idx);
+    }
+
+    // --- v4.0: return statement ---
+    if (strncmp(text, "return ", 7) == 0 || strcmp(text, "return") == 0) {
+        const char* rhs = text + 6;
+        while (*rhs == ' ') rhs++;
+        if (*rhs) {
+            // Try array builtin expression first (zeros, randn, add, mul, scale, literal)
+            AM_Array* arr = aml_try_array_expr(ctx, rhs);
+            if (arr) {
+                ctx->has_return = 1;
+                ctx->return_type = AML_TYPE_ARRAY;
+                ctx->return_value = 0;
+                ctx->return_array = arr;
+            } else {
+                // Check if RHS is just an array variable name
+                char rhs_name[AML_MAX_NAME] = {0};
+                const char* rp = rhs;
+                int ri = 0;
+                while ((isalnum((unsigned char)*rp) || *rp == '_') && ri < AML_MAX_NAME - 1)
+                    rhs_name[ri++] = *rp++;
+                rhs_name[ri] = 0;
+                while (*rp == ' ') rp++;
+                if (ri > 0 && *rp == '\0') {
+                    AML_Var* src = resolve_var_full(ctx, rhs_name);
+                    if (src && src->type == AML_TYPE_ARRAY && src->array) {
+                        ctx->has_return = 1;
+                        ctx->return_type = AML_TYPE_ARRAY;
+                        ctx->return_value = 0;
+                        ctx->return_array = src->array; // refcount bumped in aml_call_func
+                        return ctx->nlines;
+                    }
+                }
+                // Scalar return (may call user functions via aml_eval)
+                float val = aml_eval(ctx, rhs);
+                // Check if a user function returned an array through eval
+                if (ctx->has_return && ctx->return_array) {
+                    // Already set by the function call, keep it
+                } else {
+                    ctx->has_return = 1;
+                    ctx->return_type = AML_TYPE_FLOAT;
+                    ctx->return_value = val;
+                    ctx->return_array = NULL;
+                }
+            }
+        } else {
+            ctx->has_return = 1;
+            ctx->return_value = 0;
+            ctx->return_array = NULL;
+        }
+        return ctx->nlines; // stop block execution
     }
 
     // --- if/else ---
@@ -1934,12 +4316,48 @@ static int aml_exec_line(AML_ExecCtx* ctx, int idx) {
         int body_end = aml_find_block_end(ctx->lines, ctx->nlines, idx);
         int iterations = 0;
 
-        while (aml_eval(ctx, cond) != 0.0f && iterations < 10000) {
+        while (aml_eval(ctx, cond) != 0.0f && iterations < 10000 && !ctx->has_return) {
             aml_exec_block(ctx, idx + 1, body_end);
             iterations++;
         }
         return body_end;
     }
+
+    // --- v4.0: SPAWN name: (async block) ---
+#ifndef AM_ASYNC_DISABLED
+    if (strncasecmp(text, "SPAWN ", 6) == 0) {
+        // Parse: SPAWN name:
+        char spawn_name[AM_SPAWN_NAME_LEN] = {0};
+        const char* sp = text + 6;
+        while (*sp == ' ') sp++;
+        int ni = 0;
+        while (*sp && *sp != ':' && *sp != ' ' && ni < AM_SPAWN_NAME_LEN - 1)
+            spawn_name[ni++] = *sp++;
+        spawn_name[ni] = 0;
+
+        int body_end = aml_find_block_end(ctx->lines, ctx->nlines, idx);
+
+        // Build script string from indented block
+        // Calculate total size needed
+        int total = 0;
+        for (int bi = idx + 1; bi < body_end; bi++)
+            total += (int)strlen(ctx->lines[bi].text) + 1; // +1 for newline
+        total += 1; // null terminator
+
+        char* script = (char*)malloc(total);
+        if (script) {
+            script[0] = 0;
+            for (int bi = idx + 1; bi < body_end; bi++) {
+                strcat(script, ctx->lines[bi].text);
+                strcat(script, "\n");
+            }
+            am_spawn_launch(spawn_name, script);
+            free(script);
+        }
+
+        return body_end;
+    }
+#endif // AM_ASYNC_DISABLED
 
     // --- INCLUDE ---
     if (strncasecmp(text, "INCLUDE ", 8) == 0) {
@@ -1963,6 +4381,53 @@ static int aml_exec_line(AML_ExecCtx* ctx, int idx) {
         return idx + 1;
     }
 
+    // --- v4.0: array element write: name[index] = expr ---
+    {
+        // Look for pattern: identifier[expr] = expr
+        const char* bracket = strchr(text, '[');
+        if (bracket) {
+            const char* close_bracket = strchr(bracket, ']');
+            if (close_bracket) {
+                const char* eq_after = close_bracket + 1;
+                while (*eq_after == ' ') eq_after++;
+                if (*eq_after == '=' && eq_after[1] != '=') {
+                    // Extract variable name
+                    char varname[AML_MAX_NAME] = {0};
+                    int ni = 0;
+                    const char* p = text;
+                    while (p < bracket && ni < AML_MAX_NAME - 1) {
+                        if (!isspace((unsigned char)*p))
+                            varname[ni++] = *p;
+                        p++;
+                    }
+                    varname[ni] = 0;
+
+                    if (ni > 0) {
+                        // Evaluate index
+                        char idx_expr[AML_MAX_LINE_LEN] = {0};
+                        int ie = 0;
+                        const char* ip = bracket + 1;
+                        while (ip < close_bracket && ie < AML_MAX_LINE_LEN - 1)
+                            idx_expr[ie++] = *ip++;
+                        idx_expr[ie] = 0;
+                        int index = (int)aml_eval(ctx, idx_expr);
+
+                        // Evaluate value
+                        float val = aml_eval(ctx, eq_after + 1);
+
+                        // Find the array variable and write to it
+                        AML_Var* var = resolve_var_full(ctx, varname);
+                        if (var && var->type == AML_TYPE_ARRAY && var->array) {
+                            if (index >= 0 && index < var->array->len)
+                                var->array->data[index] = val;
+                        }
+                        return idx + 1;
+                    }
+                }
+            }
+        }
+    }
+
     // --- assignment: name = expr ---
     {
         const char* eq = strchr(text, '=');
@@ -1980,7 +4445,57 @@ static int aml_exec_line(AML_ExecCtx* ctx, int idx) {
             varname[ni] = 0;
 
             if (ni > 0 && (isalpha((unsigned char)varname[0]) || varname[0] == '_')) {
+                // v4.0: try array expression first (builtins only)
+                const char* rhs = eq + 1;
+                while (*rhs == ' ') rhs++;
+                AM_Array* arr = aml_try_array_expr(ctx, rhs);
+                if (arr) {
+                    AML_Symtab* tab = (ctx->call_depth > 0)
+                        ? &ctx->locals[ctx->call_depth - 1]
+                        : &ctx->globals;
+                    symtab_set_array(tab, varname, arr);
+                    return idx + 1;
+                }
+
+                // v4.0: also check if RHS is just a variable name holding an array
+                {
+                    char rhs_name[AML_MAX_NAME] = {0};
+                    const char* rp = rhs;
+                    int ri = 0;
+                    while ((isalnum((unsigned char)*rp) || *rp == '_') && ri < AML_MAX_NAME - 1)
+                        rhs_name[ri++] = *rp++;
+                    rhs_name[ri] = 0;
+                    while (*rp == ' ') rp++;
+                    if (ri > 0 && *rp == '\0') {
+                        // RHS is a bare identifier — check if it's an array variable
+                        AML_Var* src = resolve_var_full(ctx, rhs_name);
+                        if (src && src->type == AML_TYPE_ARRAY && src->array) {
+                            AM_Array* clone = am_array_clone(src->array);
+                            if (clone) {
+                                AML_Symtab* tab = (ctx->call_depth > 0)
+                                    ? &ctx->locals[ctx->call_depth - 1]
+                                    : &ctx->globals;
+                                symtab_set_array(tab, varname, clone);
+                                return idx + 1;
+                            }
+                        }
+                    }
+                }
+
                 float val = aml_eval(ctx, eq + 1);
+
+                // v4.0: check if a user function returned an array
+                if (ctx->has_return && ctx->return_array) {
+                    AML_Symtab* tab = (ctx->call_depth > 0)
+                        ? &ctx->locals[ctx->call_depth - 1]
+                        : &ctx->globals;
+                    symtab_set_array(tab, varname, ctx->return_array);
+                    ctx->has_return = 0;
+                    ctx->return_array = NULL;
+                    return idx + 1;
+                }
+                ctx->has_return = 0;
+
                 if (ctx->call_depth > 0)
                     symtab_set(&ctx->locals[ctx->call_depth - 1], varname, val);
                 else
@@ -2067,7 +4582,7 @@ static int aml_exec_line(AML_ExecCtx* ctx, int idx) {
 // Execute a block of lines [start, end)
 static int aml_exec_block(AML_ExecCtx* ctx, int start, int end) {
     int i = start;
-    while (i < end && i < ctx->nlines) {
+    while (i < end && i < ctx->nlines && !ctx->has_return) {
         i = aml_exec_line(ctx, i);
     }
     return 0;
@@ -2094,6 +4609,9 @@ int am_exec(const char* script) {
     ctx.lines = lines;
     ctx.nlines = nlines;
 
+    // v4.0: restore persistent globals if enabled
+    persistent_restore(&ctx.globals);
+
     // register built-in functions (native AML, not external bindings)
     aml_register_builtins(&ctx);
 
@@ -2102,6 +4620,10 @@ int am_exec(const char* script) {
 
     // second pass: execute top-level block
     aml_exec_block(&ctx, 0, nlines);
+
+    // v4.0: save globals to persistent storage, then clean up
+    persistent_save(&ctx.globals);
+    symtab_clear_arrays(&ctx.globals);
 
     free(lines);
 
@@ -2302,6 +4824,7 @@ void am_apply_laws_to_logits(float* logits, int n) {
 
 // Apply delta voice: out += alpha * A @ (B @ x)
 // Low-rank weight modulation. From arianna.c/src/delta.c: apply_delta()
+// BLAS path: cblas_sgemv × 2 (matrix-vector multiply)
 void am_apply_delta(float* out, const float* A, const float* B,
                     const float* x, int out_dim, int in_dim, int rank,
                     float alpha) {
@@ -2311,21 +4834,20 @@ void am_apply_delta(float* out, const float* A, const float* B,
     float temp[128];
 
 #ifdef USE_BLAS
-    // temp = B @ x  (BLAS: sgemv)
+    // temp = B @ x  (BLAS: sgemv, rank × in_dim @ in_dim × 1 → rank × 1)
     cblas_sgemv(CblasRowMajor, CblasNoTrans, rank, in_dim,
                 1.0f, B, in_dim, x, 1, 0.0f, temp, 1);
-    // out += alpha * A @ temp  (BLAS: sgemv)
+    // out += alpha * A @ temp  (BLAS: sgemv, out_dim × rank @ rank × 1 → out_dim × 1)
     cblas_sgemv(CblasRowMajor, CblasNoTrans, out_dim, rank,
                 alpha, A, rank, temp, 1, 1.0f, out, 1);
 #else
-    // temp = B @ x  (rank × 1)
+    // Scalar fallback: portable, no dependencies
     for (int r = 0; r < rank; r++) {
         temp[r] = 0.0f;
         for (int j = 0; j < in_dim; j++) {
             temp[r] += B[r * in_dim + j] * x[j];
         }
     }
-    // out += alpha * A @ temp
     for (int i = 0; i < out_dim; i++) {
         float sum = 0.0f;
         for (int r = 0; r < rank; r++) {
@@ -2499,9 +5021,10 @@ static float am_frandn(unsigned int* seed) {
 }
 
 // NOTORCH step: update low-rank delta matrices from experience
-// A: [out_dim × rank], B: [rank × in_dim]
+// A: [in_dim × rank], B: [rank × out_dim]
 // x: input hidden state [in_dim], dy: output gradient proxy [out_dim]
 // signal: teaching signal (positive = reinforce, negative = suppress)
+// BLAS path: cblas_sger × 2 (rank-1 outer product updates)
 void am_notorch_step(float* A, float* B, int out_dim, int in_dim, int rank,
                      const float* x, const float* dy, float signal) {
     if (!A || !B || !x || !dy) return;
@@ -2522,16 +5045,12 @@ void am_notorch_step(float* A, float* B, int out_dim, int in_dim, int rank,
     }
 
 #ifdef USE_BLAS
-    // A += (lr*g) * x ⊗ u  (BLAS: rank-1 update, sger)
-    // A is [in_dim × rank], so x is the "row" vector, u is the "column" vector
-    cblas_sger(CblasRowMajor, in_dim, rank,
-               lr * g, x, 1, u, 1, A, rank);
-
-    // B += (lr*g) * u ⊗ dy  (BLAS: rank-1 update, sger)
-    // B is [rank × out_dim], so u is the "row" vector, dy is the "column" vector
-    cblas_sger(CblasRowMajor, rank, out_dim,
-               lr * g, u, 1, dy, 1, B, out_dim);
+    // A += (lr * g) * x ⊗ u  (BLAS: rank-1 update, in_dim × rank)
+    cblas_sger(CblasRowMajor, in_dim, rank, lr * g, x, 1, u, 1, A, rank);
+    // B += (lr * g) * u ⊗ dy  (BLAS: rank-1 update, rank × out_dim)
+    cblas_sger(CblasRowMajor, rank, out_dim, lr * g, u, 1, dy, 1, B, out_dim);
 #else
+    // Scalar fallback: portable, no dependencies
     // A[i,r] += lr * x[i] * u[r] * g
     for (int i = 0; i < in_dim; i++) {
         float xi = x[i] * lr * g;
@@ -2575,315 +5094,6 @@ void am_notorch_step(float* A, float* B, int out_dim, int in_dim, int rank,
         if (B[i] > 10.0f) B[i] = 10.0f;
         if (B[i] < -10.0f) B[i] = -10.0f;
     }
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// METHOD — distributed cognition operator (C implementation)
-//
-// The field operator. Works on collective organism data, not individuals.
-// Host pushes organism snapshots, METHOD computes awareness and steering.
-// From method.py → native C for speed.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-static AM_MethodState M;
-
-
-/* ═══════════════════════════════════════════════════════════════════════════════
- * HARMONIC NET — weightless neural network in C
- *
- * Layer 1: Fourier decomposition of entropy history
- * Layer 2: Correlation matrix (pairwise gamma cosines = the "weights")
- * Layer 3: Phase aggregation (resonance + harmonics → steering refinement)
- *
- * No trainable weights. No backprop. Just harmonic resonance.
- * ═══════════════════════════════════════════════════════════════════════════════ */
-
-static struct {
-    /* Entropy history (circular buffer) */
-    float entropy_history[AM_HARMONIC_MAX_HISTORY];
-    int   history_len;
-    int   history_pos;
-
-    /* Organism gammas for this step */
-    float gammas[AM_HARMONIC_MAX_ORGANISMS][AM_HARMONIC_GAMMA_DIM];
-    float org_entropy[AM_HARMONIC_MAX_ORGANISMS];
-    int   n_organisms;
-} HN;
-
-void am_harmonic_init(void) {
-    memset(&HN, 0, sizeof(HN));
-}
-
-void am_harmonic_clear(void) {
-    HN.n_organisms = 0;
-}
-
-void am_harmonic_push_entropy(float entropy) {
-    HN.entropy_history[HN.history_pos] = entropy;
-    HN.history_pos = (HN.history_pos + 1) % AM_HARMONIC_MAX_HISTORY;
-    if (HN.history_len < AM_HARMONIC_MAX_HISTORY)
-        HN.history_len++;
-}
-
-void am_harmonic_push_gamma(int id, const float *gamma, int dim, float entropy) {
-    if (HN.n_organisms >= AM_HARMONIC_MAX_ORGANISMS) return;
-    int idx = HN.n_organisms++;
-    int copy_dim = dim < AM_HARMONIC_GAMMA_DIM ? dim : AM_HARMONIC_GAMMA_DIM;
-    memcpy(HN.gammas[idx], gamma, copy_dim * sizeof(float));
-    /* Zero-pad if needed */
-    for (int i = copy_dim; i < AM_HARMONIC_GAMMA_DIM; i++)
-        HN.gammas[idx][i] = 0.0f;
-    HN.org_entropy[idx] = entropy;
-}
-
-AM_HarmonicResult am_harmonic_forward(int step) {
-    AM_HarmonicResult r;
-    memset(&r, 0, sizeof(r));
-    r.n_organisms = HN.n_organisms;
-    r.strength_mod = 0.3f;
-
-    if (HN.n_organisms == 0) return r;
-
-    int T = HN.history_len;
-
-    /* ── Layer 1: Fourier decomposition of entropy history ── */
-    if (T >= 4) {
-        for (int k = 0; k < AM_HARMONIC_N_FREQ; k++) {
-            float sum = 0.0f;
-            for (int t = 0; t < T; t++) {
-                int idx = (HN.history_pos - T + t + AM_HARMONIC_MAX_HISTORY) % AM_HARMONIC_MAX_HISTORY;
-                float phase = 2.0f * 3.14159265f * (float)(k + 1) * (float)t / (float)T;
-                sum += HN.entropy_history[idx] * sinf(phase);
-            }
-            r.harmonics[k] = sum / (float)T;
-        }
-    }
-
-    /* ── Layer 2: Correlation matrix (pairwise gamma cosines) ── */
-    int n = HN.n_organisms;
-
-    /* Compute norms */
-    float norms[AM_HARMONIC_MAX_ORGANISMS];
-    for (int i = 0; i < n; i++) {
-        float s = 0.0f;
-        for (int d = 0; d < AM_HARMONIC_GAMMA_DIM; d++)
-            s += HN.gammas[i][d] * HN.gammas[i][d];
-        norms[i] = sqrtf(s);
-        if (norms[i] < 1e-8f) norms[i] = 1e-8f;
-    }
-
-    /* Pairwise cosines + phase resonance */
-    float mean_ent = 0.0f;
-    for (int i = 0; i < n; i++) mean_ent += HN.org_entropy[i];
-    mean_ent /= (float)n;
-
-    for (int i = 0; i < n; i++) {
-        float res = 0.0f;
-        float phase_i = HN.org_entropy[i] - mean_ent;
-        for (int j = 0; j < n; j++) {
-            if (i == j) continue;
-            /* Cosine similarity */
-            float dot = 0.0f;
-            for (int d = 0; d < AM_HARMONIC_GAMMA_DIM; d++)
-                dot += HN.gammas[i][d] * HN.gammas[j][d];
-            float cos_ij = dot / (norms[i] * norms[j]);
-
-            /* Phase similarity */
-            float phase_j = HN.org_entropy[j] - mean_ent;
-            float phase_sim = expf(-fabsf(phase_i - phase_j));
-
-            res += cos_ij * phase_sim;
-        }
-        if (n > 1) res /= (float)(n - 1);
-        r.resonance[i] = res;
-    }
-
-    /* ── Layer 3: Output ── */
-    /* Find dominant harmonic */
-    float max_amp = 0.0f;
-    r.dominant_freq = 0;
-    if (T >= 4) {
-        for (int k = 0; k < AM_HARMONIC_N_FREQ; k++) {
-            float a = fabsf(r.harmonics[k]);
-            if (a > max_amp) { max_amp = a; r.dominant_freq = k; }
-        }
-    }
-
-    /* Confidence: more data = more confident */
-    float conf_t = T < 16 ? (float)T / 16.0f : 1.0f;
-    float conf_n = n < 4 ? (float)n / 4.0f : 1.0f;
-    r.strength_mod = 0.3f + 0.7f * conf_t * conf_n;
-
-    return r;
-}
-
-void am_method_init(void) {
-    memset(&M, 0, sizeof(AM_MethodState));
-}
-
-void am_method_clear(void) {
-    M.n_organisms = 0;
-}
-
-void am_method_push_organism(int id, float entropy, float syntropy,
-                             float gamma_mag, float gamma_cos) {
-    if (M.n_organisms >= AM_METHOD_MAX_ORGANISMS) return;
-    AM_MethodOrganism* o = &M.organisms[M.n_organisms++];
-    o->id = id;
-    o->entropy = entropy;
-    o->syntropy = syntropy;
-    o->gamma_mag = gamma_mag;
-    o->gamma_cos = gamma_cos;
-}
-
-float am_method_field_entropy(void) {
-    if (M.n_organisms == 0) return 0.0f;
-    float sum = 0.0f;
-    for (int i = 0; i < M.n_organisms; i++)
-        sum += M.organisms[i].entropy;
-    return sum / (float)M.n_organisms;
-}
-
-float am_method_field_syntropy(void) {
-    if (M.n_organisms == 0) return 0.0f;
-    float sum = 0.0f;
-    for (int i = 0; i < M.n_organisms; i++)
-        sum += M.organisms[i].syntropy;
-    return sum / (float)M.n_organisms;
-}
-
-float am_method_field_coherence(void) {
-    if (M.n_organisms == 0) return 1.0f;
-    // Mean pairwise gamma cosine similarity
-    // Organisms push gamma_cos (precomputed vs field mean by host)
-    // But we can also compute mean of pairwise from gamma_cos values:
-    // If only one organism, perfectly coherent
-    if (M.n_organisms == 1) return 1.0f;
-
-    // Simple: mean gamma_cos across organisms (host-computed pairwise)
-    float sum = 0.0f;
-    int count = 0;
-    for (int i = 0; i < M.n_organisms; i++) {
-        if (M.organisms[i].gamma_mag > 1e-6f) {
-            sum += M.organisms[i].gamma_cos;
-            count++;
-        }
-    }
-    return count > 0 ? sum / (float)count : 1.0f;
-}
-
-AM_MethodSteering am_method_step(float dt) {
-    AM_MethodSteering s;
-    memset(&s, 0, sizeof(s));
-
-    s.n_organisms = M.n_organisms;
-    M.step_count++;
-    s.step = M.step_count;
-
-    if (M.n_organisms == 0) {
-        s.action = AM_METHOD_WAIT;
-        return s;
-    }
-
-    float entropy = am_method_field_entropy();
-    float syntropy = am_method_field_syntropy();
-    float coherence = am_method_field_coherence();
-
-    s.entropy = entropy;
-    s.syntropy = syntropy;
-    s.coherence = coherence;
-
-    // Push to circular history buffer
-    int pos = M.history_pos % AM_METHOD_HISTORY_LEN;
-    M.entropy_history[pos] = entropy;
-    M.coherence_history[pos] = coherence;
-    M.history_pos++;
-    if (M.history_len < AM_METHOD_HISTORY_LEN)
-        M.history_len++;
-
-    // Compute entropy trend (positive = organizing, negative = dissolving)
-    float trend = 0.0f;
-    if (M.history_len >= 4) {
-        // Recent 4 vs earlier 4
-        float recent = 0.0f, earlier = 0.0f;
-        int rc = 0, ec = 0;
-        for (int i = 0; i < M.history_len && i < 8; i++) {
-            int idx = ((M.history_pos - 1 - i) % AM_METHOD_HISTORY_LEN + AM_METHOD_HISTORY_LEN) % AM_METHOD_HISTORY_LEN;
-            if (i < 4) { recent += M.entropy_history[idx]; rc++; }
-            else        { earlier += M.entropy_history[idx]; ec++; }
-        }
-        if (rc > 0 && ec > 0)
-            trend = (earlier / (float)ec) - (recent / (float)rc);
-    }
-    s.trend = trend;
-
-    // Find best organism (lowest entropy)
-    int best_id = M.organisms[0].id;
-    float best_entropy = M.organisms[0].entropy;
-    for (int i = 1; i < M.n_organisms; i++) {
-        if (M.organisms[i].entropy < best_entropy) {
-            best_entropy = M.organisms[i].entropy;
-            best_id = M.organisms[i].id;
-        }
-    }
-    s.target_id = best_id;
-
-    // Decide action (same logic as method.py)
-    if (coherence < 0.3f) {
-        s.action = AM_METHOD_REALIGN;
-        s.strength = 1.0f - coherence;
-    } else if (trend > 0.05f) {
-        s.action = AM_METHOD_AMPLIFY;
-        s.strength = fminf(1.0f, trend * 5.0f);
-    } else if (trend < -0.05f) {
-        s.action = AM_METHOD_DAMPEN;
-        s.strength = fminf(1.0f, fabsf(trend) * 5.0f);
-    } else if (entropy > 2.0f) {
-        s.action = AM_METHOD_GROUND;
-        s.strength = fminf(1.0f, (entropy - 1.5f) * 0.5f);
-    } else if (entropy < 0.5f) {
-        s.action = AM_METHOD_EXPLORE;
-        s.strength = fminf(1.0f, (1.0f - entropy) * 0.5f);
-    } else {
-        s.action = AM_METHOD_SUSTAIN;
-        s.strength = 0.1f;
-    }
-
-    // Advance AML field physics
-    am_step(dt);
-
-    // Translate steering to AML state (same as method.py)
-    switch (s.action) {
-        case AM_METHOD_DAMPEN:
-            am_exec("PAIN 0.3");
-            am_exec("VELOCITY WALK");
-            break;
-        case AM_METHOD_AMPLIFY:
-            am_exec("VELOCITY RUN");
-            am_exec("DESTINY 0.6");
-            break;
-        case AM_METHOD_GROUND:
-            am_exec("ATTEND_FOCUS 0.9");
-            am_exec("VELOCITY NOMOVE");
-            break;
-        case AM_METHOD_EXPLORE:
-            am_exec("TUNNEL_CHANCE 0.3");
-            am_exec("VELOCITY RUN");
-            break;
-        case AM_METHOD_REALIGN:
-            am_exec("PAIN 0.5");
-            am_exec("ATTEND_FOCUS 0.8");
-            break;
-        default:
-            break;
-    }
-
-    return s;
-}
-
-AM_MethodState* am_method_get_state(void) {
-    return &M;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3169,6 +5379,215 @@ int am_blood_compile_emotion(const char* name, float valence, float arousal) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// LILITH — I/O subsystem (named pipes for data infrastructure)
+//
+// "Та, которая была до Евы."
+// Infra that existed before the human intervened.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef AM_IO_DISABLED
+
+// Find pipe by logical name. Returns index or -1.
+static int pipe_find(const char* name) {
+    for (int i = 0; i < g_pipe_count; i++) {
+        if (g_pipes[i].active && strcmp(g_pipes[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+// Find first free pipe slot. Returns index or -1.
+static int pipe_find_free(void) {
+    // Reuse inactive slots first
+    for (int i = 0; i < g_pipe_count; i++) {
+        if (!g_pipes[i].active) return i;
+    }
+    if (g_pipe_count < AM_MAX_PIPES) return g_pipe_count++;
+    return -1;
+}
+
+int am_pipe_create(const char* path) {
+    if (!path || !path[0]) return -1;
+
+    // Remove existing file/pipe at path first (idempotent)
+    unlink(path);
+
+    if (mkfifo(path, 0666) != 0) {
+        // EEXIST is OK — pipe already exists
+        if (errno != EEXIST) {
+            printf("[LILITH] mkfifo(%s) failed: %s\n", path, strerror(errno));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int am_pipe_open(const char* name, const char* path, int mode) {
+    if (!name || !name[0] || !path || !path[0]) return -1;
+
+    // Check if already open with this name
+    int existing = pipe_find(name);
+    if (existing >= 0) {
+        printf("[LILITH] pipe '%s' already open\n", name);
+        return existing;
+    }
+
+    int slot = pipe_find_free();
+    if (slot < 0) {
+        printf("[LILITH] max pipes reached (%d)\n", AM_MAX_PIPES);
+        return -1;
+    }
+
+    int flags;
+    if (mode == AM_PIPE_MODE_READ) {
+        flags = O_RDONLY | O_NONBLOCK;
+    } else {
+        // O_WRONLY + O_NONBLOCK on FIFO returns ENXIO if no reader yet.
+        // Use O_RDWR to avoid blocking — works on both macOS and Linux.
+        flags = O_RDWR | O_NONBLOCK;
+    }
+
+    int fd = open(path, flags);
+    if (fd < 0) {
+        printf("[LILITH] open(%s) failed: %s\n", path, strerror(errno));
+        return -1;
+    }
+
+    snprintf(g_pipes[slot].name, AM_PIPE_NAME_LEN, "%.31s", name);
+    snprintf(g_pipes[slot].path, AM_PIPE_PATH_LEN, "%.255s", path);
+    g_pipes[slot].fd = fd;
+    g_pipes[slot].mode = mode;
+    g_pipes[slot].active = 1;
+
+    printf("[LILITH] pipe '%s' opened (%s, %s)\n", name, path,
+           mode == AM_PIPE_MODE_READ ? "READ" : "WRITE");
+    return slot;
+}
+
+int am_pipe_write(const char* name, const char* message) {
+    if (!name || !message) return -1;
+
+    int idx = pipe_find(name);
+    if (idx < 0) {
+        printf("[LILITH] pipe '%s' not found\n", name);
+        return -1;
+    }
+    if (!g_pipes[idx].active || g_pipes[idx].fd < 0) return -1;
+
+    // Append newline as message delimiter
+    int mlen = (int)strlen(message);
+    char buf[AM_PIPE_BUF_SIZE];
+    if (mlen + 2 > AM_PIPE_BUF_SIZE) mlen = AM_PIPE_BUF_SIZE - 2;
+    memcpy(buf, message, mlen);
+    buf[mlen] = '\n';
+    buf[mlen + 1] = 0;
+
+    ssize_t n = write(g_pipes[idx].fd, buf, mlen + 1);
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            printf("[LILITH] pipe '%s' write: no reader (EAGAIN)\n", name);
+            return 0;
+        }
+        printf("[LILITH] pipe '%s' write error: %s\n", name, strerror(errno));
+        return -1;
+    }
+    return (int)n;
+}
+
+int am_pipe_read(const char* name, char* buf, int bufsize) {
+    if (!name || !buf || bufsize <= 0) return -1;
+
+    int idx = pipe_find(name);
+    if (idx < 0) {
+        printf("[LILITH] pipe '%s' not found\n", name);
+        return -1;
+    }
+    if (!g_pipes[idx].active || g_pipes[idx].fd < 0) return -1;
+
+    ssize_t n = read(g_pipes[idx].fd, buf, bufsize - 1);
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            buf[0] = 0;
+            return 0;  // nothing available (non-blocking)
+        }
+        printf("[LILITH] pipe '%s' read error: %s\n", name, strerror(errno));
+        buf[0] = 0;
+        return -1;
+    }
+    if (n == 0) {
+        buf[0] = 0;
+        return 0;  // EOF / no data
+    }
+
+    buf[n] = 0;
+    // Strip trailing newline
+    if (n > 0 && buf[n - 1] == '\n') buf[--n] = 0;
+
+    // Parse first number found anywhere in response into g_pipe_last_value
+    // Scans forward until a digit or sign-before-digit is found
+    {
+        const char* p = buf;
+        while (*p) {
+            if (isdigit((unsigned char)*p) ||
+                ((*p == '-' || *p == '+' || *p == '.') && isdigit((unsigned char)p[1]))) {
+                char* endptr = NULL;
+                float val = strtof(p, &endptr);
+                if (endptr != p) {
+                    g_pipe_last_value = val;
+                    break;
+                }
+            }
+            p++;
+        }
+    }
+
+    return (int)n;
+}
+
+void am_pipe_close(const char* name) {
+    int idx = pipe_find(name);
+    if (idx < 0) return;
+
+    if (g_pipes[idx].fd >= 0) {
+        close(g_pipes[idx].fd);
+    }
+    printf("[LILITH] pipe '%s' closed\n", g_pipes[idx].name);
+    g_pipes[idx].fd = -1;
+    g_pipes[idx].active = 0;
+    g_pipes[idx].name[0] = 0;
+}
+
+void am_pipe_close_all(void) {
+    for (int i = 0; i < g_pipe_count; i++) {
+        if (g_pipes[i].active) {
+            if (g_pipes[i].fd >= 0) close(g_pipes[i].fd);
+            g_pipes[i].fd = -1;
+            g_pipes[i].active = 0;
+        }
+    }
+    g_pipe_count = 0;
+    printf("[LILITH] all pipes closed\n");
+}
+
+float am_pipe_last_value(void) { return g_pipe_last_value; }
+
+int am_pipe_count(void) {
+    int count = 0;
+    for (int i = 0; i < g_pipe_count; i++) {
+        if (g_pipes[i].active) count++;
+    }
+    return count;
+}
+
+const AM_Pipe* am_pipe_get(int idx) {
+    if (idx < 0 || idx >= g_pipe_count) return NULL;
+    if (!g_pipes[idx].active) return NULL;
+    return &g_pipes[idx];
+}
+
+#endif // AM_IO_DISABLED
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // STEP — advance field physics (call each frame)
 // applies debt decay, temporal debt accumulation, etc.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3403,4 +5822,309 @@ void am_step(float dt) {
           G.winter_energy * 0.005f * dt);
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HARMONIC NET — weightless neural network in C
+//
+// Layer 1: Fourier decomposition of entropy history
+// Layer 2: Correlation matrix (pairwise gamma cosines = the "weights")
+// Layer 3: Phase aggregation (resonance + harmonics → steering refinement)
+//
+// No trainable weights. No backprop. Just harmonic resonance.
+// Evolved in molequla, ported to core.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static struct {
+    /* Entropy history (circular buffer) */
+    float entropy_history[AM_HARMONIC_MAX_HISTORY];
+    int   history_len;
+    int   history_pos;
+
+    /* Organism gammas for this step */
+    float gammas[AM_HARMONIC_MAX_ORGANISMS][AM_HARMONIC_GAMMA_DIM];
+    float org_entropy[AM_HARMONIC_MAX_ORGANISMS];
+    int   n_organisms;
+} HN;
+
+void am_harmonic_init(void) {
+    memset(&HN, 0, sizeof(HN));
+}
+
+void am_harmonic_clear(void) {
+    HN.n_organisms = 0;
+}
+
+void am_harmonic_push_entropy(float entropy) {
+    HN.entropy_history[HN.history_pos] = entropy;
+    HN.history_pos = (HN.history_pos + 1) % AM_HARMONIC_MAX_HISTORY;
+    if (HN.history_len < AM_HARMONIC_MAX_HISTORY)
+        HN.history_len++;
+}
+
+void am_harmonic_push_gamma(int id, const float *gamma, int dim, float entropy) {
+    (void)id;
+    if (HN.n_organisms >= AM_HARMONIC_MAX_ORGANISMS) return;
+    int idx = HN.n_organisms++;
+    int copy_dim = dim < AM_HARMONIC_GAMMA_DIM ? dim : AM_HARMONIC_GAMMA_DIM;
+    memcpy(HN.gammas[idx], gamma, copy_dim * sizeof(float));
+    /* Zero-pad if needed */
+    for (int i = copy_dim; i < AM_HARMONIC_GAMMA_DIM; i++)
+        HN.gammas[idx][i] = 0.0f;
+    HN.org_entropy[idx] = entropy;
+}
+
+AM_HarmonicResult am_harmonic_forward(int step) {
+    (void)step;
+    AM_HarmonicResult r;
+    memset(&r, 0, sizeof(r));
+    r.n_organisms = HN.n_organisms;
+    r.strength_mod = 0.3f;
+
+    if (HN.n_organisms == 0) return r;
+
+    int T = HN.history_len;
+
+    /* ── Layer 1: Fourier decomposition of entropy history ── */
+    if (T >= 4) {
+        for (int k = 0; k < AM_HARMONIC_N_FREQ; k++) {
+            float sum = 0.0f;
+            for (int t = 0; t < T; t++) {
+                int idx = (HN.history_pos - T + t + AM_HARMONIC_MAX_HISTORY) % AM_HARMONIC_MAX_HISTORY;
+                float phase = 2.0f * 3.14159265f * (float)(k + 1) * (float)t / (float)T;
+                sum += HN.entropy_history[idx] * sinf(phase);
+            }
+            r.harmonics[k] = sum / (float)T;
+        }
+    }
+
+    /* ── Layer 2: Correlation matrix (pairwise gamma cosines) ── */
+    int n = HN.n_organisms;
+
+    /* Compute norms */
+    float norms[AM_HARMONIC_MAX_ORGANISMS];
+    for (int i = 0; i < n; i++) {
+        float s = 0.0f;
+        for (int d = 0; d < AM_HARMONIC_GAMMA_DIM; d++)
+            s += HN.gammas[i][d] * HN.gammas[i][d];
+        norms[i] = sqrtf(s);
+        if (norms[i] < 1e-8f) norms[i] = 1e-8f;
+    }
+
+    /* Pairwise cosines + phase resonance */
+    float mean_ent = 0.0f;
+    for (int i = 0; i < n; i++) mean_ent += HN.org_entropy[i];
+    mean_ent /= (float)n;
+
+    for (int i = 0; i < n; i++) {
+        float res = 0.0f;
+        float phase_i = HN.org_entropy[i] - mean_ent;
+        for (int j = 0; j < n; j++) {
+            if (i == j) continue;
+            /* Cosine similarity */
+            float dot = 0.0f;
+            for (int d = 0; d < AM_HARMONIC_GAMMA_DIM; d++)
+                dot += HN.gammas[i][d] * HN.gammas[j][d];
+            float cos_ij = dot / (norms[i] * norms[j]);
+
+            /* Phase similarity */
+            float phase_j = HN.org_entropy[j] - mean_ent;
+            float phase_sim = expf(-fabsf(phase_i - phase_j));
+
+            res += cos_ij * phase_sim;
+        }
+        if (n > 1) res /= (float)(n - 1);
+        r.resonance[i] = res;
+    }
+
+    /* ── Layer 3: Output ── */
+    /* Find dominant harmonic */
+    float max_amp = 0.0f;
+    r.dominant_freq = 0;
+    if (T >= 4) {
+        for (int k = 0; k < AM_HARMONIC_N_FREQ; k++) {
+            float a = fabsf(r.harmonics[k]);
+            if (a > max_amp) { max_amp = a; r.dominant_freq = k; }
+        }
+    }
+
+    /* Confidence: more data = more confident */
+    float conf_t = T < 16 ? (float)T / 16.0f : 1.0f;
+    float conf_n = n < 4 ? (float)n / 4.0f : 1.0f;
+    r.strength_mod = 0.3f + 0.7f * conf_t * conf_n;
+
+    return r;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// METHOD — distributed cognition operator (C implementation)
+//
+// The field operator. Works on collective organism data, not individuals.
+// Host pushes organism snapshots, METHOD computes awareness and steering.
+// Evolved in molequla, ported to core.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static AM_MethodState M;
+
+void am_method_init(void) {
+    memset(&M, 0, sizeof(AM_MethodState));
+}
+
+void am_method_clear(void) {
+    M.n_organisms = 0;
+}
+
+void am_method_push_organism(int id, float entropy, float syntropy,
+                             float gamma_mag, float gamma_cos) {
+    if (M.n_organisms >= AM_METHOD_MAX_ORGANISMS) return;
+    AM_MethodOrganism* o = &M.organisms[M.n_organisms++];
+    o->id = id;
+    o->entropy = entropy;
+    o->syntropy = syntropy;
+    o->gamma_mag = gamma_mag;
+    o->gamma_cos = gamma_cos;
+}
+
+float am_method_field_entropy(void) {
+    if (M.n_organisms == 0) return 0.0f;
+    float sum = 0.0f;
+    for (int i = 0; i < M.n_organisms; i++)
+        sum += M.organisms[i].entropy;
+    return sum / (float)M.n_organisms;
+}
+
+float am_method_field_syntropy(void) {
+    if (M.n_organisms == 0) return 0.0f;
+    float sum = 0.0f;
+    for (int i = 0; i < M.n_organisms; i++)
+        sum += M.organisms[i].syntropy;
+    return sum / (float)M.n_organisms;
+}
+
+float am_method_field_coherence(void) {
+    if (M.n_organisms == 0) return 1.0f;
+    if (M.n_organisms == 1) return 1.0f;
+
+    // Mean gamma_cos across organisms (host-computed pairwise)
+    float sum = 0.0f;
+    int count = 0;
+    for (int i = 0; i < M.n_organisms; i++) {
+        if (M.organisms[i].gamma_mag > 1e-6f) {
+            sum += M.organisms[i].gamma_cos;
+            count++;
+        }
+    }
+    return count > 0 ? sum / (float)count : 1.0f;
+}
+
+AM_MethodSteering am_method_step(float dt) {
+    AM_MethodSteering s;
+    memset(&s, 0, sizeof(s));
+
+    s.n_organisms = M.n_organisms;
+    M.step_count++;
+    s.step = M.step_count;
+
+    if (M.n_organisms == 0) {
+        s.action = AM_METHOD_WAIT;
+        return s;
+    }
+
+    float entropy = am_method_field_entropy();
+    float syntropy = am_method_field_syntropy();
+    float coherence = am_method_field_coherence();
+
+    s.entropy = entropy;
+    s.syntropy = syntropy;
+    s.coherence = coherence;
+
+    // Push to circular history buffer
+    int pos = M.history_pos % AM_METHOD_HISTORY_LEN;
+    M.entropy_history[pos] = entropy;
+    M.coherence_history[pos] = coherence;
+    M.history_pos++;
+    if (M.history_len < AM_METHOD_HISTORY_LEN)
+        M.history_len++;
+
+    // Compute entropy trend (positive = organizing, negative = dissolving)
+    float trend = 0.0f;
+    if (M.history_len >= 4) {
+        float recent = 0.0f, earlier = 0.0f;
+        int rc = 0, ec = 0;
+        for (int i = 0; i < M.history_len && i < 8; i++) {
+            int idx = ((M.history_pos - 1 - i) % AM_METHOD_HISTORY_LEN + AM_METHOD_HISTORY_LEN) % AM_METHOD_HISTORY_LEN;
+            if (i < 4) { recent += M.entropy_history[idx]; rc++; }
+            else        { earlier += M.entropy_history[idx]; ec++; }
+        }
+        if (rc > 0 && ec > 0)
+            trend = (earlier / (float)ec) - (recent / (float)rc);
+    }
+    s.trend = trend;
+
+    // Find best organism (lowest entropy)
+    int best_id = M.organisms[0].id;
+    float best_entropy = M.organisms[0].entropy;
+    for (int i = 1; i < M.n_organisms; i++) {
+        if (M.organisms[i].entropy < best_entropy) {
+            best_entropy = M.organisms[i].entropy;
+            best_id = M.organisms[i].id;
+        }
+    }
+    s.target_id = best_id;
+
+    // Decide action
+    if (coherence < 0.3f) {
+        s.action = AM_METHOD_REALIGN;
+        s.strength = 1.0f - coherence;
+    } else if (trend > 0.05f) {
+        s.action = AM_METHOD_AMPLIFY;
+        s.strength = fminf(1.0f, trend * 5.0f);
+    } else if (trend < -0.05f) {
+        s.action = AM_METHOD_DAMPEN;
+        s.strength = fminf(1.0f, fabsf(trend) * 5.0f);
+    } else if (entropy > 2.0f) {
+        s.action = AM_METHOD_GROUND;
+        s.strength = fminf(1.0f, (entropy - 1.5f) * 0.5f);
+    } else if (entropy < 0.5f) {
+        s.action = AM_METHOD_EXPLORE;
+        s.strength = fminf(1.0f, (1.0f - entropy) * 0.5f);
+    } else {
+        s.action = AM_METHOD_SUSTAIN;
+        s.strength = 0.1f;
+    }
+
+    // Advance AML field physics
+    am_step(dt);
+
+    // Translate steering to AML state
+    switch (s.action) {
+        case AM_METHOD_DAMPEN:
+            am_exec("PAIN 0.3");
+            am_exec("VELOCITY WALK");
+            break;
+        case AM_METHOD_AMPLIFY:
+            am_exec("VELOCITY RUN");
+            am_exec("DESTINY 0.6");
+            break;
+        case AM_METHOD_GROUND:
+            am_exec("ATTEND_FOCUS 0.9");
+            am_exec("VELOCITY NOMOVE");
+            break;
+        case AM_METHOD_EXPLORE:
+            am_exec("TUNNEL_CHANCE 0.3");
+            am_exec("VELOCITY RUN");
+            break;
+        case AM_METHOD_REALIGN:
+            am_exec("PAIN 0.5");
+            am_exec("ATTEND_FOCUS 0.8");
+            break;
+        default:
+            break;
+    }
+
+    return s;
+}
+
+AM_MethodState* am_method_get_state(void) {
+    return &M;
 }

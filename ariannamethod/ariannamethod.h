@@ -236,12 +236,31 @@ typedef struct {
 
 #define AML_MAX_LINES       1024
 #define AML_MAX_LINE_LEN    256
-#define AML_MAX_VARS        64
+#define AML_MAX_VARS        256
 #define AML_MAX_NAME        32
 #define AML_MAX_FUNCS       64    // increased: 32 user + 32 built-in
 #define AML_MAX_PARAMS      8
 #define AML_MAX_CALL_DEPTH  16
 #define AML_MAX_INCLUDE     8
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AML v4.0 — ARRAYS (Phase 1)
+// Float arrays as first-class values. Heap-allocated, freed on scope exit.
+// Max 1M floats (4MB) per array.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#define AML_TYPE_FLOAT  0
+#define AML_TYPE_ARRAY  1
+#define AM_MAX_ARRAY_SIZE  1048576  // 1M floats = 4MB
+
+typedef struct {
+    float* data;
+    int    len;
+    int    refcount;  // simple refcounting for shared arrays
+    // v4.0 Phase 2: matrix shape (0,0 = 1D array; rows>0, cols>0 = 2D matrix)
+    int    rows;
+    int    cols;
+} AM_Array;
 
 // Preprocessed line
 typedef struct {
@@ -250,10 +269,12 @@ typedef struct {
     int  lineno;
 } AML_Line;
 
-// Variable
+// Variable — supports float or array
 typedef struct {
-    char  name[AML_MAX_NAME];
-    float value;
+    char      name[AML_MAX_NAME];
+    int       type;     // AML_TYPE_FLOAT or AML_TYPE_ARRAY
+    float     value;    // used when type == FLOAT
+    AM_Array* array;    // used when type == ARRAY (heap allocated)
 } AML_Var;
 
 // Symbol table
@@ -289,6 +310,11 @@ typedef struct {
     int          include_depth;
     char         base_dir[256];
     char         error[256];
+    // v4.0: return values
+    int          has_return;        // 1 if function returned a value
+    float        return_value;      // scalar return value
+    AM_Array*    return_array;      // array return value (NULL if scalar)
+    int          return_type;       // AML_TYPE_FLOAT or AML_TYPE_ARRAY
 } AML_ExecCtx;
 
 // AM_State field map entry (for reading state in expressions)
@@ -452,6 +478,195 @@ int am_blood_count(void);
 const AM_BloodModule* am_blood_get(int idx);
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// LILITH — I/O subsystem for data infrastructure
+//
+// Named pipe (FIFO) communication between AML scripts and external processes.
+// Designed for Lilith: AML brain steering INDEX nodes (Go binaries) that
+// crawl, embed, and index data from the outside world.
+//
+// "Та, которая была до Евы."
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef AM_IO_DISABLED
+
+#define AM_MAX_PIPES       16
+#define AM_PIPE_NAME_LEN   32
+#define AM_PIPE_PATH_LEN   256
+#define AM_PIPE_BUF_SIZE   4096
+
+#define AM_PIPE_MODE_READ  0
+#define AM_PIPE_MODE_WRITE 1
+
+typedef struct {
+    char  name[AM_PIPE_NAME_LEN];     // logical name (e.g. "idx1_cmd")
+    char  path[AM_PIPE_PATH_LEN];     // filesystem path (e.g. "/tmp/lilith_idx1_cmd")
+    int   fd;                          // file descriptor (-1 if closed)
+    int   mode;                        // AM_PIPE_MODE_READ or AM_PIPE_MODE_WRITE
+    int   active;                      // 1 = open, 0 = closed/unused
+} AM_Pipe;
+
+// Create a named pipe (FIFO) at path. Returns 0 on success, -1 on error.
+int am_pipe_create(const char* path);
+
+// Open a named pipe. mode: AM_PIPE_MODE_READ or AM_PIPE_MODE_WRITE.
+// Returns pipe index (0..AM_MAX_PIPES-1) or -1 on error.
+int am_pipe_open(const char* name, const char* path, int mode);
+
+// Write a line to a named pipe. Returns bytes written or -1.
+int am_pipe_write(const char* name, const char* message);
+
+// Read a line from a named pipe (non-blocking).
+// Returns bytes read, 0 if nothing available, -1 on error.
+// Result stored in buf (null-terminated).
+int am_pipe_read(const char* name, char* buf, int bufsize);
+
+// Close a named pipe by logical name.
+void am_pipe_close(const char* name);
+
+// Close all open pipes. Call at cleanup.
+void am_pipe_close_all(void);
+
+// Get last value read from pipe (first number parsed from last PIPE READ).
+float am_pipe_last_value(void);
+
+// Get pipe count.
+int am_pipe_count(void);
+
+// Get pipe by index (NULL if out of range or inactive).
+const AM_Pipe* am_pipe_get(int idx);
+
+#endif // AM_IO_DISABLED
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUTOGRAD TAPE (v4.0 Phase 3)
+// Reverse-mode automatic differentiation. Inspired by microGPT's Value class
+// and molequla's Vec/Scalar autograd.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#define AM_TAPE_MAX_ENTRIES  8192
+#define AM_TAPE_MAX_PARAMS   512
+
+// Tape operation types
+#define AM_OP_NONE       0
+#define AM_OP_MATVEC     1   // y = W @ x
+#define AM_OP_ADD        2   // y = a + b
+#define AM_OP_MUL        3   // y = a * b (element-wise)
+#define AM_OP_SCALE      4   // y = a * scalar
+#define AM_OP_SOFTMAX    5   // y = softmax(x)
+#define AM_OP_RMSNORM    6   // y = rmsnorm(x)
+#define AM_OP_SILU       7   // y = silu(x)
+#define AM_OP_CROSS_ENT  8   // loss = cross_entropy(logits, target)
+#define AM_OP_EMB_LOOKUP 9   // y = row(wte, token_id)
+#define AM_OP_MATMUL    10   // C = A @ B
+// Phase 5: sequence-level transformer ops
+#define AM_OP_SEQ_EMBED     11  // h = embed(wte, wpe, tokens, T)
+#define AM_OP_SEQ_MATVEC    12  // Y = W @ X for each of T positions
+#define AM_OP_SEQ_RMSNORM   13  // normalize each D-sized chunk independently
+#define AM_OP_CAUSAL_ATTN   14  // causal self-attention over T positions
+#define AM_OP_SEQ_CROSSENT  15  // cross-entropy over T positions
+#define AM_OP_MH_CAUSAL_ATTN 16 // multi-head causal self-attention
+
+typedef struct {
+    AM_Array* output;       // forward result (owned by tape)
+    AM_Array* grad;         // gradient (same shape as output, allocated on backward)
+    int       op;           // AM_OP_* type
+    int       parent1;      // index into tape (-1 = none)
+    int       parent2;      // index into tape (-1 = none)
+    int       parent3;      // index into tape (-1 = none, used by causal_attention for V)
+    float     aux;          // auxiliary scalar (target index for CE, scale for SCALE, T for seq ops)
+    float     aux2;         // second auxiliary (D for seq ops, V for seq_cross_entropy)
+    int       is_param;     // 1 = this is a trainable parameter (not freed on CLEAR)
+} AM_TapeEntry;
+
+// Adam optimizer state per parameter
+typedef struct {
+    AM_Array* m;            // first moment (mean of gradients)
+    AM_Array* v;            // second moment (mean of squared gradients)
+    int       t;            // timestep counter
+} AM_AdamState;
+
+typedef struct {
+    AM_TapeEntry entries[AM_TAPE_MAX_ENTRIES];
+    int          count;
+    int          active;    // 1 = recording, 0 = not recording
+
+    // Parameter registry for Adam
+    AM_AdamState adam[AM_TAPE_MAX_PARAMS];
+    int          n_params;
+} AM_Tape;
+
+// Tape API
+void am_tape_start(void);
+void am_tape_clear(void);
+int  am_tape_is_active(void);
+int  am_tape_record(AM_Array* output, int op, int p1, int p2, float aux);
+int  am_tape_record3(AM_Array* output, int op, int p1, int p2, int p3, float aux, float aux2);
+int  am_tape_record_param(AM_Array* param);
+void am_tape_backward(int loss_idx);
+void am_tape_adam_step(float lr);
+AM_Tape* am_tape_get(void);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ASYNC (v4.0 Phase 4) — SPAWN/AWAIT/CHANNEL
+// pthreads-based parallel execution. Each SPAWN gets its own AML_ExecCtx
+// with a snapshot of globals. Channels provide thread-safe communication.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef AM_ASYNC_DISABLED
+
+#define AM_MAX_SPAWNS      16
+#define AM_MAX_CHANNELS    16
+#define AM_CHANNEL_BUF     64
+#define AM_SPAWN_NAME_LEN  32
+
+// Spawn slot — tracks one spawned thread
+typedef struct {
+    char  name[AM_SPAWN_NAME_LEN];
+    int   active;      // 1 = thread running, 0 = finished or unused
+    int   joined;      // 1 = already joined
+    int   result;      // execution result (0 = ok)
+} AM_SpawnSlot;
+
+// Channel — thread-safe bounded float queue
+typedef struct {
+    float data[AM_CHANNEL_BUF];
+    int   head;
+    int   tail;
+    int   count;
+    int   capacity;
+    int   active;
+    char  name[AM_SPAWN_NAME_LEN];
+} AM_ChannelSlot;
+
+// Spawn API
+int  am_spawn_launch(const char* name, const char* script);
+int  am_spawn_await(const char* name);
+void am_spawn_await_all(void);
+int  am_spawn_count(void);
+
+// Channel API
+int  am_channel_create(const char* name, int capacity);
+int  am_channel_write(const char* name, float value);
+int  am_channel_read(const char* name, float* out);
+int  am_channel_count(void);
+void am_channel_close_all(void);
+
+#endif // AM_ASYNC_DISABLED
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARRAY API (v4.0)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Allocate a new array of given length, initialized to zero. Returns NULL on failure.
+AM_Array* am_array_new(int len);
+
+// Free an array (decrements refcount, frees when 0).
+void am_array_free(AM_Array* arr);
+
+// Increment refcount (for shared references).
+AM_Array* am_array_ref(AM_Array* arr);
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CONVENIENCE QUERIES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -543,8 +758,14 @@ void am_janus_register(
 #endif // AM_JANUS_DISABLED
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════════
 // HARMONIC NET — weightless neural network in C
+//
+// Three layers, no trainable weights:
+//   Layer 1: Fourier decomposition of entropy history
+//   Layer 2: Correlation matrix (pairwise gamma cosines = the "weights")
+//   Layer 3: Phase aggregation (resonance + harmonics → steering refinement)
+//
+// Evolved in molequla (github.com/ariannamethod/molequla), ported to core.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #define AM_HARMONIC_MAX_HISTORY 64
@@ -566,24 +787,28 @@ void am_harmonic_push_entropy(float entropy);
 void am_harmonic_push_gamma(int id, const float *gamma, int dim, float entropy);
 AM_HarmonicResult am_harmonic_forward(int step);
 
+// ═══════════════════════════════════════════════════════════════════════════════
 // METHOD — distributed cognition operator
-// works on the FIELD, not individual organisms.
-// reads collective metrics, computes steering for the mouth.
+//
+// The field operator. Works on collective organism data, not individuals.
+// Host pushes organism snapshots, METHOD computes awareness and steering.
+//
+// Evolved in molequla (github.com/ariannamethod/molequla), ported to core.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #define AM_METHOD_MAX_ORGANISMS 64
 #define AM_METHOD_HISTORY_LEN   16
 
-// Per-organism data pushed by host (Python/Rust/Go)
+// Per-organism data pushed by host
 typedef struct {
     int   id;
     float entropy;
     float syntropy;
     float gamma_mag;       // magnitude of gamma direction vector
-    float gamma_cos;       // cosine similarity to field mean gamma (host-computed or 0)
+    float gamma_cos;       // cosine similarity to field mean gamma
 } AM_MethodOrganism;
 
-// METHOD steering actions
+// Steering actions
 #define AM_METHOD_WAIT     0
 #define AM_METHOD_AMPLIFY  1
 #define AM_METHOD_DAMPEN   2
@@ -619,33 +844,46 @@ typedef struct {
 } AM_MethodState;
 
 // --- METHOD API ---
-
-// Initialize METHOD operator (call once)
 void am_method_init(void);
-
-// Clear organisms (call before pushing new snapshot)
 void am_method_clear(void);
-
-// Push one organism's data into METHOD field
 void am_method_push_organism(int id, float entropy, float syntropy,
                              float gamma_mag, float gamma_cos);
-
-// Compute field metrics
 float am_method_field_entropy(void);
 float am_method_field_syntropy(void);
 float am_method_field_coherence(void);
-
-// Full METHOD step: compute steering from current organisms
-// Also advances AML field physics by dt seconds
 AM_MethodSteering am_method_step(float dt);
-
-// Get METHOD state (for inspection/debug)
 AM_MethodState* am_method_get_state(void);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PERSISTENT GLOBALS — C training host API
+// When persistent mode is ON, AML variables survive across am_exec() calls.
+// The C host can inject/read arrays by name, enabling batch-feeding loops:
+//   am_set_var_array("tokens", tok_arr);
+//   am_exec(model_script);
+//   float loss = am_get_var_float("loss");
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Enable/disable persistent globals mode (default: OFF)
+void am_persistent_mode(int enable);
+
+// Set a named AML variable to an array (clones the array, caller keeps ownership)
+int am_set_var_array(const char* name, const float* data, int len);
+
+// Set a named AML variable to a 2D matrix (rows*cols = len, sets shape info)
+int am_set_var_matrix(const char* name, const float* data, int rows, int cols);
+
+// Get a named AML variable as array (returns pointer to internal data, do NOT free)
+// Returns NULL if variable doesn't exist or isn't an array. Sets *len if non-NULL.
+const float* am_get_var_array(const char* name, int* len);
+
+// Get a named AML variable as float. Returns 0 if not found.
+float am_get_var_float(const char* name);
+
+// Clear all persistent globals (frees arrays, resets to empty)
+void am_persistent_clear(void);
 
 #ifdef __cplusplus
 }
-
-
 #endif
 
 #endif // ARIANNAMETHOD_H
