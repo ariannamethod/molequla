@@ -142,22 +142,22 @@ The training engine is **ariannamethod.c** — a C implementation of the Arianna
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Go (molequla.go)                      │
-│  Organism lifecycle, DNA exchange, ontogenesis,          │
-│  swarm ecology, syntropy, consciousness, generation      │
-│                                                          │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │              CGO Bridge (cgo_aml.go)               │  │
-│  │  amlInit, amlExec, amlSetArray, amlGetArray,       │  │
-│  │  amlSetMatrix, amlGetFloat, amlClear                │  │
-│  └────────────────────┬───────────────────────────────┘  │
-│                       │ CGO                               │
-│  ┌────────────────────▼───────────────────────────────┐  │
-│  │           C (ariannamethod.c, ~6000 lines)         │  │
-│  │  TAPE autograd, Adam optimizer, persistent mode,    │  │
-│  │  seq_embed, seq_matvec, seq_rmsnorm, silu,          │  │
-│  │  multi_head_attention, seq_cross_entropy             │  │
-│  └────────────────────────────────────────────────────┘  │
+│                    Go (molequla.go)                     │
+│  Organism lifecycle, DNA exchange, ontogenesis,         │
+│  swarm ecology, syntropy, consciousness, generation     │
+│                                                         │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │              CGO Bridge (cgo_aml.go)               │ │
+│  │  amlInit, amlExec, amlSetArray, amlGetArray,       │ │
+│  │  amlSetMatrix, amlGetFloat, amlClear               │ │
+│  └────────────────────┬───────────────────────────────┘ │
+│                       │ CGO                             │
+│  ┌────────────────────▼───────────────────────────────┐ │
+│  │           C (ariannamethod.c, ~6000 lines)         │ │
+│  │  TAPE autograd, Adam optimizer, persistent mode,   │ │
+│  │  seq_embed, seq_matvec, seq_rmsnorm, silu,         │ │
+│  │  multi_head_attention, seq_cross_entropy           │ │
+│  └────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -315,7 +315,7 @@ ps aux | grep "organism-id" | grep -v grep
 ## The Ecology
 
 ```
-                        ┌─────────────┐
+                        ┌───────────-──┐
                         │  DNA Layer   │
                         │              │
           writes ──────>│  earth/      │<────── reads
@@ -328,16 +328,16 @@ ps aux | grep "organism-id" | grep -v grep
             │                  │                  │
      ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
      │   Earth     │   │    Air      │   │   Water     │
-     │  patience   │   │  freedom   │   │   flow      │
-     │  structure  │   │  change    │   │   depth     │
-     └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+     │  patience   │   │  freedom    │   │   flow      │
+     │  structure  │   │  change     │   │   depth     │
+     └──────┬──────┘   └─────-─┬─────┘   └───--───┬────┘
             │                  │                  │
             └──────────────────┼──────────────────┘
                                │
                         ┌──────▼──────┐
                         │    Fire     │
-                        │ transform  │
-                        │  intensity │
+                        │ transform   │
+                        │  intensity  │
                         └──────┬──────┘
                                │
                      ┌─────────▼─────────┐
