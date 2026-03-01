@@ -3,23 +3,245 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>molequla.js — a GPT organism in your browser</title>
+    <title>molequla — a GPT organism in your browser</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --accent: #7c7cff;
+            --accent-glow: rgba(124, 124, 255, 0.15);
+            --text: #e0e0e8;
+            --text-muted: #6a6a7a;
+            --green: #7aff7a;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg) !important;
+            color: var(--text) !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif !important;
+            height: 100vh;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden;
+        }
+
+        /* ---- Landing header ---- */
+        .mol-landing {
+            padding: 2rem 2rem 1.5rem;
+            text-align: center;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .mol-landing img {
+            width: 80px;
+            height: auto;
+            margin-bottom: 0.75rem;
+            filter: invert(1);
+            opacity: 0.9;
+        }
+
+        .mol-landing h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+        }
+
+        .mol-landing .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            max-width: 520px;
+            margin: 0 auto 1rem;
+            line-height: 1.5;
+        }
+
+        .mol-landing .stats {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .mol-landing .stat {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.35rem 0.75rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+        }
+
+        .mol-landing .stat strong {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* ---- Override molequla.js injected styles ---- */
+
+        body > div[style*="100vh"] {
+            height: auto !important;
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+        }
+
+        .mol-header {
+            background: var(--surface) !important;
+            border-bottom: 1px solid var(--border) !important;
+            padding: 0.6rem 1.25rem !important;
+        }
+
+        .mol-title {
+            color: var(--accent) !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif !important;
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.02em !important;
+        }
+
+        .mol-status {
+            color: var(--text-muted) !important;
+            font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace !important;
+            font-size: 0.7rem !important;
+        }
+
+        .mol-chat {
+            background: var(--bg) !important;
+            padding: 1.25rem !important;
+            gap: 0.75rem !important;
+        }
+
+        .mol-msg {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif !important;
+            font-size: 0.9rem !important;
+            line-height: 1.55 !important;
+            border-radius: 1rem !important;
+            padding: 0.75rem 1rem !important;
+            max-width: 75% !important;
+        }
+
+        .mol-user {
+            background: var(--accent-glow) !important;
+            border: 1px solid rgba(124, 124, 255, 0.25) !important;
+            color: var(--text) !important;
+        }
+
+        .mol-molequla {
+            background: rgba(122, 255, 122, 0.05) !important;
+            border: 1px solid rgba(122, 255, 122, 0.15) !important;
+            color: var(--green) !important;
+        }
+
+        .mol-input-wrap {
+            background: var(--surface) !important;
+            border-top: 1px solid var(--border) !important;
+            padding: 0.75rem 1.25rem !important;
+            gap: 0.6rem !important;
+        }
+
+        .mol-input {
+            background: var(--bg) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 1.5rem !important;
+            padding: 0.7rem 1.25rem !important;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+            font-size: 0.9rem !important;
+            color: var(--text) !important;
+            transition: border-color 0.2s, box-shadow 0.2s !important;
+        }
+
+        .mol-input:focus {
+            border-color: var(--accent) !important;
+            outline: none !important;
+            box-shadow: 0 0 0 3px var(--accent-glow) !important;
+        }
+
+        .mol-input::placeholder {
+            color: var(--text-muted) !important;
+        }
+
+        .mol-send {
+            background: var(--accent) !important;
+            color: #000 !important;
+            border: none !important;
+            border-radius: 1.5rem !important;
+            padding: 0.7rem 1.5rem !important;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            cursor: pointer !important;
+            transition: opacity 0.2s, transform 0.1s !important;
+        }
+
+        .mol-send:hover {
+            opacity: 0.9 !important;
+            transform: scale(1.02) !important;
+        }
+
+        .mol-log {
+            background: var(--surface) !important;
+            border-top: 1px solid var(--border) !important;
+            max-height: 100px !important;
+            padding: 0.5rem 1.25rem !important;
+            font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace !important;
+            font-size: 0.65rem !important;
+            color: var(--text-muted) !important;
+        }
+
+        .mol-log-line {
+            padding: 1px 0 !important;
+            opacity: 0.7;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .mol-landing { padding: 1.25rem 1rem 1rem; }
+            .mol-landing img { width: 56px; }
+            .mol-landing h1 { font-size: 1.35rem; }
+            .mol-landing .stats { gap: 0.5rem; }
+            .mol-landing .stat { font-size: 0.65rem; padding: 0.25rem 0.6rem; }
+            .mol-msg { max-width: 90% !important; }
+        }
+    </style>
 </head>
 <body>
-    <!--
-        molequla.html
-        Open this file in a browser. That's it. No build step. No npm.
-        The organism will create its own UI, load its corpus, and begin learning.
+    <div class="mol-landing">
+        <img src="logo.jpg" alt="molequla">
+        <h1>molequla</h1>
+        <p class="subtitle">
+            A GPT organism that trains itself in your browser.
+            Zero dependencies. Zero frameworks. Just a script tag and emergence.
+        </p>
+        <div class="stats">
+            <span class="stat"><strong>4</strong> languages</span>
+            <span class="stat"><strong>10M</strong> param adult</span>
+            <span class="stat"><strong>6</strong> growth stages</span>
+            <span class="stat"><strong>0</strong> dependencies</span>
+        </div>
+    </div>
 
-        Place nonames.txt in the same directory for best results,
-        or the organism will use its built-in seed corpus.
+    <!--
+        molequla.js creates its own UI (chat, input, log panel) and appends to body.
+        The CSS above overrides its default styles to match the Apple-style theme.
+        Place nonames.txt in the same directory for best results.
 
         Serve with any HTTP server:
-            python3 -m http.server 8000
             npx serve .
             php -S localhost:8000
-
-        Then open http://localhost:8000/molequla.html
+        Then open http://localhost:8000
     -->
     <script src="molequla.js"></script>
 </body>
