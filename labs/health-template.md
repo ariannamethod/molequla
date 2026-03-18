@@ -32,6 +32,17 @@
 | Final loss | |
 | Vocab size | |
 | Delta modules | |
+| BPE enabled | Yes / No |
+| BPE merges | |
+| Quantum bursts triggered | |
+| Quantum buffer bytes | |
+| Quantum novelty ratio | |
+| deltaAlphaScale (conscience) | |
+| Gamma drift check (cosine) | |
+| Rejected bursts (immune) | |
+| Global step | |
+| Training duration | |
+| Peak RSS (MB) | |
 
 ### 🜁 Air
 
@@ -45,6 +56,17 @@
 | Final loss | |
 | Vocab size | |
 | Delta modules | |
+| BPE enabled | Yes / No |
+| BPE merges | |
+| Quantum bursts triggered | |
+| Quantum buffer bytes | |
+| Quantum novelty ratio | |
+| deltaAlphaScale (conscience) | |
+| Gamma drift check (cosine) | |
+| Rejected bursts (immune) | |
+| Global step | |
+| Training duration | |
+| Peak RSS (MB) | |
 
 ### 🜄 Water
 
@@ -58,6 +80,17 @@
 | Final loss | |
 | Vocab size | |
 | Delta modules | |
+| BPE enabled | Yes / No |
+| BPE merges | |
+| Quantum bursts triggered | |
+| Quantum buffer bytes | |
+| Quantum novelty ratio | |
+| deltaAlphaScale (conscience) | |
+| Gamma drift check (cosine) | |
+| Rejected bursts (immune) | |
+| Global step | |
+| Training duration | |
+| Peak RSS (MB) | |
 
 ### 🜂 Fire
 
@@ -71,12 +104,23 @@
 | Final loss | |
 | Vocab size | |
 | Delta modules | |
+| BPE enabled | Yes / No |
+| BPE merges | |
+| Quantum bursts triggered | |
+| Quantum buffer bytes | |
+| Quantum novelty ratio | |
+| deltaAlphaScale (conscience) | |
+| Gamma drift check (cosine) | |
+| Rejected bursts (immune) | |
+| Global step | |
+| Training duration | |
+| Peak RSS (MB) | |
 
 ---
 
 ## Evolution Metrics
 
-_Parsed from SQLite `growth` and `syntropy_log` tables if available._
+_Parsed from SQLite `messages`, `growth`, `syntropy_log`, and `corpus_events` tables if available._
 
 ### Growth Summary
 
@@ -102,6 +146,35 @@ _Parsed from SQLite `growth` and `syntropy_log` tables if available._
 |---------------|----------|---------|-----------|
 | _(none or fill)_ | | | |
 
+### Consciousness Metrics
+
+| Element | deltaAlphaScale | lastSurprise | surpriseBaseline | lastGenEntropy |
+|---------|----------------|--------------|------------------|----------------|
+| Earth | | | | |
+| Air | | | | |
+| Water | | | | |
+| Fire | | | | |
+
+### Action Effectiveness
+
+_From `SyntropyTracker.ActionEffectiveness()` — mean loss delta per action type._
+
+| Element | amplify | boost | dampen | ground | explore | realign | divide | hibernate |
+|---------|---------|-------|--------|--------|---------|---------|--------|-----------|
+| Earth | | | | | | | | |
+| Air | | | | | | | | |
+| Water | | | | | | | | |
+| Fire | | | | | | | | |
+
+### Swarm Status
+
+| Element | Organism ID | Peers Discovered | Heartbeat OK | Parent ID |
+|---------|-------------|-----------------|--------------|-----------|
+| Earth | | | Yes / No | |
+| Air | | | Yes / No | |
+| Water | | | Yes / No | |
+| Fire | | | Yes / No | |
+
 ---
 
 ## Known Issues Checklist
@@ -112,6 +185,7 @@ _Parsed from SQLite `growth` and `syntropy_log` tables if available._
 - [ ] **CGO cache** — Build used stale C code (missing `-a` flag)
 - [ ] **Deadlock** — Organism hung (check for mutex contention in logs)
 - [ ] **Tokenizer regression** — Vocab size decreased or BPE merge anomaly
+- [ ] **Personality corruption** — Gamma drift cosine below threshold (`GammaDriftCheck()`)
 - [ ] **Other:** _(describe)_
 
 ---

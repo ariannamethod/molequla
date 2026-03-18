@@ -52,7 +52,7 @@ Each organism grows through 6 predefined stages (`molequla.go`, lines 188–195)
 | 4 | teen | 350K chars | 224 | 5 | 8 | ~4.1M |
 | 5 | adult | 500K chars | 320 | 6 | 8 | ~10M |
 
-Growth is triggered by DNA exchange → corpus expansion → `MaybeGrow()`. Architecture grows **one stage at a time** to prevent catastrophic jumps.
+Growth is triggered by DNA exchange → corpus expansion → `MaybeGrowArchitecture()`. Architecture grows **one stage at a time** to prevent catastrophic jumps.
 
 ### DNA Exchange
 
@@ -109,6 +109,7 @@ AML (Arianna Method Language) is a domain-specific language for differentiable c
 
 Molequla logs to SQLite (`memory.sqlite3`):
 
+- **messages** table — conversation and interaction history
 - **growth** table — architecture milestones (vocab size, params, deltas, loss, gamma drift)
 - **syntropy_log** table — self-reasoning decisions (entropy, field deviation, purpose, action)
 - **corpus_events** table — corpus growth tracking
