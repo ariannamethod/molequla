@@ -31,7 +31,7 @@ else
 	endif
 endif
 
-SRCS = ariannamethod.c
+SRCS = ariannamethod.c notorch.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET)
@@ -39,7 +39,10 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-%.o: %.c ariannamethod.h
+ariannamethod.o: ariannamethod.c ariannamethod.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+notorch.o: notorch.c notorch.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
