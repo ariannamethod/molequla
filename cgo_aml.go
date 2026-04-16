@@ -1,10 +1,26 @@
 package main
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/ariannamethod -O2 -fopenmp
-#cgo LDFLAGS: -lm -lpthread -lgomp
+#cgo CFLAGS: -I${SRCDIR}/ariannamethod -O2
+#cgo LDFLAGS: -lm -lpthread
+#cgo darwin CFLAGS: -DUSE_BLAS -DACCELERATE -DACCELERATE_NEW_LAPACK
+#cgo darwin LDFLAGS: -framework Accelerate
 #include "ariannamethod.h"
 #include "ariannamethod.c"
+
+// BLAS matvec for Go: out[nout] = data[nout*nin] @ x[nin]
+// cblas_dgemv available from ariannamethod.c includes
+static void go_blas_dgemv(double *out, const double *data, int nout, int nin, const double *x) {
+#ifdef USE_BLAS
+    cblas_dgemv(101, 111, nout, nin, 1.0, data, nin, x, 1, 0.0, out, 1);
+#else
+    for (int i = 0; i < nout; i++) {
+        double s = 0;
+        for (int j = 0; j < nin; j++) s += data[i*nin+j] * x[j];
+        out[i] = s;
+    }
+#endif
+}
 */
 import "C"
 import (
@@ -77,4 +93,20 @@ func amlGetFloat(name string) float32 {
 func amlClear() {
 	C.am_persistent_clear()
 	amlInitialized = false
+}
+
+// blasMatvec: BLAS-accelerated matrix-vector multiply for Go MatrixParam.
+// Packs scattered Go rows into contiguous C buffer, calls cblas_dgemv, returns result.
+// Thread-safe (each call allocates its own buffer).
+// blasDgemv calls cblas_dgemv through C for BLAS-accelerated matvec.
+// data: contiguous row-major [nout*nin], x: [nin], returns out [nout].
+func blasDgemv(data []float64, nout, nin int, x []float64) []float64 {
+	out := make([]float64, nout)
+	C.go_blas_dgemv(
+		(*C.double)(unsafe.Pointer(&out[0])),
+		(*C.double)(unsafe.Pointer(&data[0])),
+		C.int(nout), C.int(nin),
+		(*C.double)(unsafe.Pointer(&x[0])),
+	)
+	return out
 }

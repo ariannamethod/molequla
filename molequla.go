@@ -759,14 +759,24 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 func (m *MatrixParam) Matvec(x *Vec) *Vec {
 	nout := m.Nout
 	nin := len(x.Data)
-	outData := make([]float64, nout)
+	var outData []float64
 
-	for i := 0; i < nout; i++ {
-		sum := 0.0
-		for j := 0; j < nin; j++ {
-			sum += m.Rows[i].Data[j] * x.Data[j]
+	// Try BLAS path: pack rows into contiguous buffer, call cblas_dgemv via CGO
+	if nout*nin >= 256 {
+		packed := make([]float64, nout*nin)
+		for i := 0; i < nout; i++ {
+			copy(packed[i*nin:], m.Rows[i].Data[:nin])
 		}
-		outData[i] = sum
+		outData = blasDgemv(packed, nout, nin, x.Data)
+	} else {
+		outData = make([]float64, nout)
+		for i := 0; i < nout; i++ {
+			sum := 0.0
+			for j := 0; j < nin; j++ {
+				sum += m.Rows[i].Data[j] * x.Data[j]
+			}
+			outData[i] = sum
+		}
 	}
 
 	out := NewVec(outData)

@@ -34,9 +34,6 @@
     #include <cblas.h>
   #endif
   #define HAS_BLAS 1
-  /* Thread-local reusable buffer for packing row-per-vec into contiguous for BLAS */
-  static __thread double *blas_buf = NULL;
-  static __thread int blas_buf_cap = 0;
 #else
   #define HAS_BLAS 0
 #endif
@@ -841,65 +838,69 @@ static void backward(Node *root) {
 
 /* Persistent weight matrix (NOT arena allocated) */
 typedef struct {
-    double **row_data; /* [nout][nin] */
-    double **row_grad; /* [nout][nin] */
+    double *data; /* contiguous [nout * nin], row-major */
+    double *grad; /* contiguous [nout * nin], row-major */
     int nout, nin;
 } MatrixParam;
+
+/* Access macros for contiguous layout */
+#define MAT_AT(m, i, j) ((m)->data[(i) * (m)->nin + (j)])
+#define MAT_GRAD(m, i, j) ((m)->grad[(i) * (m)->nin + (j)])
+#define MAT_ROW(m, i) ((m)->data + (i) * (m)->nin)
+#define MAT_GROW(m, i) ((m)->grad + (i) * (m)->nin)
 
 static MatrixParam *mat_new(int nout, int nin, double std) {
     MatrixParam *m = calloc(1, sizeof(MatrixParam));
     m->nout = nout; m->nin = nin;
-    m->row_data = calloc(nout, sizeof(double*));
-    m->row_grad = calloc(nout, sizeof(double*));
-    for (int i = 0; i < nout; i++) {
-        m->row_data[i] = calloc(nin, sizeof(double));
-        m->row_grad[i] = calloc(nin, sizeof(double));
-        for (int j = 0; j < nin; j++)
-            m->row_data[i][j] = rand_normal() * std;
-    }
+    m->data = calloc((size_t)nout * nin, sizeof(double));
+    m->grad = calloc((size_t)nout * nin, sizeof(double));
+    for (int i = 0; i < nout * nin; i++)
+        m->data[i] = rand_normal() * std;
     return m;
 }
 
 static void mat_grow_rows(MatrixParam *m, int new_nout, double std) {
     if (new_nout <= m->nout) return;
-    void *tmp_data = realloc(m->row_data, sizeof(double*) * new_nout);
-    void *tmp_grad = realloc(m->row_grad, sizeof(double*) * new_nout);
-    if (!tmp_data || !tmp_grad) {
+    size_t old_size = (size_t)m->nout * m->nin;
+    size_t new_size = (size_t)new_nout * m->nin;
+    double *tmp_d = realloc(m->data, new_size * sizeof(double));
+    double *tmp_g = realloc(m->grad, new_size * sizeof(double));
+    if (!tmp_d || !tmp_g) {
         fprintf(stderr, "[mat_grow_rows] realloc failed\n");
-        if (tmp_data) m->row_data = tmp_data;
-        if (tmp_grad) m->row_grad = tmp_grad;
+        if (tmp_d) m->data = tmp_d;
+        if (tmp_g) m->grad = tmp_g;
         return;
     }
-    m->row_data = tmp_data;
-    m->row_grad = tmp_grad;
-    for (int i = m->nout; i < new_nout; i++) {
-        m->row_data[i] = calloc(m->nin, sizeof(double));
-        m->row_grad[i] = calloc(m->nin, sizeof(double));
-        for (int j = 0; j < m->nin; j++)
-            m->row_data[i][j] = rand_normal() * std;
-    }
+    m->data = tmp_d;
+    m->grad = tmp_g;
+    /* Zero new grad, init new data with noise */
+    memset(m->grad + old_size, 0, (new_size - old_size) * sizeof(double));
+    for (size_t i = old_size; i < new_size; i++)
+        m->data[i] = rand_normal() * std;
     m->nout = new_nout;
 }
 
-/* Grow columns (input dimension) of a matrix: extend each row with gaussian noise */
+/* Grow columns (input dimension): must repack rows since stride changes */
 static void mat_grow_cols(MatrixParam *m, int new_nin, double std) {
     if (new_nin <= m->nin) return;
-    for (int i = 0; i < m->nout; i++) {
-        void *tmp_d = realloc(m->row_data[i], sizeof(double) * new_nin);
-        void *tmp_g = realloc(m->row_grad[i], sizeof(double) * new_nin);
-        if (!tmp_d || !tmp_g) {
-            fprintf(stderr, "[mat_grow_cols] realloc failed at row %d\n", i);
-            if (tmp_d) m->row_data[i] = tmp_d;
-            if (tmp_g) m->row_grad[i] = tmp_g;
-            return;
-        }
-        m->row_data[i] = tmp_d;
-        m->row_grad[i] = tmp_g;
-        for (int j = m->nin; j < new_nin; j++) {
-            m->row_data[i][j] = rand_normal() * std;
-            m->row_grad[i][j] = 0.0;
-        }
+    double *new_data = calloc((size_t)m->nout * new_nin, sizeof(double));
+    double *new_grad = calloc((size_t)m->nout * new_nin, sizeof(double));
+    if (!new_data || !new_grad) {
+        fprintf(stderr, "[mat_grow_cols] alloc failed\n");
+        free(new_data); free(new_grad);
+        return;
     }
+    /* Copy old data row by row (stride changed from nin to new_nin) */
+    for (int i = 0; i < m->nout; i++) {
+        memcpy(new_data + (size_t)i * new_nin, m->data + (size_t)i * m->nin,
+               m->nin * sizeof(double));
+        /* Fill new columns with noise */
+        for (int j = m->nin; j < new_nin; j++)
+            new_data[(size_t)i * new_nin + j] = rand_normal() * std;
+    }
+    free(m->data); free(m->grad);
+    m->data = new_data;
+    m->grad = new_grad;
     m->nin = new_nin;
 }
 
@@ -916,9 +917,11 @@ static void back_matvec(Node *self) {
     MatvecCtx *c = self->ctx;
     for (int i = 0; i < c->nout; i++) {
         double g = self->grad[i];
+        double *row = MAT_ROW(c->m, i);
+        double *grow = MAT_GROW(c->m, i);
         for (int j = 0; j < c->nin; j++) {
-            c->m->row_grad[i][j] += g * c->x->data[j];
-            c->x->grad[j] += g * c->m->row_data[i][j];
+            grow[j] += g * c->x->data[j];
+            c->x->grad[j] += g * row[j];
         }
     }
 }
@@ -928,32 +931,25 @@ static Node *mat_matvec(MatrixParam *m, Node *x) {
     Node *out = node_new(nout);
 #if HAS_BLAS
     if (nout * nin >= 256) {
-        /* Pack row pointers into contiguous thread-local buffer for cblas_dgemv */
-        int needed = nout * nin;
-        if (needed > blas_buf_cap) {
-            free(blas_buf);
-            blas_buf = malloc(sizeof(double) * needed);
-            blas_buf_cap = needed;
-        }
-        for (int i = 0; i < nout; i++)
-            memcpy(blas_buf + i * nin, m->row_data[i], nin * sizeof(double));
+        /* Contiguous layout: no packing needed — direct BLAS call */
         cblas_dgemv(CblasRowMajor, CblasNoTrans, nout, nin,
-                    1.0, blas_buf, nin, x->data, 1, 0.0, out->data, 1);
+                    1.0, m->data, nin, x->data, 1, 0.0, out->data, 1);
     } else
 #endif
     {
         for (int i = 0; i < nout; i++) {
             double s = 0;
-            for (int j = 0; j < nin; j++) s += m->row_data[i][j] * x->data[j];
+            double *row = MAT_ROW(m, i);
+            for (int j = 0; j < nin; j++) s += row[j] * x->data[j];
             out->data[i] = s;
         }
     }
 
     if (grad_enabled) {
-        /* Wrap each row as a node for the graph */
+        /* Wrap each row as a node pointing into contiguous data/grad */
         Node **kids = arena_alloc(&G_arena, sizeof(Node*) * (nout + 1));
         for (int i = 0; i < nout; i++)
-            kids[i] = node_wrap(m->row_data[i], m->row_grad[i], nin);
+            kids[i] = node_wrap(MAT_ROW(m, i), MAT_GROW(m, i), nin);
         kids[nout] = x;
         node_set_children(out, kids, nout + 1);
 
@@ -1224,11 +1220,11 @@ static int top_k_top_p_sample(const double *probs, int n, int k, double p, doubl
 /* Gradient clipping */
 static void clip_grads(MatrixParam *m, double clip) {
     if (clip <= 0) return;
-    for (int i = 0; i < m->nout; i++)
-        for (int j = 0; j < m->nin; j++) {
-            if (m->row_grad[i][j] > clip) m->row_grad[i][j] = clip;
-            else if (m->row_grad[i][j] < -clip) m->row_grad[i][j] = -clip;
-        }
+    int n = m->nout * m->nin;
+    for (int i = 0; i < n; i++) {
+        if (m->grad[i] > clip) m->grad[i] = clip;
+        else if (m->grad[i] < -clip) m->grad[i] = -clip;
+    }
 }
 
 /* ============================================================
@@ -1868,13 +1864,14 @@ static void adam_step(AdamState *st, MatrixParam *mat, double lr) {
     clip_grads(mat, CFG.grad_clip);
     for (int i = 0; i < mat->nout; i++)
         for (int j = 0; j < mat->nin; j++) {
-            double g = mat->row_grad[i][j];
+            int idx = i * mat->nin + j;
+            double g = mat->grad[idx];
             st->m[i][j] = CFG.beta1 * st->m[i][j] + (1 - CFG.beta1) * g;
             st->v[i][j] = CFG.beta2 * st->v[i][j] + (1 - CFG.beta2) * g * g;
             double mh = st->m[i][j] / b1c;
             double vh = st->v[i][j] / b2c;
-            mat->row_data[i][j] -= lr * mh / (sqrt(vh) + CFG.eps_adam);
-            mat->row_grad[i][j] = 0;
+            mat->data[idx] -= lr * mh / (sqrt(vh) + CFG.eps_adam);
+            mat->grad[idx] = 0;
         }
 }
 
@@ -2085,7 +2082,7 @@ static GPT *gpt_new(EvolvingTokenizer *tok) {
             }
             snprintf(name, sizeof(name), "l%d.h%d.alpha", li, h);
             MatrixParam *am = mat_new(1, 1, 0.0);
-            am->row_data[0][0] = CFG.hybrid_alpha_init;
+            am->data[0] = CFG.hybrid_alpha_init;
             gpt_add_base(g, name, am);
         }
     }
@@ -2098,7 +2095,7 @@ static GPT *gpt_new(EvolvingTokenizer *tok) {
     g->init_embed_snapshot = calloc(wte->nout, sizeof(double*));
     for (int i = 0; i < wte->nout; i++) {
         g->init_embed_snapshot[i] = calloc(wte->nin, sizeof(double));
-        memcpy(g->init_embed_snapshot[i], wte->row_data[i], sizeof(double) * wte->nin);
+        memcpy(g->init_embed_snapshot[i], MAT_ROW(wte, i), sizeof(double) * wte->nin);
     }
 
     return g;
@@ -2229,7 +2226,7 @@ static int gpt_maybe_grow_architecture(GPT *g, int corpus_chars) {
             }
             snprintf(name, sizeof(name), "l%d.h%d.alpha", li, h);
             MatrixParam *am = mat_new(1, 1, 0.0);
-            am->row_data[0][0] = CFG.hybrid_alpha_init;
+            am->data[0] = CFG.hybrid_alpha_init;
             gpt_add_base(g, name, am);
         }
     }
@@ -2256,7 +2253,7 @@ static int gpt_maybe_grow_architecture(GPT *g, int corpus_chars) {
             }
             snprintf(name, sizeof(name), "l%d.h%d.alpha", li, h);
             MatrixParam *am = mat_new(1, 1, 0.0);
-            am->row_data[0][0] = CFG.hybrid_alpha_init;
+            am->data[0] = CFG.hybrid_alpha_init;
             gpt_add_base(g, name, am);
         }
     }
@@ -2454,9 +2451,9 @@ static Node *gpt_forward_step(GPT *g, int token_id, int pos_id, KVCache *kv) {
     MatrixParam *wte = gpt_base(g, "wte");
     MatrixParam *wpe = gpt_base(g, "wpe");
 
-    Node *tok_emb = node_wrap(wte->row_data[token_id], wte->row_grad[token_id], g->n_embd);
-    Node *pos_emb = node_wrap(wpe->row_data[pos_id % g->block_size],
-                              wpe->row_grad[pos_id % g->block_size], g->n_embd);
+    Node *tok_emb = node_wrap(MAT_ROW(wte, token_id), MAT_GROW(wte, token_id), g->n_embd);
+    Node *pos_emb = node_wrap(MAT_ROW(wpe, pos_id % g->block_size),
+                              MAT_GROW(wpe, pos_id % g->block_size), g->n_embd);
     Node *x = vec_add(tok_emb, pos_emb);
 
     char name[64];
@@ -2522,7 +2519,7 @@ static Node *gpt_forward_step(GPT *g, int token_id, int pos_id, KVCache *kv) {
                 char aname[64];
                 snprintf(aname, sizeof(aname), "l%d.h%d.alpha", li, h);
                 MatrixParam *am = gpt_base(g, aname);
-                Node *alpha_vec = node_wrap(am->row_data[0], am->row_grad[0], 1);
+                Node *alpha_vec = node_wrap(am->data, am->grad, 1);
                 Node *alpha_scalar = vec_element(alpha_vec, 0);
                 Node *a = scalar_sigmoid(alpha_scalar);
                 Node *one_minus_a = scalar_addf(scalar_mulf(a, -1.0), 1.0);
@@ -3070,7 +3067,7 @@ static GammaStats gpt_gamma_stats(GPT *g) {
     for (int i = 0; i < n; i++) {
         double mag = 0;
         for (int j = 0; j < wte->nin; j++) {
-            double d = wte->row_data[i][j] - g->init_embed_snapshot[i][j];
+            double d = MAT_AT(wte, i, j) - g->init_embed_snapshot[i][j];
             mag += d * d;
         }
         mag = sqrt(mag);
@@ -3117,12 +3114,12 @@ static ImmuneSnapshot gpt_snapshot_deltas(GPT *g) {
             as->A_data = calloc(da->A->nout, sizeof(double*));
             for (int i = 0; i < da->A->nout; i++) {
                 as->A_data[i] = malloc(sizeof(double) * da->A->nin);
-                memcpy(as->A_data[i], da->A->row_data[i], sizeof(double) * da->A->nin);
+                memcpy(as->A_data[i], MAT_ROW(da->A, i), sizeof(double) * da->A->nin);
             }
             as->B_data = calloc(da->B->nout, sizeof(double*));
             for (int i = 0; i < da->B->nout; i++) {
                 as->B_data[i] = malloc(sizeof(double) * da->B->nin);
-                memcpy(as->B_data[i], da->B->row_data[i], sizeof(double) * da->B->nin);
+                memcpy(as->B_data[i], MAT_ROW(da->B, i), sizeof(double) * da->B->nin);
             }
         }
     }
@@ -3136,9 +3133,9 @@ static void gpt_restore_deltas(GPT *g, ImmuneSnapshot *snap) {
             DeltaAdapter *da = mod->adapters[a];
             AdapterSnap *as = &snap->modules[d].adapters[a];
             for (int i = 0; i < as->A_nout && i < da->A->nout; i++)
-                memcpy(da->A->row_data[i], as->A_data[i], sizeof(double) * da->A->nin);
+                memcpy(MAT_ROW(da->A, i), as->A_data[i], sizeof(double) * da->A->nin);
             for (int i = 0; i < as->B_nout && i < da->B->nout; i++)
-                memcpy(da->B->row_data[i], as->B_data[i], sizeof(double) * da->B->nin);
+                memcpy(MAT_ROW(da->B, i), as->B_data[i], sizeof(double) * da->B->nin);
         }
     }
 }
@@ -3167,7 +3164,7 @@ static double *gpt_contrastive_projection(GPT *g, int *out_dim, double *out_mag)
     double *dir = calloc(dim, sizeof(double));
     for (int i = 0; i < n; i++)
         for (int j = 0; j < dim; j++)
-            dir[j] += wte->row_data[i][j] - g->init_embed_snapshot[i][j];
+            dir[j] += MAT_AT(wte, i, j) - g->init_embed_snapshot[i][j];
     double mag = 0;
     for (int j = 0; j < dim; j++) mag += dir[j] * dir[j];
     mag = sqrt(mag);
@@ -3946,7 +3943,7 @@ static double *gpt_compute_purpose_vector(GPT *g, int *out_dim, double *out_mag)
         int d = da->A->nin < dim ? da->A->nin : dim;
         for (int r = 0; r < da->A->nout; r++) {
             for (int j = 0; j < d; j++)
-                mean_dir[j] += da->A->row_data[r][j];
+                mean_dir[j] += MAT_AT(da->A, r, j);
             n_rows++;
         }
     }
@@ -4418,7 +4415,7 @@ static void save_checkpoint(GPT *g, EvolvingTokenizer *tok, const char *path) {
         fwrite(&g->base_mats[i]->nout, 4, 1, f);
         fwrite(&g->base_mats[i]->nin, 4, 1, f);
         for (int r = 0; r < g->base_mats[i]->nout; r++)
-            fwrite(g->base_mats[i]->row_data[r], sizeof(double), g->base_mats[i]->nin, f);
+            fwrite(MAT_ROW(g->base_mats[i], r), sizeof(double), g->base_mats[i]->nin, f);
     }
 
     /* Model metadata (global_step, warmup stage, growth offset) */
@@ -4438,9 +4435,9 @@ static void save_checkpoint(GPT *g, EvolvingTokenizer *tok, const char *path) {
             fwrite(mod->names[a], 1, nlen, f);
             DeltaAdapter *da = mod->adapters[a];
             fwrite(&da->A->nout, 4, 1, f); fwrite(&da->A->nin, 4, 1, f);
-            for (int r = 0; r < da->A->nout; r++) fwrite(da->A->row_data[r], sizeof(double), da->A->nin, f);
+            for (int r = 0; r < da->A->nout; r++) fwrite(MAT_ROW(da->A, r), sizeof(double), da->A->nin, f);
             fwrite(&da->B->nout, 4, 1, f); fwrite(&da->B->nin, 4, 1, f);
-            for (int r = 0; r < da->B->nout; r++) fwrite(da->B->row_data[r], sizeof(double), da->B->nin, f);
+            for (int r = 0; r < da->B->nout; r++) fwrite(MAT_ROW(da->B, r), sizeof(double), da->B->nin, f);
         }
     }
 
@@ -4521,7 +4518,7 @@ static GPT *load_checkpoint(const char *path, EvolvingTokenizer **out_tok) {
         if (nout <= 0 || nin <= 0 || nout > 100000 || nin > 100000) goto ckpt_fail;
         MatrixParam *m = mat_new(nout, nin, 0.0);
         for (int r = 0; r < nout; r++)
-            CKPT_READ(m->row_data[r], sizeof(double), nin, f);
+            CKPT_READ(MAT_ROW(m, r), sizeof(double), nin, f);
         saved_mats[i] = m;
     }
 
@@ -4573,14 +4570,10 @@ static GPT *load_checkpoint(const char *path, EvolvingTokenizer **out_tok) {
         MatrixParam *dst = gpt_base(g, saved_names[i]);
         if (dst && dst->nout == saved_mats[i]->nout && dst->nin == saved_mats[i]->nin) {
             for (int r = 0; r < dst->nout; r++)
-                memcpy(dst->row_data[r], saved_mats[i]->row_data[r], sizeof(double) * dst->nin);
+                memcpy(MAT_ROW(dst, r), MAT_ROW(saved_mats[i], r), sizeof(double) * dst->nin);
         }
-        for (int r = 0; r < saved_mats[i]->nout; r++) {
-            free(saved_mats[i]->row_data[r]);
-            free(saved_mats[i]->row_grad[r]);
-        }
-        free(saved_mats[i]->row_data);
-        free(saved_mats[i]->row_grad);
+        free(saved_mats[i]->data);
+        free(saved_mats[i]->grad);
         free(saved_mats[i]);
         free(saved_names[i]);
     }
@@ -4617,13 +4610,13 @@ static GPT *load_checkpoint(const char *path, EvolvingTokenizer **out_tok) {
             int ao, ai; CKPT_READ_INT(ao, f); CKPT_READ_INT(ai, f);
             DeltaAdapter *da = dmod_get(mod, aname);
             if (da && da->A->nout == ao && da->A->nin == ai) {
-                for (int r = 0; r < ao; r++) CKPT_READ(da->A->row_data[r], sizeof(double), ai, f);
+                for (int r = 0; r < ao; r++) CKPT_READ(MAT_ROW(da->A, r), sizeof(double), ai, f);
             } else {
                 fseek(f, sizeof(double) * ao * ai, SEEK_CUR);
             }
             int bo, bi; CKPT_READ_INT(bo, f); CKPT_READ_INT(bi, f);
             if (da && da->B->nout == bo && da->B->nin == bi) {
-                for (int r = 0; r < bo; r++) CKPT_READ(da->B->row_data[r], sizeof(double), bi, f);
+                for (int r = 0; r < bo; r++) CKPT_READ(MAT_ROW(da->B, r), sizeof(double), bi, f);
             } else {
                 fseek(f, sizeof(double) * bo * bi, SEEK_CUR);
             }
@@ -4643,12 +4636,8 @@ ckpt_fail:
     if (saved_names && saved_mats) {
         for (int i = 0; i < n_base; i++) {
             if (saved_mats[i]) {
-                for (int r = 0; r < saved_mats[i]->nout; r++) {
-                    free(saved_mats[i]->row_data[r]);
-                    free(saved_mats[i]->row_grad[r]);
-                }
-                free(saved_mats[i]->row_data);
-                free(saved_mats[i]->row_grad);
+                free(saved_mats[i]->data);
+                free(saved_mats[i]->grad);
                 free(saved_mats[i]);
             }
             free(saved_names[i]);
