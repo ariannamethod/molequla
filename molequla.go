@@ -5032,7 +5032,7 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 				continue
 			}
 			text := strings.TrimSpace(string(data))
-			if len(text) < 5 {
+			if len(text) < 10 {
 				os.Remove(fpath)
 				continue
 			}
