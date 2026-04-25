@@ -206,15 +206,15 @@ The [Arianna Method Language](https://github.com/ariannamethod/ariannamethod.ai)
 │                         │ CGO                                │
 │  ┌──────────────────────▼──────────────────────────────────┐ │
 │  │      AML/C Engine (ariannamethod.c, 6000+ lines)        │ │
-│  │  TAPE autograd, Adam optimizer, persistent mode,         │ │
+│  │  TAPE autograd, Adam optimizer, persistent mode,        │ │
 │  │  seq_embed, seq_matvec, seq_rmsnorm, silu,              │ │
-│  │  multi_head_attention, seq_cross_entropy, OpenMP         │ │
+│  │  multi_head_attention, seq_cross_entropy, OpenMP        │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                              │
 │  ┌─────────────────────────────────────────────────────────┐ │
-│  │         AML Training Wrapper (aml_trainer.go)            │ │
+│  │         AML Training Wrapper (aml_trainer.go)           │ │
 │  │  amlModelScript(), amlTrainSteps(), amlBurstTrain(),    │ │
-│  │  amlPushWeights(), amlPullWeights()                      │ │
+│  │  amlPushWeights(), amlPullWeights()                     │ │
 │  └─────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────┘
 ```
