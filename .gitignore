@@ -87,3 +87,6 @@ molequla_new
 ariannamethod/*.o
 ariannamethod/*.so
 ariannamethod/*.dylib
+
+# Railway local data dir (state lives on volume in production)
+/data/
