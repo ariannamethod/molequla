@@ -50,8 +50,10 @@ PID_F=$!
 echo "[ecology] launched: earth=$PID_E air=$PID_A water=$PID_W fire=$PID_F"
 echo "[ecology] data root: $ROOT"
 
-# Wait on any to exit, then forward exit code so Railway restarts the
-# whole ecology (container restart > partial collapse).
-wait -n $PID_E $PID_A $PID_W $PID_F
-echo "[ecology] one organism exited — failing container so Railway restarts"
+# POSIX `wait` (no -n — dash in debian-slim doesn't support that bash
+# extension). Blocks until ALL backgrounded organisms finish. If any one
+# dies the others keep going; only when the whole ecology collapses does
+# the container exit and Railway restart fire.
+wait
+echo "[ecology] all organisms exited — container restart"
 exit 1
