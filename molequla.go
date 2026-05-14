@@ -4426,8 +4426,17 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		// then divide by temp, softmax, multinomial — mirror postgpt.c:969-991
 		// and pitomadom.c:761-772. The hard mask kills the long noise-tail that
 		// otherwise competes with overlay peaks under soft top-k/top-p sampling.
+		// Hard top-K=15 mask only fires for the untrained-overlay regime
+		// (mirror of postgpt_q.c:1414-1424 — only `!has_tf` path uses
+		// greedy+top-K). Warmed models with overlay use the regular soft
+		// TopKTopPSample below; hard mask on a BPE subword vocab + overlay
+		// bigram boost concentrates top-15 onto short subword fragments
+		// (suffix tokens, punctuation) and the chain stays at subword level
+		// — sweep cell 2 v3 reproduced this with «,iieriying the isa?yenanan?»
+		// output at infant stage (post-warmup, mag>1.0 → untrainedRegime=false
+		// pre-fix; now we just skip the hard mask entirely in that regime).
 		scaled := make([]float64, len(overlaidLogits))
-		if overlayActive {
+		if overlayActive && untrainedRegime {
 			topK := 15
 			if topK > len(overlaidLogits) {
 				topK = len(overlaidLogits)
