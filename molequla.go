@@ -806,11 +806,17 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 // Matvec computes matrix @ vector.
 func (m *MatrixParam) Matvec(x *Vec) *Vec {
 	// GPU dispatch — only when explicitly enabled AND inference (no autograd
-	// requested) AND this matrix is cached on device. Training stays on CPU
-	// (BLAS + autograd) because the GPU adam stub is not wired here; only
-	// the forward path benefits. The same binary runs on macOS / non-linux
-	// because gpuReady() and m.gpuKey both return false there.
-	if CFG.UseGPU && gpuReady() && !gradEnabled.Load() && m.gpuKey != "" {
+	// requested) AND this matrix is cached on device AND the matrix is large
+	// enough that the cuBLAS launch + CPU↔GPU transfer cost (~15-20µs/call)
+	// is amortised over the matmul work. Below 16K elements the CPU BLAS
+	// path is faster (~1-5µs for a NEmbd=16 matvec on Apple Silicon / A40
+	// host CPU). Verified on pod 2026-05-14: embryo (NEmbd=16) GPU smoke ran
+	// 55s vs 47s CPU; child onwards (NEmbd≥64) is where the crossover
+	// happens. Threshold 16384 ≈ 128² keeps small matrices on CPU
+	// automatically.
+	const gpuMatvecMin = 16384
+	if CFG.UseGPU && gpuReady() && !gradEnabled.Load() && m.gpuKey != "" &&
+		m.Nout*m.Nin >= gpuMatvecMin {
 		if gpuOut := m.MatvecGPU(x); gpuOut != nil {
 			return gpuOut
 		}
