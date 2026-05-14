@@ -96,6 +96,13 @@ type Config struct {
 	// before/after measurement run. Floor on log-prob for unseen tokens
 	// prevents -inf bias from masking valid model preferences.
 	CorpusLogitOverlay     bool    `json:"corpus_logit_overlay"`
+
+	// UseGPU routes per-matrix Matvec calls through cuBLAS sgemm on Linux
+	// builds (see gpu_bindings_linux.go + gpu_forward.go). Inference-only:
+	// gradEnabled gates training back to the CPU/BLAS path. Default off — same
+	// binary runs unchanged on macOS / non-CUDA hosts; on a CUDA pod the
+	// --gpu flag plus a successful gpu_init() enables the fast path.
+	UseGPU                 bool    `json:"use_gpu"`
 	MetaCBigram            float64 `json:"meta_c_bigram"`
 	MetaCTrigram           float64 `json:"meta_c_trigram"`
 	MetaCHebbian           float64 `json:"meta_c_hebbian"`
@@ -778,6 +785,10 @@ type MatrixParam struct {
 	Rows []*Vec
 	Nout int
 	Nin  int
+	// gpuKey, when non-empty, names this matrix in the GPU weight cache
+	// (gpu_cache_weight). Matvec checks it before dispatching to MatvecGPU.
+	// Empty = not yet uploaded; set by gpuRefreshWeights at generation start.
+	gpuKey string
 }
 
 func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
@@ -794,6 +805,18 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 
 // Matvec computes matrix @ vector.
 func (m *MatrixParam) Matvec(x *Vec) *Vec {
+	// GPU dispatch — only when explicitly enabled AND inference (no autograd
+	// requested) AND this matrix is cached on device. Training stays on CPU
+	// (BLAS + autograd) because the GPU adam stub is not wired here; only
+	// the forward path benefits. The same binary runs on macOS / non-linux
+	// because gpuReady() and m.gpuKey both return false there.
+	if CFG.UseGPU && gpuReady() && !gradEnabled.Load() && m.gpuKey != "" {
+		if gpuOut := m.MatvecGPU(x); gpuOut != nil {
+			return gpuOut
+		}
+		// Fall through to CPU path on any GPU error.
+	}
+
 	nout := m.Nout
 	nin := len(x.Data)
 	var outData []float64
@@ -4241,6 +4264,14 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 	gradEnabled.Store(false)
 	defer func() { gradEnabled.Store(true) }()
 
+	// Refresh GPU weight cache once per generation call. Any host-side weight
+	// mutation since the last call (training burst, vocab growth, mitosis
+	// inheritance) is re-uploaded so the per-token Matvec dispatch sees fresh
+	// device data. No-op on non-linux / when --gpu is off.
+	if CFG.UseGPU && gpuReady() {
+		gpuRefreshWeights(model)
+	}
+
 	var ids []int
 	if prompt != "" {
 		enc := tok.Encode(prompt)
@@ -5733,6 +5764,12 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 			// Q-style zero-training coherence: embryo organism receives only
 			// metaweight-seeded embeddings + overlay, no gradient steps.
 			CFG.WarmupSteps = 0
+		} else if os.Args[i] == "--gpu" {
+			// Route inference Matvec through cuBLAS sgemm. Linux-only at
+			// runtime (gpuReady() returns false elsewhere). Training stays
+			// CPU/BLAS — autograd graph requires host tensors. See
+			// gpu_bindings_linux.go + gpu_forward.go.
+			CFG.UseGPU = true
 		}
 	}
 	return
@@ -6145,6 +6182,19 @@ func main() {
 
 	// Parse CLI args for child organisms
 	organismID, configPath, element, evolution := parseCLIArgs()
+
+	// GPU init: attempted only when --gpu (CFG.UseGPU) requested. Silent
+	// fallback if init fails — gpuReady() stays false and the Matvec
+	// dispatcher continues to use the CPU/BLAS path. Linux only at runtime
+	// (the stub on other platforms returns -1 immediately).
+	if CFG.UseGPU {
+		if rc := gpuInit(); rc != 0 || !gpuReady() {
+			fmt.Fprintf(os.Stderr, "[gpu] init failed (rc=%d); falling back to CPU/BLAS\n", rc)
+			CFG.UseGPU = false
+		} else {
+			fmt.Fprintln(os.Stderr, "[gpu] CUDA backend live — inference matvec routed through cuBLAS")
+		}
+	}
 
 	// Element → corpus path: each element eats its own food
 	if element != "" {
