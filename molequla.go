@@ -5340,6 +5340,15 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 				os.Remove(fpath)
 				continue
 			}
+			// Mirror DNA fragment to ../dna/seen/<element>/ before consume.
+			// Paper-cycle artifact: organism-to-organism DNA exchange would
+			// otherwise be deleted-on-consume; we preserve the full stream
+			// so Body can compare actual emission content across cells.
+			// Added 2026-05-14 (Singularity strike — Oleg «фикси если видишь
+			// проблему»; lost DNA content was the gap).
+			seenDir := filepath.Join("../dna/seen", e)
+			os.MkdirAll(seenDir, 0755)
+			os.WriteFile(filepath.Join(seenDir, entry.Name()), data, 0644)
 			// Append to own corpus — the organism eats another's words
 			f, err := os.OpenFile(corpusPath, os.O_APPEND|os.O_WRONLY, 0644)
 			if err == nil {
