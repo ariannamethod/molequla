@@ -4374,8 +4374,23 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 			// seeded embeddings push mag to ~0.25, so 0.1 too low here. 1.0 keeps
 			// the bootstrap window open until real gradient training lifts mag.
 			untrainedRegime = tmag <= 1.0
-			overlaidLogits, prophecyField = MetaweightsOverlay(overlaidLogits, ids, field, model, prophecyField, overlayScratch)
-			MetaweightsRepetitionPenalty(overlaidLogits, ids)
+			// Overlay self-disables on warmed organisms (mag > 1.0). On a
+			// 16-dim BPE embryo, warmed transformer logits already carry
+			// word-level signal; overlapping that with overlay's c_bg=5 *
+			// bigram_prob on a subword vocab pulls top-K toward subword
+			// fragments (suffix tokens, punctuation) and the chain stays
+			// at subword level — repeated sweep cells 2/3 v2/v3/v4
+			// reproduced this with «,iieriying the isa?yenanan?» style
+			// output at infant stage. Zero-training overlay (cell 4) keeps
+			// working because the transformer is silent there and the
+			// metaweight chain runs cleanly. Sigmoid-blend refactor
+			// (postgpt.c:949-952 style) is the proper fix, deferred.
+			if untrainedRegime {
+				overlaidLogits, prophecyField = MetaweightsOverlay(overlaidLogits, ids, field, model, prophecyField, overlayScratch)
+				MetaweightsRepetitionPenalty(overlaidLogits, ids)
+			} else {
+				overlayActive = false
+			}
 		}
 
 		// Q-style untrained-regime early-step greedy: postgpt_q.c:1416-1418 —
