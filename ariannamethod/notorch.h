@@ -23,7 +23,7 @@ extern "C" {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #define NT_MAX_DIMS     8
-#define NT_MAX_ELEMENTS (1 << 24)  // 16M floats max per tensor
+#define NT_MAX_ELEMENTS (1 << 28)  // 268M floats max per tensor (Qwen-0.5B vocab×embed = 136M)
 
 typedef struct {
     float*   data;              // CPU data (heap-allocated)
@@ -34,7 +34,8 @@ typedef struct {
     int      refcount;
 #ifdef USE_CUDA
     float*   d_data;            // GPU device pointer
-    int      gpu_valid;         // 1 = GPU copy is current
+    int      gpu_valid;         // 1 = GPU copy is up to date with last write
+    int      cpu_dirty;         // 1 = GPU was last writer, CPU mirror stale, needs ensure_cpu
 #endif
 } nt_tensor;
 
@@ -65,18 +66,20 @@ void nt_tensor_rand(nt_tensor* t, float scale);
 // Fill with Xavier/Kaiming init
 void nt_tensor_xavier(nt_tensor* t, int fan_in, int fan_out);
 
+// Kaiming uniform initialization (variance = 1 / fan_in).
+// Uniform in [-sqrt(3/fan_in), +sqrt(3/fan_in)] — variance a²/3 = 1/fan_in.
+// Used for LoRA A matrix init (per-fan_in scale, NOT per-rank).
+void nt_kaiming_uniform_init(nt_tensor* t, int fan_in);
+
 // Reshape in-place (total elements must match). Returns 0 on success.
 int nt_tensor_reshape(nt_tensor* t, const int* new_shape, int new_ndim);
 
+// Sync GPU mirror to CPU. No-op on non-USE_CUDA builds. Use before reading
+// param->data after a Chuck/Adam step on GPU (e.g. saving LoRA adapter).
+void nt_tensor_sync_cpu(nt_tensor* t);
+
 // Print tensor info (shape, first/last few values)
 void nt_tensor_print(const nt_tensor* t, const char* name);
-
-// Public sync wrapper: ensures CPU mirror reflects authoritative state.
-// On CPU-only build (no USE_CUDA) this is a no-op since CPU is always
-// the source of truth. Added to mirror canonical notorch interface so
-// backward CPU branches that read parent->output->data stay safe when
-// a future CUDA build path is enabled.
-void nt_tensor_sync_cpu(nt_tensor* t);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTOGRAD TAPE — reverse-mode automatic differentiation
@@ -112,6 +115,15 @@ void nt_tensor_sync_cpu(nt_tensor* t);
 #define NT_OP_GQA_ATTN       23   // grouped-query causal attention
 #define NT_OP_RRPRAM_ATTN    24   // RRPRAM positional attention (x @ Wr, causal)
 #define NT_OP_CONCAT         25   // concatenate two tensors per position
+#define NT_OP_SEQ_MATVEC_T  26   // Y[t] = W^T @ X[t] — transposed seq_linear for Janus Echo
+#define NT_OP_SIGMOID       27   // y = 1 / (1 + exp(-x)) — logistic activation
+#define NT_OP_SCALE_BY_T    28   // y[i] = a[0] * x[i], a is scalar tensor [1]
+#define NT_OP_SWIGLU        29   // y = SiLU(gate) * up (element-wise, pre-computed tensors)
+#define NT_OP_BIT_LINEAR    30   // y = bitquant(W) @ x — BitNet 1.58, STE backward
+#define NT_OP_BIT_SEQ_LINEAR 31  // Y[t] = bitquant(W) @ X[t] for T positions (BitNet seq)
+#define NT_OP_SEQ_CROSSENT_MASKED 32  // masked sequence cross-entropy (parent3 = mask)
+#define NT_OP_RRPRAM_LR     33   // low-rank RRPRAM (Wr = Wr_a × Wr_b packed in one tensor)
+#define NT_OP_RRPRAM_BCAST  34   // broadcast RRPRAM — mid[h,r] = Σ_t x[t]·Wr_a[h] (canonical Janus pattern, sc=1/sqrt(D))
 
 typedef struct {
     nt_tensor* output;          // forward result
@@ -126,6 +138,7 @@ typedef struct {
     float      aux4;            // fourth auxiliary (n_kv_heads for GQA)
     int        is_param;        // 1 = trainable parameter
     int        no_decay;        // 1 = skip weight decay (embeddings)
+    int        frozen;          // 1 = skip backward computation (frozen base in LoRA)
 } nt_tape_entry;
 
 // Adam optimizer state per parameter
@@ -210,6 +223,18 @@ int  nt_tape_record3(nt_tensor* output, int op, int p1, int p2, int p3, float au
 int  nt_tape_record4(nt_tensor* output, int op, int p1, int p2, int p3, float aux, float aux2, float aux3, float aux4);
 int  nt_tape_param(nt_tensor* param);
 void nt_tape_no_decay(int idx);   // mark param as no-decay (embeddings)
+void nt_tape_freeze_param(int param_idx);  // post-registration freeze: entry + Chuck slot
+
+// Register a tape entry for `param` WITHOUT allocating a Chuck optimizer slot.
+// Sets entry->frozen=1 so backward skips dw accumulation. Use this for base
+// weights when downstream LoRA A,B (or other adapters) are the actual trainable
+// params: keeps Chuck's chuck_params[] array 1:1 with TRULY trainable entries
+// only, so optimizer slot indexing stays correct.
+//
+// Returns the tape entry index (mirrors nt_tape_param's return contract).
+// Contrast with nt_tape_param() + nt_tape_freeze_param() which still consume
+// a Chuck slot and can mis-route LoRA grads in current Chuck step indexing.
+int  nt_tape_param_frozen(nt_tensor* param);
 
 // Backward pass
 void nt_tape_backward(int loss_idx);
@@ -223,6 +248,14 @@ void  nt_tape_chuck_step(float lr, float loss_val);
 float nt_tape_clip_grads(float max_norm);
 void  nt_tape_accum_grads(void);
 void  nt_tape_apply_accum(int n_accum);
+
+// ── GPU mode toggle ──
+// When on (1), hot tape ops (seq_linear / seq_linear_t / seq_rmsnorm / silu /
+// swiglu / add / mh_causal_attention / seq_cross_entropy) dispatch to CUDA via
+// notorch_cuda.{h,cu}. Default = off (CPU path). Compiled out when USE_CUDA
+// is undefined. Caller is responsible for gpu_init() / gpu_shutdown().
+void nt_set_gpu_mode(int on_off);
+int  nt_get_gpu_mode(void);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LR SCHEDULE — warmup + cosine annealing + step decay
@@ -299,6 +332,11 @@ int nt_linear(int w_idx, int x_idx, int bias_idx);
 // Sequence linear: Y[t] = W @ X[t] for t=0..T-1
 int nt_seq_linear(int w_idx, int x_idx, int T);
 
+// Transposed sequence linear: Y[t] = W^T @ X[t] — Janus Echo W^T·W
+// W is [rows, cols]. Computes Y[t] = W^T @ X[t] where X[t] has rows elements,
+// output Y[t] has cols elements. Same W, gradient flows through both passes.
+int nt_seq_linear_t(int w_idx, int x_idx, int T);
+
 // RMSNorm: y = x / rms(x) * gamma
 int nt_rmsnorm(int x_idx, int gamma_idx);
 
@@ -307,6 +345,13 @@ int nt_seq_rmsnorm(int x_idx, int gamma_idx, int T, int D);
 
 // SiLU activation: y = x * sigmoid(x)
 int nt_silu(int x_idx);
+
+// Sigmoid activation: y = 1 / (1 + exp(-x))
+int nt_sigmoid(int x_idx);
+
+// Broadcast scale: y[i] = a[0] * x[i], where a is a scalar tensor (shape [1]).
+// Grad flows to both x (gx = a*gy) and a (ga = sum(gy*x)).
+int nt_scale_by_t(int x_idx, int a_idx);
 
 // GEGLU: y = GELU(x @ W1) * (x @ W2) — Gemma-3 style FFN
 int nt_geglu(int x_idx, int w1_idx, int w2_idx, int T, int D_in, int D_out);
@@ -330,6 +375,10 @@ int nt_cross_entropy(int logits_idx, int target);
 // Sequence cross-entropy loss (T positions)
 int nt_seq_cross_entropy(int logits_idx, int targets_idx, int T, int V);
 
+// Masked sequence cross-entropy: loss only on positions where mask[t] == 1.
+// mask tensor must have T float elements; gradient zeroed on positions with mask=0.
+int nt_seq_cross_entropy_masked(int logits_idx, int targets_idx, int mask_idx, int T, int V);
+
 // Element-wise add
 int nt_add(int a_idx, int b_idx);
 
@@ -339,8 +388,20 @@ int nt_mul(int a_idx, int b_idx);
 // Scale by scalar
 int nt_scale(int x_idx, float s);
 
-// RoPE: apply rotary position embeddings in-place
+// RoPE: apply rotary position embeddings in-place (default freq_base = 10000)
 int nt_rope(int x_idx, int T, int head_dim);
+
+// RoPE with explicit freq_base — Qwen2 uses 1000000, Llama uses 10000
+int nt_rope_freq(int x_idx, int T, int head_dim, float freq_base);
+
+// Split-half RoPE — pairs (i, i+head_dim/2) instead of even/odd (2i, 2i+1).
+// Sign convention matches canonical Janus rope_pos (infer_v4.c:35-49):
+//   q[i]      =  q0*cos + q1*sin
+//   q[i+half] = -q0*sin + q1*cos
+// Used by nanochat / Janus v4 / similar split-half-trained bases.
+// CPU-only forward; GPU backward dispatches only for even/odd, split-half
+// falls back to CPU.
+int nt_rope_split_half_freq(int x_idx, int T, int head_dim, float freq_base);
 
 // Dropout: zero random elements with probability p (training only)
 int nt_dropout(int x_idx, float p);
@@ -359,8 +420,64 @@ int nt_gelu(int x_idx);
 // output: [T, nr_heads * head_dim]
 int nt_rrpram_attention(int wr_idx, int x_idx, int v_idx, int T, int n_embd, int nr_heads, int head_dim);
 
+// Low-rank RRPRAM: same as nt_rrpram_attention but Wr = Wr_a × Wr_b factorized.
+// wr_combined holds Wr_a (size H*E*R) followed by Wr_b (size H*R*T_r), so total
+// length = H*R*(E+T_r). Assumption: T_r == T (positional dim equals current ctx).
+// Rank derived from tensor length: R = len / (H * (E + T)).
+// Per head: scores[i,j] = (xi @ Wr_a[h]) @ Wr_b[h] [:, j] for j ≤ i (causal).
+// Backward propagates gradients to Wr_a, Wr_b (stored in same combined buffer
+// at proper offsets), x, v separately. Same V interpretation as nt_rrpram_attention.
+//
+// Saves params relative to full-rank when R << min(E, T_r). Plan #5.1: R=128
+// at E=1024, T_r=2048 reduces RRPRAM weights from H·E·T_r per layer down to
+// H·R·(E+T_r) — a 5× reduction at this configuration.
+int nt_rrpram_lowrank_attention(int wr_combined_idx, int x_idx, int v_idx,
+                                 int T, int n_embd, int nr_heads, int head_dim);
+
+// Broadcast RRPRAM low-rank attention — canonical Janus pattern (per dario/infer_v4.c:218-249).
+// mid[h,r] = Σ_t Σ_e x[t,e] · Wr_a[h,e,r] computed once per layer (broadcast over t).
+// score[h,j] = Σ_r mid[h,r] · Wr_b[h,r,j] * sc with sc = 1/sqrt(D) (canonical scale).
+// attn[h,i,j] = softmax_causal(scores[h])[i,j] for j ≤ i.
+// out[i, h_off+d] = Σ_{j≤i} attn[h,i,j] · v[j, h_off+d].
+int nt_rrpram_broadcast_attention(int wr_combined_idx, int x_idx, int v_idx,
+                                   int T, int n_embd, int nr_heads, int head_dim);
+
 // Concatenate per-position: out[t] = [a[t], b[t]]. a: [T, D_a], b: [T, D_b] → out: [T, D_a+D_b]
 int nt_concat(int a_idx, int b_idx, int T);
+
+// SwiGLU: y = SiLU(gate) * up (element-wise)
+// gate and up must have same length (typically pre-computed via nt_seq_linear or nt_bit_seq_linear).
+// Used in LLaMA/Qwen/BitNet FFN: gate = W_gate @ x, up = W_up @ x, h = swiglu(gate, up), out = W_down @ h.
+int nt_swiglu(int gate_idx, int up_idx);
+
+// BitLinear (BitNet b1.58): y = bitquant(W) @ x
+// W quantized to ternary {-1, 0, +1} via absmean (γ_W = mean|W|).
+// x quantized to int8 via absmax (γ_x = max|x|). Output rescaled: y = (γ_W γ_x / 127) × int_matmul.
+// Backward uses Straight-Through Estimator: gradient flows through quantization as identity,
+// so dW = dout ⊗ x, dx = W^T @ dout (using full-precision W).
+int nt_bit_linear(int w_idx, int x_idx);
+
+// Sequence BitLinear: Y[t] = bitquant(W) @ X[t] for t = 0..T-1.
+// W is quantized once per forward (shared across positions), x is per-position absmax quantized.
+int nt_bit_seq_linear(int w_idx, int x_idx, int T);
+
+// SPA — Sentence Phonon Attention (inference-time helpers; no tape, no gradient).
+// Compute sentence embedding via exponentially-weighted mean of token embeddings.
+// tokens: token IDs in sentence (len n_tokens). W_embed: pointer to [vocab_size × dim] matrix.
+// alpha: recency bias (0.85 typical — larger α = more recent tokens weighted higher).
+// out_emb: caller-provided buffer of length `dim`.
+void nt_spa_embed_sentence(const int* tokens, int n_tokens,
+                           const float* W_embed, int vocab_size, int dim,
+                           float alpha, float* out_emb);
+
+// SPA connectedness: max softmax attention score between query_emb and history of sentence embeddings.
+// Returns value in [0, 1]. Larger = current sentence more connected to history.
+float nt_spa_connectedness(const float* query_emb, int dim,
+                           const float* sentence_embeddings, int n_sentences);
+
+// Modulate logits by SPA connectedness (higher conn → sharper distribution via effective-temperature drop).
+// logits: buffer of V values modified in place. strength ∈ [0, 1] (0.3 typical).
+void nt_spa_modulate_logits(float* logits, int V, float connectedness, float strength);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BLAS — direct matmul API for inference engines
@@ -371,6 +488,11 @@ void nt_blas_mmT(float *C, const float *A, const float *BT, int m, int k, int n)
 
 // C[m,n] = A[m,k] @ B[k,n]
 void nt_blas_mm(float *C, const float *A, const float *B, int m, int k, int n);
+
+// out[m] = W[m,n] @ x[n]  — matrix–vector path for inference engines that
+// call matvec per-token inside a hot loop. Under USE_BLAS uses cblas_sgemv
+// (Accelerate / OpenBLAS); without BLAS falls back to the naive nested loop.
+void nt_blas_matvec(float *out, const float *W, const float *x, int m, int n);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PROFILER — op timing + memory tracking
@@ -482,6 +604,75 @@ nt_tensor** nt_load(const char* path, int* n_params);
 void nt_hebbian_step(float* A, float* B, int out_dim, int in_dim, int rank,
                      const float* x, const float* dy, float signal,
                      float lr, float decay);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTORCH LoRA — low-rank adapters on a frozen base weight
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Classic LoRA: y = W_frozen @ x + (alpha/rank) * B @ (A @ x).
+// A : [rank, in_dim] — kaiming_uniform_(fan_in=in_dim) init, trainable
+// B : [out_dim, rank] — zeros init, trainable
+// W : [out_dim, in_dim] — frozen base weight, registered separately via
+//                         nt_tape_param_frozen() so it does not consume a
+//                         Chuck optimizer slot.
+//
+// LoRA pair owns persistent A,B tensors on the heap. The trainer's per-step
+// loop calls nt_lora_forward() which registers A,B into THAT step's tape via
+// nt_tape_param() (allocating Chuck slots ONLY for A,B — clean indexing).
+// Chuck step then advances A,B's optimizer state correctly while base entries
+// are skipped (they have no Chuck slots).
+
+typedef struct {
+    nt_tensor* A;          // [rank, in_dim] persistent, trainable
+    nt_tensor* B;          // [out_dim, rank] persistent, trainable
+    int        rank;
+    float      alpha;
+    float      scaling;    // alpha / rank
+    int        in_dim;
+    int        out_dim;
+} nt_lora_pair;
+
+// Allocate persistent A, B; init A ~ kaiming_uniform_(fan_in=in_dim), B = 0.
+// Returns 0 on success, -1 on alloc fail.
+int  nt_lora_init(nt_lora_pair* lora, int in_dim, int out_dim, int rank, float alpha);
+
+// Free persistent A, B. Call once at trainer shutdown.
+void nt_lora_free(nt_lora_pair* lora);
+
+// Per-step forward: registers persistent A,B as trainable into the active tape
+// (via nt_tape_param), then composes
+//     y = nt_seq_linear(w_idx, x_idx, T) + scaling * nt_seq_linear(b_tape_idx,
+//                                              nt_seq_linear(a_tape_idx, x_idx, T), T)
+// Returns the tape entry index of y (final sum). Must be called inside an
+// active nt_tape_start()/nt_tape_clear() pair. -1 on failure.
+int  nt_lora_forward(int w_idx, nt_lora_pair* lora, int x_idx, int T);
+
+// Single-artifact save: writes ALL targets × all layers into one file.
+// `pairs` is flat-indexed [layer * num_targets + target_idx].
+// Calls nt_tensor_ensure_cpu(A,B) before reading host buffers (GPU-safe).
+// Returns 0 on success, -1 on I/O / format fail.
+//
+// File format:
+//   [u32 magic 0x4C4F5241 'LORA'][u32 version=1]
+//   [u32 num_targets][per-target: u8 namelen, name bytes]
+//   [u32 num_layers][u32 rank][u32 alpha_int][u32 in_dim][u32 out_dim]
+//   [for each L in [0,num_layers): for each T in [0,num_targets):
+//       A floats (rank × in_dim), B floats (out_dim × rank)]
+int  nt_lora_save(const nt_lora_pair* pairs, int num_layers, int num_targets,
+                  const char* const* target_names, const char* path);
+
+// Single-artifact load. Caller pre-allocates pairs (init'd via nt_lora_init).
+// Verifies magic/version/dims/rank/alpha and target_names against caller's,
+// then reads A,B into caller's persistent tensors. -1 on mismatch / I/O fail.
+int  nt_lora_load(nt_lora_pair* pairs, int num_layers, int num_targets,
+                  const char* const* target_names, const char* path);
+
+// Merge LoRA delta into a CPU float buffer:
+//     W_dst[i,j] = W_frozen[i,j] + scaling * sum_k B[i,k] * A[k,j]
+// Calls nt_tensor_ensure_cpu(lora->A,B) internally. W_frozen and W_dst may
+// alias for in-place merge. Layout: row-major [out_dim, in_dim].
+void nt_lora_merge_into(float* W_dst, const float* W_frozen,
+                        const nt_lora_pair* lora, int in_dim, int out_dim);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES

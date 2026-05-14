@@ -30,6 +30,7 @@
 #include <stdio.h>   // for sscanf in LAW command parsing
 #include <strings.h> // for strcasecmp
 #include <stddef.h>  // for offsetof
+#include <stdint.h>  // for uint32_t (Chuck RNG)
 #include <time.h>    // for real calendar computation
 #ifdef _OPENMP
 #include <omp.h>
@@ -79,6 +80,10 @@
   #else
     #include <cblas.h>
   #endif
+#endif
+
+#ifdef USE_CUDA
+  #include "ariannamethod_cuda.h"
 #endif
 
 // See ariannamethod.h for struct definitions and pack flags
@@ -703,8 +708,6 @@ static void persistent_restore(AML_Symtab* dst) {
 // update them. Intermediates created by later scripts get saved once (unavoidable)
 // but since they have fixed names, the count stabilizes.
 static void persistent_save(AML_Symtab* src) {
-    static int save_call_count = 0;
-    save_call_count++;
     if (!g_persistent_enabled) return;
 
     // Phase 1: Update existing persistent variables from exec ctx
@@ -767,20 +770,6 @@ static void persistent_save(AML_Symtab* src) {
         } else {
             symtab_set(&g_persistent_globals, sv->name, sv->value);
         }
-    // DIAGNOSTIC: print persistent storage stats every 50 calls
-    if (save_call_count % 50 == 0) {
-        long total_bytes = 0;
-        int n_arrays = 0;
-        for (int i = 0; i < g_persistent_globals.count; i++) {
-            if (g_persistent_globals.vars[i].type == AML_TYPE_ARRAY && 
-                g_persistent_globals.vars[i].array) {
-                total_bytes += g_persistent_globals.vars[i].array->len * sizeof(float);
-                n_arrays++;
-            }
-        }
-        fprintf(stderr, "[DIAG] persistent_save #%d: %d vars (%d arrays), %ld bytes (%.1f MB), src: %d vars\n",
-            save_call_count, g_persistent_globals.count, n_arrays, total_bytes, total_bytes / 1048576.0, src->count);
-    }
     }
 }
 
@@ -854,6 +843,84 @@ void am_reset_field(void) {
 void am_reset_debt(void) {
   G.debt = 0.0f;
   G.temporal_debt = 0.0f;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIELD STATE PERSISTENCE — am_field_save / am_field_load
+//
+// AM_State is POD with only inline arrays (scar_texts, gamma slots, etc.).
+// We dump it as a single block: magic + version + sizeof + timestamp + struct.
+// On load, refuse if magic / version / sizeof differ — that catches any case
+// where libaml has been recompiled with a different layout, so old soma files
+// don't silently corrupt the running field. Top-level AML directives LOAD/SAVE
+// dispatch here from aml_exec_level0.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#define AM_SOMA_MAGIC   0x4F534D41u  /* 'A','M','S','O' little-endian */
+#define AM_SOMA_VERSION 1u
+
+int am_field_save(const char* path) {
+  if (!path || !path[0]) return -1;
+  FILE* f = fopen(path, "wb");
+  if (!f) {
+    fprintf(stderr, "[am_field_save] cannot open '%s' for write\n", path);
+    return -1;
+  }
+  uint32_t magic     = AM_SOMA_MAGIC;
+  uint32_t version   = AM_SOMA_VERSION;
+  uint32_t state_sz  = (uint32_t)sizeof(AM_State);
+  uint64_t timestamp = (uint64_t)time(NULL);
+  if (fwrite(&magic,    4, 1, f) != 1 ||
+      fwrite(&version,  4, 1, f) != 1 ||
+      fwrite(&state_sz, 4, 1, f) != 1 ||
+      fwrite(&timestamp,8, 1, f) != 1 ||
+      fwrite(&G, sizeof(AM_State), 1, f) != 1) {
+    fprintf(stderr, "[am_field_save] short write to '%s'\n", path);
+    fclose(f);
+    return -2;
+  }
+  fclose(f);
+  return 0;
+}
+
+int am_field_load(const char* path) {
+  if (!path || !path[0]) return -1;
+  FILE* f = fopen(path, "rb");
+  if (!f) {
+    /* Missing file isn't an error on first run — quietly start fresh. */
+    return -1;
+  }
+  uint32_t magic = 0, version = 0, state_sz = 0;
+  uint64_t timestamp = 0;
+  if (fread(&magic, 4, 1, f) != 1 || magic != AM_SOMA_MAGIC) {
+    fprintf(stderr, "[am_field_load] '%s': bad magic 0x%08x (expected 0x%08x)\n",
+            path, magic, AM_SOMA_MAGIC);
+    fclose(f);
+    return -2;
+  }
+  if (fread(&version, 4, 1, f) != 1 || version != AM_SOMA_VERSION) {
+    fprintf(stderr, "[am_field_load] '%s': version %u (expected %u) — refusing\n",
+            path, version, AM_SOMA_VERSION);
+    fclose(f);
+    return -3;
+  }
+  if (fread(&state_sz, 4, 1, f) != 1 || state_sz != (uint32_t)sizeof(AM_State)) {
+    fprintf(stderr,
+            "[am_field_load] '%s': sizeof(AM_State)=%u, file has %u — libaml ABI changed\n",
+            path, (unsigned)sizeof(AM_State), state_sz);
+    fclose(f);
+    return -4;
+  }
+  if (fread(&timestamp, 8, 1, f) != 1) {
+    fclose(f); return -5;
+  }
+  if (fread(&G, sizeof(AM_State), 1, f) != 1) {
+    fprintf(stderr, "[am_field_load] '%s': short read of state\n", path);
+    fclose(f);
+    return -5;
+  }
+  fclose(f);
+  return 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -990,6 +1057,10 @@ AM_Array* am_array_new(int len) {
     arr->refcount = 1;
     arr->rows = 0;
     arr->cols = 0;
+#ifdef USE_CUDA
+    arr->d_data = NULL;
+    arr->gpu_valid = 0;
+#endif
     return arr;
 }
 
@@ -1010,6 +1081,9 @@ void am_array_free(AM_Array* arr) {
     arr->refcount--;
     if (arr->refcount <= 0) {
         free(arr->data);
+#ifdef USE_CUDA
+        if (arr->d_data) gpu_free(arr->d_data);
+#endif
         free(arr);
     }
 }
@@ -1031,10 +1105,38 @@ static AM_Array* am_array_clone(const AM_Array* src) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+#ifdef USE_CUDA
+static void ensure_gpu(AM_Array* arr) {
+    if (!arr || !arr->data) return;
+    if (!arr->d_data) {
+        arr->d_data = gpu_alloc(arr->len);
+        if (!arr->d_data) return;
+    }
+    if (!arr->gpu_valid) {
+        gpu_upload(arr->d_data, arr->data, arr->len);
+        arr->gpu_valid = 1;
+    }
+}
+static void ensure_cpu(AM_Array* arr) {
+    if (!arr || !arr->d_data || !arr->gpu_valid || !arr->data) return;
+    gpu_download(arr->data, arr->d_data, arr->len);
+}
+static void invalidate_gpu(AM_Array* arr) {
+    if (arr) arr->gpu_valid = 0;
+}
+#endif
+
 // AUTOGRAD TAPE (v4.0 Phase 3) — reverse-mode automatic differentiation
 // ═══════════════════════════════════════════════════════════════════════════════
 
 static AM_Tape g_tape = {0};
+
+// Global LR schedule and NaN guard shared by the AML TAPE LR_* / NAN_* commands.
+// One per-process is enough for the language layer — C API users can still
+// construct their own AM_Schedule / AM_NanGuard values locally.
+static AM_Schedule g_aml_schedule = {0};
+static AM_NanGuard g_aml_nan_guard = {0};
+static int         g_aml_nan_guard_inited = 0;
 
 void am_tape_start(void) {
     // Clear any existing tape state
@@ -1043,9 +1145,9 @@ void am_tape_start(void) {
 }
 
 void am_tape_clear(void) {
-    // Free non-param outputs and all grads
+    // Free ALL outputs (including params — refcount handles safety) and all grads
     for (int i = 0; i < g_tape.count; i++) {
-        if (g_tape.entries[i].output) {  // Free ALL outputs including params (refcount handles safety)
+        if (g_tape.entries[i].output) {
             am_array_free(g_tape.entries[i].output);
         }
         if (g_tape.entries[i].grad) {
@@ -1054,9 +1156,10 @@ void am_tape_clear(void) {
         }
     }
     g_tape.count = 0;
-    g_tape.n_params = 0;  // Reset param count so adam states get reused (not leaked)
     g_tape.active = 0;
-    // NOTE: adam states and n_params survive clear — they persist across steps
+    // Reset n_params so TAPE PARAM re-registers into same adam slots
+    // adam[].m, adam[].v, adam[].t survive — they are reused, not reallocated
+    g_tape.n_params = 0;
 }
 
 // Full tape reset — frees ALL resources including params and adam states
@@ -1076,8 +1179,10 @@ static void am_tape_destroy(void) {
     for (int i = 0; i < g_tape.n_params; i++) {
         if (g_tape.adam[i].m) { am_array_free(g_tape.adam[i].m); g_tape.adam[i].m = NULL; }
         if (g_tape.adam[i].v) { am_array_free(g_tape.adam[i].v); g_tape.adam[i].v = NULL; }
+        if (g_tape.adam[i].acc_grad) { am_array_free(g_tape.adam[i].acc_grad); g_tape.adam[i].acc_grad = NULL; }
         g_tape.adam[i].t = 0;
     }
+    // memset zeros everything including chuck state
     memset(&g_tape, 0, sizeof(g_tape));
 }
 
@@ -1138,25 +1243,28 @@ int am_tape_record_param(AM_Array* param) {
     e->aux = 0;
     e->aux2 = 0;
     e->is_param = 1;
+    e->no_decay = 0;
 
-    // Register for Adam if not already registered
-    // Use pointer comparison to find existing registration
-    int found = -1;
-    for (int i = 0; i < g_tape.n_params; i++) {
-        // adam[i] corresponds to the i-th unique param
-        // We need a way to match — use the data pointer
-        // (params share the same data pointer across tape recordings)
-        if (g_tape.adam[i].m && g_tape.adam[i].m->len == param->len) {
-            // Already has an adam state of the right size — reuse index
-            // NOTE: this is a simplification. In practice we'd track by pointer.
-        }
-    }
-    if (found < 0 && g_tape.n_params < AM_TAPE_MAX_PARAMS) {
+    // Register for Adam — positional: param N always gets adam slot N
+    if (g_tape.n_params < AM_TAPE_MAX_PARAMS) {
         int pi = g_tape.n_params;
         if (!g_tape.adam[pi].m) {
+            // First time: allocate
             g_tape.adam[pi].m = am_array_new(param->len);
             g_tape.adam[pi].v = am_array_new(param->len);
             g_tape.adam[pi].t = 0;
+        } else if (g_tape.adam[pi].m->len != param->len) {
+            // Size changed (vocab evolution): resize, zero-init new elements
+            int old_len = g_tape.adam[pi].m->len;
+            AM_Array* new_m = am_array_new(param->len);
+            AM_Array* new_v = am_array_new(param->len);
+            int copy_len = old_len < param->len ? old_len : param->len;
+            memcpy(new_m->data, g_tape.adam[pi].m->data, copy_len * sizeof(float));
+            memcpy(new_v->data, g_tape.adam[pi].v->data, copy_len * sizeof(float));
+            am_array_free(g_tape.adam[pi].m);
+            am_array_free(g_tape.adam[pi].v);
+            g_tape.adam[pi].m = new_m;
+            g_tape.adam[pi].v = new_v;
         }
         g_tape.n_params++;
     }
@@ -1199,6 +1307,23 @@ void am_tape_backward(int loss_idx) {
         case AM_OP_ADD: {
             // y = a + b → da += dout, db += dout
             if (e->parent1 >= 0) tape_acc_grad(e->parent1, dout, out_len);
+#ifdef USE_CUDA
+                if (e->output->d_data && e->output->gpu_valid) {
+                    float* d_ga = gpu_scratch(3, out_len);
+                    float* d_gb = gpu_scratch(4, out_len);
+                    float* d_dout_buf = gpu_scratch(0, out_len);
+                    gpu_upload(d_dout_buf, dout, out_len);
+                    gpu_add_backward(d_ga, d_gb, d_dout_buf, out_len);
+                    float* ga = (float*)malloc(out_len * sizeof(float));
+                    float* gb = (float*)malloc(out_len * sizeof(float));
+                    gpu_download(ga, d_ga, out_len);
+                    gpu_download(gb, d_gb, out_len);
+                    tape_acc_grad(e->parent1, ga, out_len);
+                    tape_acc_grad(e->parent2, gb, out_len);
+                    free(ga); free(gb);
+                    break;
+                }
+#endif
             if (e->parent2 >= 0) tape_acc_grad(e->parent2, dout, out_len);
             break;
         }
@@ -1207,6 +1332,31 @@ void am_tape_backward(int loss_idx) {
             if (e->parent1 >= 0 && e->parent2 >= 0) {
                 AM_TapeEntry* pa = &g_tape.entries[e->parent1];
                 AM_TapeEntry* pb = &g_tape.entries[e->parent2];
+#ifdef USE_CUDA
+                if (pa->output->d_data && pa->output->gpu_valid &&
+                    pb->output->d_data && pb->output->gpu_valid) {
+                    float* d_ga = gpu_scratch(3, out_len);
+                    float* d_gb = gpu_scratch(4, out_len);
+                    float* d_dout_buf = gpu_scratch(0, out_len);
+                    gpu_upload(d_dout_buf, dout, out_len);
+                    gpu_mul_backward(d_ga, d_gb, d_dout_buf,
+                                     pa->output->d_data, pb->output->d_data, out_len);
+                    float* ga = (float*)malloc(out_len * sizeof(float));
+                    float* gb = (float*)malloc(out_len * sizeof(float));
+                    gpu_download(ga, d_ga, out_len);
+                    gpu_download(gb, d_gb, out_len);
+                    tape_acc_grad(e->parent1, ga, out_len);
+                    tape_acc_grad(e->parent2, gb, out_len);
+                    free(ga); free(gb);
+                    break;
+                }
+#endif
+                /* CPU fallback: parents may be GPU-fresh with stale CPU mirror.
+                 * Mirrors notorch.c NT_OP_MUL fix 2026-05-11. */
+#ifdef USE_CUDA
+                ensure_cpu(pa->output);
+                ensure_cpu(pb->output);
+#endif
                 float* ga = (float*)calloc(out_len, sizeof(float));
                 float* gb = (float*)calloc(out_len, sizeof(float));
                 if (ga && gb) {
@@ -1238,6 +1388,10 @@ void am_tape_backward(int loss_idx) {
             if (e->parent1 >= 0 && e->parent2 >= 0) {
                 AM_TapeEntry* pw = &g_tape.entries[e->parent1]; // W
                 AM_TapeEntry* px = &g_tape.entries[e->parent2]; // x
+#ifdef USE_CUDA
+                ensure_cpu(pw->output);
+                ensure_cpu(px->output);
+#endif
                 int rows = pw->output->rows;
                 int cols = pw->output->cols;
                 if (rows > 0 && cols > 0) {
@@ -1267,6 +1421,23 @@ void am_tape_backward(int loss_idx) {
             // y = x * sigmoid(x) → dy/dx = sigmoid(x) * (1 + x * (1 - sigmoid(x)))
             if (e->parent1 >= 0) {
                 AM_TapeEntry* px = &g_tape.entries[e->parent1];
+#ifdef USE_CUDA
+                if (px->output->d_data && px->output->gpu_valid) {
+                    float* d_gx = gpu_scratch(3, out_len);
+                    float* d_dout_buf = gpu_scratch(0, out_len);
+                    gpu_upload(d_dout_buf, dout, out_len);
+                    gpu_silu_backward(d_gx, d_dout_buf, px->output->d_data, out_len);
+                    float* gx = (float*)malloc(out_len * sizeof(float));
+                    gpu_download(gx, d_gx, out_len);
+                    tape_acc_grad(e->parent1, gx, out_len);
+                    free(gx);
+                    break;
+                }
+                /* CPU fallback: GPU branch above already returned via break if
+                 * the GPU path fired. Here parent->output->data may be the
+                 * stale CPU mirror of a GPU-resident forward. */
+                ensure_cpu(px->output);
+#endif
                 float* gx = (float*)calloc(out_len, sizeof(float));
                 if (gx) {
                     for (int i = 0; i < out_len; i++) {
@@ -1284,6 +1455,9 @@ void am_tape_backward(int loss_idx) {
             // y = softmax(x) → Jacobian: diag(y) - y⊗y
             // dsoftmax_i = y_i * (dout_i - sum(dout * y))
             if (e->parent1 >= 0) {
+#ifdef USE_CUDA
+                ensure_cpu(e->output);
+#endif
                 float dot_dy = 0;
                 for (int i = 0; i < out_len; i++)
                     dot_dy += dout[i] * e->output->data[i];
@@ -1302,6 +1476,9 @@ void am_tape_backward(int loss_idx) {
             // Simplified gradient: similar to LayerNorm but without mean subtraction
             if (e->parent1 >= 0) {
                 AM_TapeEntry* px = &g_tape.entries[e->parent1];
+#ifdef USE_CUDA
+                ensure_cpu(px->output);
+#endif
                 int n = out_len;
                 float ss = 0;
                 for (int i = 0; i < n; i++) ss += px->output->data[i] * px->output->data[i];
@@ -1320,11 +1497,176 @@ void am_tape_backward(int loss_idx) {
             }
             break;
         }
+        case AM_OP_GELU: {
+            // y = 0.5*x*(1 + tanh(sqrt(2/pi)*(x + 0.044715*x^3)))
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* px = &g_tape.entries[e->parent1];
+#ifdef USE_CUDA
+                ensure_cpu(px->output);
+#endif
+                float* gx = (float*)calloc(out_len, sizeof(float));
+                if (gx) {
+                    for (int i = 0; i < out_len; i++) {
+                        float x = px->output->data[i];
+                        float x3 = x * x * x;
+                        float inner = 0.7978845608f * (x + 0.044715f * x3);
+                        float th = tanhf(inner);
+                        float gelu_grad = 0.5f * (1.0f + th) +
+                            0.5f * x * (1.0f - th * th) *
+                            0.7978845608f * (1.0f + 3.0f * 0.044715f * x * x);
+                        gx[i] = dout[i] * gelu_grad;
+                    }
+                    tape_acc_grad(e->parent1, gx, out_len);
+                }
+                free(gx);
+            }
+            break;
+        }
+        case AM_OP_DROPOUT: {
+            // y = x * mask (inverted). Mask encoded in output: 0 = dropped, kept = scaled.
+            // aux = p
+            if (e->parent1 >= 0) {
+#ifdef USE_CUDA
+                ensure_cpu(e->output);
+#endif
+                float p = e->aux;
+                float scale = (p > 0.0f && p < 1.0f) ? 1.0f / (1.0f - p) : 1.0f;
+                float* gx = (float*)calloc(out_len, sizeof(float));
+                if (gx) {
+                    for (int i = 0; i < out_len; i++) {
+                        // non-zero output => mask kept => grad passes through, scaled
+                        gx[i] = (e->output->data[i] != 0.0f) ? dout[i] * scale : 0.0f;
+                    }
+                    tape_acc_grad(e->parent1, gx, out_len);
+                }
+                free(gx);
+            }
+            break;
+        }
+        case AM_OP_LAYERNORM: {
+            // y = gamma * (x - mean) / sqrt(var + eps) + beta
+            // parent1 = x, parent2 = gamma (optional), parent3 = beta (optional)
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* px = &g_tape.entries[e->parent1];
+                int n = out_len;
+                int has_gamma = (e->parent2 >= 0 && e->parent2 < g_tape.count);
+                int has_beta  = (e->parent3 >= 0 && e->parent3 < g_tape.count);
+#ifdef USE_CUDA
+                ensure_cpu(px->output);
+                if (has_gamma) ensure_cpu(g_tape.entries[e->parent2].output);
+#endif
+                float* gamma_data = has_gamma ? g_tape.entries[e->parent2].output->data : NULL;
+
+                float mean = 0;
+                for (int i = 0; i < n; i++) mean += px->output->data[i];
+                mean /= n;
+                float var = 0;
+                for (int i = 0; i < n; i++) { float d = px->output->data[i] - mean; var += d * d; }
+                var /= n;
+                float inv_std = 1.0f / sqrtf(var + 1e-5f);
+
+                float* dout_eff = (float*)calloc(n, sizeof(float));
+                if (dout_eff) {
+                    for (int i = 0; i < n; i++)
+                        dout_eff[i] = has_gamma ? dout[i] * gamma_data[i] : dout[i];
+
+                    float sum_de = 0, sum_de_xhat = 0;
+                    for (int i = 0; i < n; i++) {
+                        float xhat = (px->output->data[i] - mean) * inv_std;
+                        sum_de += dout_eff[i];
+                        sum_de_xhat += dout_eff[i] * xhat;
+                    }
+                    float* gx = (float*)calloc(n, sizeof(float));
+                    if (gx) {
+                        for (int i = 0; i < n; i++) {
+                            float xhat = (px->output->data[i] - mean) * inv_std;
+                            gx[i] = inv_std * (dout_eff[i] - sum_de / n - xhat * sum_de_xhat / n);
+                        }
+                        tape_acc_grad(e->parent1, gx, n);
+                    }
+                    free(gx);
+
+                    // gamma grad: sum(dout * xhat) per element
+                    if (has_gamma) {
+                        float* gg = (float*)calloc(n, sizeof(float));
+                        if (gg) {
+                            for (int i = 0; i < n; i++) {
+                                float xhat = (px->output->data[i] - mean) * inv_std;
+                                gg[i] = dout[i] * xhat;
+                            }
+                            tape_acc_grad(e->parent2, gg, n);
+                            free(gg);
+                        }
+                    }
+                    // beta grad: dout directly
+                    if (has_beta) tape_acc_grad(e->parent3, dout, n);
+                    free(dout_eff);
+                }
+            }
+            break;
+        }
+        case AM_OP_SEQ_LAYERNORM: {
+            // layernorm per-position on T chunks of size D
+            // aux = T, aux2 = D
+            if (e->parent1 >= 0) {
+                AM_TapeEntry* px = &g_tape.entries[e->parent1];
+                int T = (int)e->aux;
+                int D = (int)e->aux2;
+                int has_gamma = (e->parent2 >= 0 && e->parent2 < g_tape.count);
+                int has_beta  = (e->parent3 >= 0 && e->parent3 < g_tape.count);
+#ifdef USE_CUDA
+                ensure_cpu(px->output);
+                if (has_gamma) ensure_cpu(g_tape.entries[e->parent2].output);
+#endif
+                float* gamma_data = has_gamma ? g_tape.entries[e->parent2].output->data : NULL;
+
+                float* gx = (float*)calloc(T * D, sizeof(float));
+                float* gg = has_gamma ? (float*)calloc(D, sizeof(float)) : NULL;
+                float* gb = has_beta  ? (float*)calloc(D, sizeof(float)) : NULL;
+
+                if (gx) {
+                    for (int t = 0; t < T; t++) {
+                        float* x_t = px->output->data + t * D;
+                        float* dout_t = dout + t * D;
+                        float mean = 0;
+                        for (int d = 0; d < D; d++) mean += x_t[d];
+                        mean /= D;
+                        float var = 0;
+                        for (int d = 0; d < D; d++) { float dd = x_t[d] - mean; var += dd * dd; }
+                        var /= D;
+                        float inv_std = 1.0f / sqrtf(var + 1e-5f);
+
+                        float sum_de = 0, sum_de_xhat = 0;
+                        for (int d = 0; d < D; d++) {
+                            float de = has_gamma ? dout_t[d] * gamma_data[d] : dout_t[d];
+                            float xhat = (x_t[d] - mean) * inv_std;
+                            sum_de += de;
+                            sum_de_xhat += de * xhat;
+                        }
+                        for (int d = 0; d < D; d++) {
+                            float de = has_gamma ? dout_t[d] * gamma_data[d] : dout_t[d];
+                            float xhat = (x_t[d] - mean) * inv_std;
+                            gx[t * D + d] = inv_std * (de - sum_de / D - xhat * sum_de_xhat / D);
+                            if (gg) gg[d] += dout_t[d] * xhat;
+                            if (gb) gb[d] += dout_t[d];
+                        }
+                    }
+                    tape_acc_grad(e->parent1, gx, T * D);
+                    free(gx);
+                    if (gg) { tape_acc_grad(e->parent2, gg, D); free(gg); }
+                    if (gb) { tape_acc_grad(e->parent3, gb, D); free(gb); }
+                }
+            }
+            break;
+        }
         case AM_OP_CROSS_ENT: {
             // loss = -log(softmax(logits)[target])
             // d_logits = softmax(logits) - one_hot(target)
             if (e->parent1 >= 0) {
                 AM_TapeEntry* pl = &g_tape.entries[e->parent1]; // logits
+#ifdef USE_CUDA
+                ensure_cpu(pl->output);
+#endif
                 int n = pl->output->len;
                 int target = (int)e->aux;
                 // Compute softmax of logits
@@ -1377,6 +1719,9 @@ void am_tape_backward(int loss_idx) {
                 AM_TapeEntry* pwte = &g_tape.entries[e->parent1];
                 AM_TapeEntry* pwpe = &g_tape.entries[e->parent2];
                 AM_TapeEntry* ptok = &g_tape.entries[e->parent3]; // tokens array
+#ifdef USE_CUDA
+                ensure_cpu(ptok->output);
+#endif
                 int T = (int)e->aux;
                 int D = (int)e->aux2;
                 float* dwte = (float*)calloc(pwte->output->len, sizeof(float));
@@ -1415,6 +1760,55 @@ void am_tape_backward(int loss_idx) {
                 if (dw && dx) {
                     float* Wd = pw->output->data;
                     float* Xd = px->output->data;
+#ifdef USE_CUDA
+                    // GPU tensor backward
+                    {
+                        ensure_gpu(pw->output);
+                        ensure_gpu(px->output);
+                        float* d_dout_buf = gpu_scratch(0, T * out_d);
+                        if (d_dout_buf && pw->output->d_data && px->output->d_data) {
+                            gpu_upload(d_dout_buf, dout, T * out_d);
+                            float* d_dX = gpu_scratch(1, T * in_d);
+                            gpu_sgemm_nn(T, in_d, out_d, d_dout_buf, pw->output->d_data, d_dX);
+                            gpu_download(dx, d_dX, T * in_d);
+                            float* d_dW = gpu_scratch(2, out_d * in_d);
+                            gpu_sgemm_tn(out_d, in_d, T, d_dout_buf, px->output->d_data, d_dW);
+                            gpu_download(dw, d_dW, out_d * in_d);
+                        } else {
+                            ensure_cpu(pw->output); ensure_cpu(px->output);
+                            float* Wd2 = pw->output->data;
+                            float* Xd2 = px->output->data;
+                            for (int t = 0; t < T; t++) {
+                                float* dout_t = dout + t * out_d;
+                                for (int j = 0; j < in_d; j++)
+                                    for (int i = 0; i < out_d; i++)
+                                        dx[t * in_d + j] += Wd2[i * in_d + j] * dout_t[i];
+                            }
+                            for (int t = 0; t < T; t++) {
+                                float* dout_t = dout + t * out_d;
+                                float* x_t = Xd2 + t * in_d;
+                                for (int i = 0; i < out_d; i++)
+                                    for (int j = 0; j < in_d; j++)
+                                        dw[i * in_d + j] += dout_t[i] * x_t[j];
+                            }
+                        }
+                    }
+#elif defined(USE_BLAS)
+                    /* BLAS path is CPU-only; if parents were last touched on GPU,
+                     * Wd/Xd point to stale CPU mirrors. No-op when no CUDA build. */
+                    /* (no ensure_cpu here — !defined(USE_CUDA) means no GPU mirror) */
+                    // BLAS backward: dX(T,in) = dout(T,out) x W(out,in)
+                    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                                T, in_d, out_d,
+                                1.0f, dout, out_d, Wd, in_d,
+                                0.0f, dx, in_d);
+                    // dW(out,in) = dout^T(out,T) x X(T,in)
+                    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+                                out_d, in_d, T,
+                                1.0f, dout, out_d, Xd, in_d,
+                                0.0f, dw, in_d);
+#else
+                    /* Plain CPU path — same comment: no GPU mirror to sync. */
                     // dX: each position t independent → parallelize over t
                     #ifdef _OPENMP
                     #pragma omp parallel for schedule(static) if(T > 16)
@@ -1434,6 +1828,7 @@ void am_tape_backward(int loss_idx) {
                             for (int j = 0; j < in_d; j++)
                                 dw[i * in_d + j] += dout_t[i] * x_t[j];
                     }
+#endif // USE_CUDA backward
                     tape_acc_grad(e->parent1, dw, pw->output->len);
                     tape_acc_grad(e->parent2, dx, px->output->len);
                 }
@@ -1446,6 +1841,23 @@ void am_tape_backward(int loss_idx) {
             // For each position t: y_t = x_t / rms_t where rms_t = sqrt(mean(x_t^2) + eps)
             if (e->parent1 >= 0) {
                 AM_TapeEntry* px = &g_tape.entries[e->parent1];
+#ifdef USE_CUDA
+                if (px->output->d_data && px->output->gpu_valid) {
+                    int Tr = (int)e->aux;
+                    int Dr = (int)e->aux2;
+                    float* d_gx = gpu_scratch(3, Tr * Dr);
+                    float* d_dout_buf = gpu_scratch(0, Tr * Dr);
+                    gpu_upload(d_dout_buf, dout, Tr * Dr);
+                    gpu_rmsnorm_backward(d_gx, d_dout_buf, px->output->d_data, Tr, Dr);
+                    float* gx = (float*)malloc(Tr * Dr * sizeof(float));
+                    gpu_download(gx, d_gx, Tr * Dr);
+                    tape_acc_grad(e->parent1, gx, Tr * Dr);
+                    free(gx);
+                    break;
+                }
+                /* CPU fallback under USE_CUDA: sync parent before reading. */
+                ensure_cpu(px->output);
+#endif
                 int T = (int)e->aux;
                 int D = (int)e->aux2;
                 float* gx = (float*)calloc(T * D, sizeof(float));
@@ -1480,6 +1892,11 @@ void am_tape_backward(int loss_idx) {
                 AM_TapeEntry* pq = &g_tape.entries[e->parent1]; // Q
                 AM_TapeEntry* pk = &g_tape.entries[e->parent2]; // K
                 AM_TapeEntry* pv = &g_tape.entries[e->parent3]; // V
+#ifdef USE_CUDA
+                ensure_cpu(pq->output);
+                ensure_cpu(pk->output);
+                ensure_cpu(pv->output);
+#endif
                 int T = (int)e->aux;
                 int D = (int)e->aux2;
                 float sc = 1.0f / sqrtf((float)D);
@@ -1549,6 +1966,11 @@ void am_tape_backward(int loss_idx) {
                 AM_TapeEntry* pq = &g_tape.entries[e->parent1]; // Q
                 AM_TapeEntry* pk = &g_tape.entries[e->parent2]; // K
                 AM_TapeEntry* pv = &g_tape.entries[e->parent3]; // V
+#ifdef USE_CUDA
+                ensure_cpu(pq->output);
+                ensure_cpu(pk->output);
+                ensure_cpu(pv->output);
+#endif
                 int T = (int)e->aux;
                 int head_dim = (int)e->aux2;
                 int D = e->output->len / T;
@@ -1616,6 +2038,10 @@ void am_tape_backward(int loss_idx) {
             if (e->parent1 >= 0) {
                 AM_TapeEntry* pl = &g_tape.entries[e->parent1]; // logits
                 AM_TapeEntry* pt = &g_tape.entries[e->parent2]; // targets
+#ifdef USE_CUDA
+                ensure_cpu(pl->output);
+                if (pt) ensure_cpu(pt->output);
+#endif
                 int T = (int)e->aux;
                 int V = (int)e->aux2;
                 float* dl = (float*)calloc(T * V, sizeof(float));
@@ -1679,33 +2105,455 @@ void am_tape_adam_step(float lr) {
     }
 }
 
-// Find tape entry index by array pointer (-1 if not found)
-static int tape_find_entry(AM_Array* arr) {
-    if (!arr) return -1;
-    for (int i = g_tape.count - 1; i >= 0; i--) {
-        if (g_tape.entries[i].output && g_tape.entries[i].output->data == arr->data)
-            return i;
+// AdamW optimizer step: Adam with decoupled weight decay
+// Matches PyTorch AdamW: weight decay applied directly to params, not through gradient
+void am_tape_adamw_step(float lr, float weight_decay, float beta1, float beta2) {
+    float eps = 1e-8f;
+    int param_idx = 0;
+
+    for (int i = 0; i < g_tape.count && param_idx < g_tape.n_params; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->grad) continue;
+
+        AM_AdamState* as = &g_tape.adam[param_idx];
+        if (!as->m || !as->v) { param_idx++; continue; }
+
+        as->t++;
+        int n = e->output->len;
+        if (as->m->len < n) n = as->m->len;
+
+        float bc1 = 1.0f - powf(beta1, (float)as->t);
+        float bc2 = 1.0f - powf(beta2, (float)as->t);
+
+        float wd = (e->no_decay) ? 0.0f : weight_decay;
+        for (int j = 0; j < n; j++) {
+            // Decoupled weight decay (AdamW): applied to param, not gradient
+            // Skipped for embeddings (no_decay=1)
+            if (wd > 0.0f)
+                e->output->data[j] -= lr * wd * e->output->data[j];
+
+            float g = e->grad->data[j];
+            as->m->data[j] = beta1 * as->m->data[j] + (1.0f - beta1) * g;
+            as->v->data[j] = beta2 * as->v->data[j] + (1.0f - beta2) * g * g;
+            float m_hat = as->m->data[j] / bc1;
+            float v_hat = as->v->data[j] / bc2;
+            e->output->data[j] -= lr * m_hat / (sqrtf(v_hat) + eps);
+        }
+        param_idx++;
     }
-    return -1;
 }
 
-// Ensure array is on tape. If not found, record as a non-trainable leaf.
-// Returns entry index.
-static int tape_ensure_entry(AM_Array* arr) {
-    if (!arr || !g_tape.active) return -1;
-    int idx = tape_find_entry(arr);
-    if (idx >= 0) return idx;
-    // Record as leaf (OP_NONE, not a param — just for backward data access)
-    return am_tape_record(arr, AM_OP_NONE, -1, -1, 0);
+// Gradient clipping by global norm (like torch.nn.utils.clip_grad_norm_)
+// Returns the total gradient norm before clipping
+float am_tape_clip_grads(float max_norm) {
+    // First pass: compute global gradient norm
+    float total_norm_sq = 0.0f;
+    for (int i = 0; i < g_tape.count; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->grad) continue;
+        int n = e->output->len;
+        if (e->grad->len < n) n = e->grad->len;
+        for (int j = 0; j < n; j++) {
+            float g = e->grad->data[j];
+            total_norm_sq += g * g;
+        }
+    }
+    float total_norm = sqrtf(total_norm_sq);
+
+    // Second pass: scale gradients if norm exceeds max_norm
+    if (total_norm > max_norm) {
+        float scale = max_norm / (total_norm + 1e-6f);
+        for (int i = 0; i < g_tape.count; i++) {
+            AM_TapeEntry* e = &g_tape.entries[i];
+            if (!e->is_param || !e->grad) continue;
+            int n = e->output->len;
+            if (e->grad->len < n) n = e->grad->len;
+            for (int j = 0; j < n; j++) {
+                e->grad->data[j] *= scale;
+            }
+        }
+    }
+    return total_norm;
+}
+
+// ── Gradient accumulation ─────────────────────────────────────────────────────
+// TAPE ACCUM_GRADS: after BACKWARD, save param grads into acc_grad buffer (additive)
+// TAPE APPLY_ACCUM N: divide acc_grad by N, copy into tape entry grads, zero acc_grad
+
+void am_tape_accum_grads(void) {
+    int param_idx = 0;
+    for (int i = 0; i < g_tape.count && param_idx < g_tape.n_params; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->grad) continue;
+        AM_AdamState* as = &g_tape.adam[param_idx];
+        int n = e->output->len;
+        // Allocate acc_grad on first use
+        if (!as->acc_grad) {
+            as->acc_grad = am_array_new(n);
+        } else if (as->acc_grad->len < n) {
+            am_array_free(as->acc_grad);
+            as->acc_grad = am_array_new(n);
+        }
+        // Accumulate: acc_grad += grad
+        for (int j = 0; j < n && j < as->acc_grad->len; j++) {
+            as->acc_grad->data[j] += e->grad->data[j];
+        }
+        param_idx++;
+    }
+}
+
+void am_tape_apply_accum(int n_accum) {
+    float scale = (n_accum > 1) ? 1.0f / (float)n_accum : 1.0f;
+    int param_idx = 0;
+    for (int i = 0; i < g_tape.count && param_idx < g_tape.n_params; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param) continue;
+        AM_AdamState* as = &g_tape.adam[param_idx];
+        if (as->acc_grad) {
+            int n = e->output->len;
+            if (as->acc_grad->len < n) n = as->acc_grad->len;
+            // Ensure grad exists
+            if (!e->grad) e->grad = am_array_new(n);
+            // Copy averaged accumulated grad into tape entry
+            for (int j = 0; j < n; j++) {
+                e->grad->data[j] = as->acc_grad->data[j] * scale;
+                as->acc_grad->data[j] = 0.0f; // zero for next round
+            }
+        }
+        param_idx++;
+    }
+}
+
+// ── Chuck optimizer step ──────────────────────────────────────────────────────
+// Self-aware Adam: θ -= (α × λ × λ_l) × m̂/(√v̂ + ε) + η
+// Requires loss_val from the current step to track trends.
+
+static float chuck_ring_avg(const float* buf, int pos, int full, int start, int count) {
+    // Average 'count' entries starting from 'start' in ring buffer
+    int len = full ? CHUCK_WINDOW : pos;
+    if (len == 0 || count == 0) return 0.0f;
+    float sum = 0.0f;
+    int actual = 0;
+    for (int i = 0; i < count && i < len; i++) {
+        int idx = (start + i) % CHUCK_WINDOW;
+        if (idx < len || full) { sum += buf[idx]; actual++; }
+    }
+    return actual > 0 ? sum / actual : 0.0f;
+}
+
+// Simple xorshift32 for stagnation noise (no stdlib dependency)
+static uint32_t chuck_rng_state = 2463534242u;
+static float chuck_randn(void) {
+    // Box-Muller-ish from uniform via xorshift
+    chuck_rng_state ^= chuck_rng_state << 13;
+    chuck_rng_state ^= chuck_rng_state >> 17;
+    chuck_rng_state ^= chuck_rng_state << 5;
+    float u = (float)(chuck_rng_state) / 4294967296.0f;
+    // Approximate Gaussian: 12 uniforms - 6 (central limit), simplified to 2u-1
+    return 2.0f * u - 1.0f;
+}
+
+void am_tape_chuck_step(float lr, float loss_val) {
+    float beta1 = 0.9f, beta2 = 0.999f, eps = 1e-8f;
+
+    // ── Level 1: Global loss trend → λ ──
+    AM_ChuckState* cs = &g_tape.chuck;
+    if (!cs->initialized) {
+        cs->dampen = 1.0f;
+        cs->noise = 0.0f;
+        cs->lr_scale = 1.0f;
+        cs->best_macro = 1e9f;
+        cs->initialized = 1;
+    }
+    // EMA smoothing: filters batch-to-batch noise for mini-batch SGD
+    if (cs->loss_ema == 0.0f) cs->loss_ema = loss_val;
+    else cs->loss_ema = 0.99f * cs->loss_ema + 0.01f * loss_val;
+    // Record smoothed loss into ring buffer
+    cs->loss_hist[cs->pos] = cs->loss_ema;
+    cs->pos = (cs->pos + 1) % CHUCK_WINDOW;
+    if (cs->pos == 0) cs->full = 1;
+
+    int len = cs->full ? CHUCK_WINDOW : cs->pos;
+    if (len >= 8) {
+        // Compare recent quarter vs oldest quarter
+        int q = len / 4;
+        if (q < 1) q = 1;
+        int old_start = cs->full ? ((cs->pos) % CHUCK_WINDOW) : 0;
+        int recent_start = cs->full ? ((cs->pos - q + CHUCK_WINDOW) % CHUCK_WINDOW)
+                                    : (cs->pos - q);
+        float old_avg = chuck_ring_avg(cs->loss_hist, cs->pos, cs->full, old_start, q);
+        float recent_avg = chuck_ring_avg(cs->loss_hist, cs->pos, cs->full, recent_start, q);
+
+        if (old_avg > eps) {
+            float trend = (recent_avg - old_avg) / old_avg;
+            // Symmetric thresholds (synced with PyTorch: 0.02 / -0.02)
+            if (trend > CHUCK_TREND_BRAKE) cs->dampen *= CHUCK_DAMP_DOWN; // loss rising → dampen
+            if (trend < CHUCK_TREND_PUSH)  cs->dampen *= CHUCK_DAMP_UP;   // loss falling → boost
+
+            // ── Level 3: Stagnation escape ──
+            if (fabsf(trend) < CHUCK_STAG_THRESH) {
+                cs->stag++;
+                if (cs->stag >= CHUCK_STAG_STEPS) {
+                    cs->noise = CHUCK_NOISE_MAG;
+                    cs->stag = 0;  // reset counter (PyTorch behavior)
+                }
+            } else {
+                cs->stag = 0;
+                cs->noise *= CHUCK_NOISE_DECAY;  // exponential decay (was: reset to 0)
+            }
+        }
+    }
+    // Mean reversion: pull dampen toward 1.0 (prevents drift)
+    cs->dampen = CHUCK_MEAN_REVERT * cs->dampen + (1.0f - CHUCK_MEAN_REVERT) * 1.0f;
+    // Clamp global dampen
+    if (cs->dampen < CHUCK_DAMP_LO) cs->dampen = CHUCK_DAMP_LO;
+    if (cs->dampen > CHUCK_DAMP_HI) cs->dampen = CHUCK_DAMP_HI;
+
+    // ── Level 9: Multi-scale awareness (macro patience) ──
+    // Slow EMA (α=0.001) tracks epoch-scale loss trend.
+    // Every CHUCK_MACRO_INT steps: patience check → LR decay if stagnant.
+    cs->global_step++;
+    if (cs->macro_ema == 0.0f) cs->macro_ema = loss_val;
+    else cs->macro_ema = 0.999f * cs->macro_ema + 0.001f * loss_val;
+
+    if (cs->global_step % CHUCK_MACRO_INT == 0 && cs->global_step > CHUCK_WINDOW) {
+        if (cs->macro_ema > cs->best_macro * 0.999f) {
+            cs->macro_stag++;
+            if (cs->macro_stag >= CHUCK_MACRO_PAT) {
+                cs->lr_scale *= CHUCK_MACRO_DECAY;
+                if (cs->lr_scale < 0.05f) cs->lr_scale = 0.05f;
+                cs->macro_stag = 0;
+            }
+        } else {
+            cs->best_macro = cs->macro_ema;
+            cs->macro_stag = 0;
+            // LR recovery when improving (PyTorch: lr_scale *= 1.2)
+            if (cs->lr_scale < 1.0f) {
+                cs->lr_scale *= 1.2f;
+                if (cs->lr_scale > 1.0f) cs->lr_scale = 1.0f;
+            }
+        }
+    }
+
+    float global_lambda = cs->dampen;
+    float noise_mag = cs->noise;
+
+    // ── Level 2: Per-param gradient norm → λ_l + freeze + Adam update ──
+    int param_idx = 0;
+    for (int i = 0; i < g_tape.count && param_idx < g_tape.n_params; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->grad) continue;
+
+        AM_AdamState* as = &g_tape.adam[param_idx];
+        AM_ChuckParamState* cp = &g_tape.chuck_params[param_idx];
+
+        // Initialize per-param state on first encounter
+        if (cp->dampen == 0.0f) cp->dampen = 1.0f;
+
+        // Check frozen
+        if (cp->frozen) { param_idx++; continue; }
+
+        if (!as->m || !as->v) { param_idx++; continue; }
+
+        // Compute gradient norm for this param
+        int n = e->output->len;
+        if (as->m->len < n) n = as->m->len;
+        float gnorm = 0.0f;
+        for (int j = 0; j < n; j++) gnorm += e->grad->data[j] * e->grad->data[j];
+        gnorm = sqrtf(gnorm);
+
+        // Record grad norm into per-param ring buffer
+        cp->grad_hist[cp->pos] = gnorm;
+        cp->pos = (cp->pos + 1) % CHUCK_WINDOW;
+        if (cp->pos == 0) cp->full = 1;
+
+        int plen = cp->full ? CHUCK_WINDOW : cp->pos;
+        if (plen >= 8) {
+            int q = plen / 4;
+            if (q < 1) q = 1;
+            int old_start = cp->full ? ((cp->pos) % CHUCK_WINDOW) : 0;
+            int recent_start = cp->full ? ((cp->pos - q + CHUCK_WINDOW) % CHUCK_WINDOW)
+                                        : (cp->pos - q);
+            float old_gn = chuck_ring_avg(cp->grad_hist, cp->pos, cp->full, old_start, q);
+            float recent_gn = chuck_ring_avg(cp->grad_hist, cp->pos, cp->full, recent_start, q);
+
+            if (old_gn > eps) {
+                float gtrend = (recent_gn - old_gn) / old_gn;
+                // Per-param: 0.05 thresholds, symmetric (synced with PyTorch)
+                if (gtrend > 0.05f)  cp->dampen *= CHUCK_DAMP_UP;    // grad rising → boost
+                if (gtrend < -0.05f) cp->dampen *= CHUCK_DAMP_DOWN;  // grad settling → ease
+            }
+
+            // Freeze check: grad norm tiny for CHUCK_STAG_STEPS consecutive
+            if (gnorm < CHUCK_FREEZE_THRESH) {
+                cp->stag++;
+                if (cp->stag >= CHUCK_STAG_STEPS) cp->frozen = 1;
+            } else {
+                cp->stag = 0;
+            }
+
+            // Per-param mean reversion (prevents drift)
+            cp->dampen = CHUCK_MEAN_REVERT * cp->dampen + (1.0f - CHUCK_MEAN_REVERT) * 1.0f;
+            if (cp->dampen < CHUCK_DAMP_LO) cp->dampen = CHUCK_DAMP_LO;
+            if (cp->dampen > CHUCK_DAMP_HI) cp->dampen = CHUCK_DAMP_HI;
+        }
+
+        // ── Adam update with Chuck modulation ──
+        float param_lambda = cp->dampen;
+        float effective_lr = lr * global_lambda * param_lambda * cs->lr_scale;
+
+        as->t++;
+        for (int j = 0; j < n; j++) {
+            float g = e->grad->data[j];
+            as->m->data[j] = beta1 * as->m->data[j] + (1.0f - beta1) * g;
+            as->v->data[j] = beta2 * as->v->data[j] + (1.0f - beta2) * g * g;
+            float m_hat = as->m->data[j] / (1.0f - powf(beta1, (float)as->t));
+            float v_hat = as->v->data[j] / (1.0f - powf(beta2, (float)as->t));
+            float update = effective_lr * m_hat / (sqrtf(v_hat) + eps);
+            // Stagnation noise η
+            if (noise_mag > 0.0f) update += noise_mag * chuck_randn();
+            e->output->data[j] -= update;
+        }
+        param_idx++;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SAVE / LOAD — persist trainable params (tape entries with is_param=1)
+// Binary format: magic(4) | n_params(4) | for each: len(4) | data[len * float]
+// Tape-order dependent: load into a model with the same param layout.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#define AM_SAVE_MAGIC 0x414D4C45u   // 'AMLE' — AML Essence
+
+int am_tape_save(const char* path) {
+    if (!path) return -1;
+    FILE* f = fopen(path, "wb");
+    if (!f) return -1;
+    uint32_t magic = AM_SAVE_MAGIC;
+    int32_t n = g_tape.n_params;
+    if (fwrite(&magic, 4, 1, f) != 1 || fwrite(&n, 4, 1, f) != 1) {
+        fclose(f); return -1;
+    }
+    int written = 0;
+    for (int i = 0; i < g_tape.count && written < n; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->output) continue;
+        int32_t len = e->output->len;
+        if (fwrite(&len, 4, 1, f) != 1 ||
+            fwrite(e->output->data, sizeof(float), (size_t)len, f) != (size_t)len) {
+            fclose(f); return -1;
+        }
+        written++;
+    }
+    fclose(f);
+    return written == n ? 0 : -1;
+}
+
+int am_tape_load(const char* path) {
+    if (!path) return -1;
+    FILE* f = fopen(path, "rb");
+    if (!f) return -1;
+    uint32_t magic = 0;
+    int32_t  n = 0;
+    if (fread(&magic, 4, 1, f) != 1 || magic != AM_SAVE_MAGIC) { fclose(f); return -1; }
+    if (fread(&n, 4, 1, f) != 1 || n <= 0) { fclose(f); return -1; }
+    if (n != g_tape.n_params) { fclose(f); return -1; }  // layout mismatch
+    int loaded = 0;
+    for (int i = 0; i < g_tape.count && loaded < n; i++) {
+        AM_TapeEntry* e = &g_tape.entries[i];
+        if (!e->is_param || !e->output) continue;
+        int32_t len = 0;
+        if (fread(&len, 4, 1, f) != 1 || len != e->output->len) {
+            fclose(f); return -1;
+        }
+        if (fread(e->output->data, sizeof(float), (size_t)len, f) != (size_t)len) {
+            fclose(f); return -1;
+        }
+        loaded++;
+    }
+    fclose(f);
+    return loaded == n ? 0 : -1;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LR SCHEDULE — cosine / step / linear, all with optional linear warmup
+// ═══════════════════════════════════════════════════════════════════════════════
+
+AM_Schedule am_schedule_cosine(float base_lr, int warmup_steps, int total_steps, float min_lr) {
+    AM_Schedule s = {0};
+    s.type = AM_SCHED_COSINE;
+    s.base_lr = base_lr;
+    s.min_lr = min_lr;
+    s.warmup_steps = warmup_steps;
+    s.total_steps = total_steps > 0 ? total_steps : 1;
+    return s;
+}
+
+AM_Schedule am_schedule_step(float base_lr, int warmup_steps, int step_size, float gamma) {
+    AM_Schedule s = {0};
+    s.type = AM_SCHED_STEP;
+    s.base_lr = base_lr;
+    s.warmup_steps = warmup_steps;
+    s.step_size = step_size > 0 ? step_size : 1;
+    s.step_gamma = gamma > 0 ? gamma : 0.1f;
+    return s;
+}
+
+AM_Schedule am_schedule_linear(float base_lr, int warmup_steps, int total_steps, float min_lr) {
+    AM_Schedule s = {0};
+    s.type = AM_SCHED_LINEAR;
+    s.base_lr = base_lr;
+    s.min_lr = min_lr;
+    s.warmup_steps = warmup_steps;
+    s.total_steps = total_steps > 0 ? total_steps : 1;
+    return s;
+}
+
+float am_schedule_get_lr(AM_Schedule* s) {
+    if (!s) return 0.001f;
+    int step = s->current_step++;
+    float lr = s->base_lr;
+
+    // Linear warmup from min_lr to base_lr over warmup_steps
+    if (step < s->warmup_steps && s->warmup_steps > 0) {
+        float t = (float)step / (float)s->warmup_steps;
+        return s->min_lr + t * (s->base_lr - s->min_lr);
+    }
+
+    int decay_step = step - s->warmup_steps;
+
+    switch (s->type) {
+    case AM_SCHED_COSINE: {
+        int decay_total = s->total_steps - s->warmup_steps;
+        if (decay_total <= 0) return lr;
+        float progress = (float)decay_step / (float)decay_total;
+        if (progress > 1.0f) progress = 1.0f;
+        lr = s->min_lr + 0.5f * (s->base_lr - s->min_lr) * (1.0f + cosf(3.14159265f * progress));
+        break;
+    }
+    case AM_SCHED_STEP: {
+        int n_decays = decay_step / s->step_size;
+        lr = s->base_lr * powf(s->step_gamma, (float)n_decays);
+        break;
+    }
+    case AM_SCHED_LINEAR: {
+        int decay_total = s->total_steps - s->warmup_steps;
+        if (decay_total <= 0) return lr;
+        float progress = (float)decay_step / (float)decay_total;
+        if (progress > 1.0f) progress = 1.0f;
+        lr = s->base_lr - progress * (s->base_lr - s->min_lr);
+        break;
+    }
+    default:
+        break;
+    }
+    return lr;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NaN/Inf GUARD — scan all param grads, zero them if any NaN/Inf detected,
-// adjust dynamic loss_scale. Mirrored from canonical AML faa4d9b 2026-04-16.
-// API-only at this stage — not auto-wired into AML interpreter or molequla
-// aml_trainer.go script generation. Activate by calling am_nan_guard_check()
-// directly from a C consumer (CGO bridge), or by adding TAPE NAN_CHECK
-// interpreter case in a follow-up.
+// adjust dynamic loss_scale.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 AM_NanGuard am_nan_guard_new(void) {
@@ -1754,6 +2602,35 @@ int am_nan_guard_check(AM_NanGuard* guard) {
         guard->stable_steps = 0;
     }
     return 1;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRAINING MODE — global flag. Dropout and similar ops consult it.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static int g_training_mode = 1;  // default: training
+
+void am_train_mode(int training) { g_training_mode = training ? 1 : 0; }
+int  am_is_training(void)        { return g_training_mode; }
+
+// Find tape entry index by array pointer (-1 if not found)
+static int tape_find_entry(AM_Array* arr) {
+    if (!arr) return -1;
+    for (int i = g_tape.count - 1; i >= 0; i--) {
+        if (g_tape.entries[i].output && g_tape.entries[i].output->data == arr->data)
+            return i;
+    }
+    return -1;
+}
+
+// Ensure array is on tape. If not found, record as a non-trainable leaf.
+// Returns entry index.
+static int tape_ensure_entry(AM_Array* arr) {
+    if (!arr || !g_tape.active) return -1;
+    int idx = tape_find_entry(arr);
+    if (idx >= 0) return idx;
+    // Record as leaf (OP_NONE, not a param — just for backward data access)
+    return am_tape_record(arr, AM_OP_NONE, -1, -1, 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2114,6 +2991,9 @@ static float expr_primary(AML_Expr* e) {
             if (e->ctx) {
                 AML_Var* var = resolve_var_full(e->ctx, name);
                 if (var && var->type == AML_TYPE_ARRAY && var->array) {
+#ifdef USE_CUDA
+                    if (var->array->gpu_valid && var->array->d_data) ensure_cpu(var->array);
+#endif
                     if (idx >= 0 && idx < var->array->len)
                         return var->array->data[idx];
                 }
@@ -2642,6 +3522,28 @@ static void aml_exec_level0(const char* cmd, const char* arg, AML_ExecCtx* ctx, 
     }
     else if (!strcmp(t, "RESET_DEBT")) {
       am_reset_debt();
+    }
+
+    // FIELD STATE PERSISTENCE — AMSO file (chambers, scars, debt, calendar, ...)
+    //   LOAD "path.soma"   — read AM_State from disk (silent if file missing)
+    //   SAVE "path.soma"   — dump AM_State to disk
+    // Inferences (yent.aml, resonance.aml, jannus-r) call these to carry the
+    // breath of the field across sessions.
+    else if (!strcmp(t, "LOAD") || !strcmp(t, "SAVE")) {
+      char path[512] = {0};
+      const char* p = arg;
+      while (*p == ' ' || *p == '\t') p++;
+      if (*p == '"') {
+        p++;
+        int k = 0;
+        while (*p && *p != '"' && k < (int)sizeof(path) - 1) path[k++] = *p++;
+      } else {
+        sscanf(arg, "%511s", path);
+      }
+      if (path[0]) {
+        if (!strcmp(t, "LOAD")) am_field_load(path);
+        else                    am_field_save(path);
+      }
     }
 
     // LAWS OF NATURE
@@ -3352,16 +4254,150 @@ static void aml_exec_level0(const char* cmd, const char* arg, AML_ExecCtx* ctx, 
         if (rest[0]) lr = ctx_float(ctx, rest);
         am_tape_adam_step(lr);
       }
-      else if (!strcmp(subcmd, "PARAM")) {
+      else if (!strcmp(subcmd, "CHUCK_STEP") || !strcmp(subcmd, "CHUCK")) {
+        // TAPE CHUCK_STEP <lr> <loss_var> — self-aware optimizer
+        // TAPE CHUCK <lr> <loss_var>
+        char arg1[AML_MAX_NAME] = {0};
+        char arg2[AML_MAX_NAME] = {0};
+        sscanf(rest, "%31s %31s", arg1, arg2);
+        float lr = 0.001f;
+        float loss_val = 0.0f;
+        if (arg1[0]) lr = ctx_float(ctx, arg1);
+        if (arg2[0] && ctx) loss_val = ctx_float(ctx, arg2);
+        am_tape_chuck_step(lr, loss_val);
+      }
+      else if (!strcmp(subcmd, "ADAMW_STEP") || !strcmp(subcmd, "ADAMW")) {
+        // TAPE ADAMW_STEP <lr> [weight_decay] [beta1] [beta2]
+        // TAPE ADAMW <lr> [weight_decay] [beta1] [beta2]
+        char a1[32]={0}, a2[32]={0}, a3[32]={0}, a4[32]={0};
+        sscanf(rest, "%31s %31s %31s %31s", a1, a2, a3, a4);
+        float lr = a1[0] ? ctx_float(ctx, a1) : 0.001f;
+        float wd = a2[0] ? ctx_float(ctx, a2) : 0.1f;
+        float b1 = a3[0] ? ctx_float(ctx, a3) : 0.9f;
+        float b2 = a4[0] ? ctx_float(ctx, a4) : 0.95f;
+        am_tape_adamw_step(lr, wd, b1, b2);
+#ifdef USE_CUDA
+        for (int pi = 0; pi < g_tape.count; pi++) {
+            if (g_tape.entries[pi].is_param && g_tape.entries[pi].output)
+                invalidate_gpu(g_tape.entries[pi].output);
+        }
+#endif
+      }
+      else if (!strcmp(subcmd, "CLIP_GRADS") || !strcmp(subcmd, "CLIP")) {
+        // TAPE CLIP_GRADS <max_norm> — gradient clipping by global norm
+        float max_norm = 1.0f;
+        if (rest[0]) max_norm = ctx_float(ctx, rest);
+        float norm = am_tape_clip_grads(max_norm);
+        // Store grad_norm in context for logging
+        if (ctx) {
+          char cmd[64]; snprintf(cmd, 64, "grad_norm = %.6f", norm);
+          am_exec(cmd);
+        }
+      }
+      else if (!strcmp(subcmd, "ACCUM_GRADS") || !strcmp(subcmd, "ACCUM")) {
+        // TAPE ACCUM_GRADS — accumulate param grads into buffer (for gradient accumulation)
+        am_tape_accum_grads();
+      }
+      else if (!strcmp(subcmd, "APPLY_ACCUM")) {
+        // TAPE APPLY_ACCUM <N> — average accumulated grads by N, copy to entries
+        int n_accum = 1;
+        if (rest[0]) n_accum = (int)ctx_float(ctx, rest);
+        if (n_accum < 1) n_accum = 1;
+        am_tape_apply_accum(n_accum);
+      }
+      else if (!strcmp(subcmd, "PARAM") || !strcmp(subcmd, "PARAM_NO_DECAY")) {
         // TAPE PARAM <var_name> — register variable as trainable parameter
+        // TAPE PARAM_NO_DECAY <var_name> — same but skip weight decay (for embeddings)
+        int nd = !strcmp(subcmd, "PARAM_NO_DECAY");
         char vname[AML_MAX_NAME] = {0};
         sscanf(rest, "%31s", vname);
         if (vname[0] && ctx) {
           AML_Var* v = resolve_var_full(ctx, vname);
           if (v && v->type == AML_TYPE_ARRAY && v->array) {
-            am_tape_record_param(v->array);
+            int idx = am_tape_record_param(v->array);
+            if (nd && idx >= 0) g_tape.entries[idx].no_decay = 1;
           }
         }
+      }
+      // ─── Save/load registered params (binary, tape-order) ───
+      else if (!strcmp(subcmd, "SAVE")) {
+        // TAPE SAVE "path.bin" — write all registered params to file
+        char path[512] = {0};
+        // Strip quotes if present
+        const char* p = rest;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '"') { p++; int k = 0;
+          while (*p && *p != '"' && k < (int)sizeof(path)-1) path[k++] = *p++;
+        } else {
+          sscanf(rest, "%511s", path);
+        }
+        if (path[0]) am_tape_save(path);
+      }
+      else if (!strcmp(subcmd, "LOAD")) {
+        // TAPE LOAD "path.bin" — read params back into existing tape params
+        char path[512] = {0};
+        const char* p = rest;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '"') { p++; int k = 0;
+          while (*p && *p != '"' && k < (int)sizeof(path)-1) path[k++] = *p++;
+        } else {
+          sscanf(rest, "%511s", path);
+        }
+        if (path[0]) am_tape_load(path);
+      }
+      // ─── LR schedules (one global schedule per tape) ───
+      else if (!strcmp(subcmd, "LR_COSINE") || !strcmp(subcmd, "LR_STEP") ||
+               !strcmp(subcmd, "LR_LINEAR")) {
+        char a1[32]={0}, a2[32]={0}, a3[32]={0}, a4[32]={0};
+        sscanf(rest, "%31s %31s %31s %31s", a1, a2, a3, a4);
+        float base = a1[0] ? ctx_float(ctx, a1) : 0.001f;
+        int   w    = a2[0] ? (int)ctx_float(ctx, a2) : 0;
+        float p3   = a3[0] ? ctx_float(ctx, a3) : 0.0f;
+        float p4   = a4[0] ? ctx_float(ctx, a4) : 0.0f;
+        if (!strcmp(subcmd, "LR_COSINE"))
+            g_aml_schedule = am_schedule_cosine(base, w, (int)p3, p4);
+        else if (!strcmp(subcmd, "LR_STEP"))
+            g_aml_schedule = am_schedule_step(base, w, (int)p3, p4);
+        else
+            g_aml_schedule = am_schedule_linear(base, w, (int)p3, p4);
+      }
+      else if (!strcmp(subcmd, "LR_NEXT")) {
+        // TAPE LR_NEXT <var> — advance schedule, store current lr in <var>
+        char vname[AML_MAX_NAME] = {0};
+        sscanf(rest, "%31s", vname);
+        float lr = am_schedule_get_lr(&g_aml_schedule);
+        if (vname[0] && ctx) {
+          char cmd[128];
+          snprintf(cmd, sizeof(cmd), "%s = %.8f", vname, lr);
+          am_exec(cmd);
+        }
+      }
+      // ─── NaN/Inf guard ───
+      else if (!strcmp(subcmd, "NAN_GUARD_INIT")) {
+        g_aml_nan_guard = am_nan_guard_new();
+        g_aml_nan_guard_inited = 1;
+      }
+      else if (!strcmp(subcmd, "NAN_CHECK")) {
+        // TAPE NAN_CHECK [<var>] — check for NaN in grads; if <var> given,
+        // store 1 (clean) or 0 (NaN found and grads zeroed) into it
+        if (!g_aml_nan_guard_inited) {
+          g_aml_nan_guard = am_nan_guard_new();
+          g_aml_nan_guard_inited = 1;
+        }
+        int ok = am_nan_guard_check(&g_aml_nan_guard);
+        char vname[AML_MAX_NAME] = {0};
+        sscanf(rest, "%31s", vname);
+        if (vname[0] && ctx) {
+          char cmd[64]; snprintf(cmd, sizeof(cmd), "%s = %d", vname, ok);
+          am_exec(cmd);
+        }
+      }
+      // ─── Train/eval mode (global, consulted by dropout) ───
+      else if (!strcmp(subcmd, "TRAIN_MODE")) {
+        am_train_mode(1);
+      }
+      else if (!strcmp(subcmd, "EVAL_MODE")) {
+        am_train_mode(0);
       }
     }
 
@@ -3620,6 +4656,9 @@ static int aml_call_func(AML_ExecCtx* ctx, AML_Func* f, float* args, int nargs, 
 //          scale(a, s), and user function calls that return arrays.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Forward declaration for bytecode dispatch
+static AM_Array* aml_array_dispatch(AML_ExecCtx* ctx, const char* fname, char arg_strs[][AML_MAX_NAME], int nargs);
+
 static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
     // skip whitespace
     while (*rhs == ' ') rhs++;
@@ -3676,6 +4715,11 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
         nargs++;
     }
 
+    return aml_array_dispatch(ctx, fname, arg_strs, nargs);
+}
+
+// Dispatch pre-parsed array function call (called from both interpreter and bytecode)
+static AM_Array* aml_array_dispatch(AML_ExecCtx* ctx, const char* fname, char arg_strs[][AML_MAX_NAME], int nargs) {
     // zeros(n) — create zero-initialized array
     if (strcasecmp(fname, "zeros") == 0 && nargs >= 1) {
         int n = (int)aml_eval(ctx, arg_strs[0]);
@@ -3711,9 +4755,25 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             int n = va->array->len < vb->array->len ? va->array->len : vb->array->len;
             AM_Array* arr = am_array_new(n);
             if (!arr) return NULL;
+#ifdef USE_CUDA
+            if (va->array->d_data && va->array->gpu_valid &&
+                vb->array->d_data && vb->array->gpu_valid) {
+                out_arr_gpu: ;
+                arr->d_data = gpu_alloc(n);
+                if (arr->d_data) {
+                    gpu_add(arr->d_data, va->array->d_data, vb->array->d_data, n);
+                    arr->gpu_valid = 1;
+                    goto add_done;
+                }
+            }
+            ensure_cpu(va->array); ensure_cpu(vb->array);
+#endif
             for (int j = 0; j < n; j++)
                 arr->data[j] = va->array->data[j] + vb->array->data[j];
             if (am_tape_is_active())
+#ifdef USE_CUDA
+            add_done: ;
+#endif
                 am_tape_record(arr, AM_OP_ADD, tape_ensure_entry(va->array), tape_ensure_entry(vb->array), 0);
             return arr;
         }
@@ -3729,9 +4789,24 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             int n = va->array->len < vb->array->len ? va->array->len : vb->array->len;
             AM_Array* arr = am_array_new(n);
             if (!arr) return NULL;
+#ifdef USE_CUDA
+            if (va->array->d_data && va->array->gpu_valid &&
+                vb->array->d_data && vb->array->gpu_valid) {
+                arr->d_data = gpu_alloc(n);
+                if (arr->d_data) {
+                    gpu_mul(arr->d_data, va->array->d_data, vb->array->d_data, n);
+                    arr->gpu_valid = 1;
+                    goto mul_done;
+                }
+            }
+            ensure_cpu(va->array); ensure_cpu(vb->array);
+#endif
             for (int j = 0; j < n; j++)
                 arr->data[j] = va->array->data[j] * vb->array->data[j];
             if (am_tape_is_active())
+#ifdef USE_CUDA
+            mul_done: ;
+#endif
                 am_tape_record(arr, AM_OP_MUL, tape_ensure_entry(va->array), tape_ensure_entry(vb->array), 0);
             return arr;
         }
@@ -3900,10 +4975,24 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             AM_Array* out = am_array_new(n);
             if (!out) { if (owns_input) am_array_free(input_arr); return NULL; }
             for (int j = 0; j < n; j++) {
+#ifdef USE_CUDA
+            if (input_arr->d_data && input_arr->gpu_valid) {
+                out->d_data = gpu_alloc(n);
+                if (out->d_data) {
+                    gpu_silu(out->d_data, input_arr->d_data, n);
+                    out->gpu_valid = 1;
+                    goto silu_done;
+                }
+            }
+            ensure_cpu(input_arr);
+#endif
                 float x = input_arr->data[j];
                 out->data[j] = x / (1.0f + expf(-x));
             }
             if (am_tape_is_active())
+#ifdef USE_CUDA
+            silu_done: ;
+#endif
                 am_tape_record(out, AM_OP_SILU, tape_ensure_entry(input_arr), -1, 0);
             // Don't free input_arr even if owns_input — tape may reference it
             return out;
@@ -3911,15 +5000,161 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
         return NULL;
     }
 
+    // gelu(x) — Gaussian Error Linear Unit (tanh approximation, Hendrycks)
+    if (strcasecmp(fname, "gelu") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        AM_Array* input_arr = NULL;
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            input_arr = vx->array;
+        } else {
+            input_arr = aml_try_array_expr(ctx, arg_strs[0]);
+        }
+        if (input_arr) {
+            int n = input_arr->len;
+            AM_Array* out = am_array_new(n);
+            if (!out) return NULL;
+            for (int j = 0; j < n; j++) {
+                float x = input_arr->data[j];
+                float x3 = x * x * x;
+                float inner = 0.7978845608f * (x + 0.044715f * x3);
+                out->data[j] = 0.5f * x * (1.0f + tanhf(inner));
+            }
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_GELU, tape_ensure_entry(input_arr), -1, 0);
+            return out;
+        }
+        return NULL;
+    }
+
+    // dropout(x, p) — inverted dropout. Uses am_is_training() to decide.
+    if (strcasecmp(fname, "dropout") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        AM_Array* input_arr = NULL;
+        if (vx && vx->type == AML_TYPE_ARRAY && vx->array) {
+            input_arr = vx->array;
+        } else {
+            input_arr = aml_try_array_expr(ctx, arg_strs[0]);
+        }
+        float p = 0.1f;
+        if (nargs >= 2) p = ctx_float(ctx, arg_strs[1]);
+        if (input_arr) {
+            int n = input_arr->len;
+            AM_Array* out = am_array_new(n);
+            if (!out) return NULL;
+            if (am_is_training() && p > 0.0f && p < 1.0f) {
+                static uint32_t drop_rng = 0xDE0B1EDEu;
+                float scale = 1.0f / (1.0f - p);
+                for (int j = 0; j < n; j++) {
+                    drop_rng ^= drop_rng << 13;
+                    drop_rng ^= drop_rng >> 17;
+                    drop_rng ^= drop_rng << 5;
+                    float r = (float)drop_rng / 4294967296.0f;
+                    out->data[j] = (r >= p) ? input_arr->data[j] * scale : 0.0f;
+                }
+            } else {
+                memcpy(out->data, input_arr->data, n * sizeof(float));
+            }
+            if (am_tape_is_active())
+                am_tape_record(out, AM_OP_DROPOUT, tape_ensure_entry(input_arr), -1, p);
+            return out;
+        }
+        return NULL;
+    }
+
+    // layernorm(x) or layernorm(x, gamma, beta)
+    if (strcasecmp(fname, "layernorm") == 0 && nargs >= 1) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        if (!vx || vx->type != AML_TYPE_ARRAY || !vx->array) return NULL;
+        int n = vx->array->len;
+        AM_Array* out = am_array_new(n);
+        if (!out) return NULL;
+
+        float mean = 0;
+        for (int i = 0; i < n; i++) mean += vx->array->data[i];
+        mean /= n;
+        float var = 0;
+        for (int i = 0; i < n; i++) {
+            float d = vx->array->data[i] - mean;
+            var += d * d;
+        }
+        var /= n;
+        float inv_std = 1.0f / sqrtf(var + 1e-5f);
+
+        for (int i = 0; i < n; i++)
+            out->data[i] = (vx->array->data[i] - mean) * inv_std;
+
+        int gamma_idx = -1, beta_idx = -1;
+        if (nargs >= 2) {
+            AML_Var* vg = resolve_var_full(ctx, arg_strs[1]);
+            if (vg && vg->type == AML_TYPE_ARRAY && vg->array) {
+                int gn = vg->array->len < n ? vg->array->len : n;
+                for (int i = 0; i < gn; i++) out->data[i] *= vg->array->data[i];
+                gamma_idx = tape_ensure_entry(vg->array);
+            }
+        }
+        if (nargs >= 3) {
+            AML_Var* vb = resolve_var_full(ctx, arg_strs[2]);
+            if (vb && vb->type == AML_TYPE_ARRAY && vb->array) {
+                int bn = vb->array->len < n ? vb->array->len : n;
+                for (int i = 0; i < bn; i++) out->data[i] += vb->array->data[i];
+                beta_idx = tape_ensure_entry(vb->array);
+            }
+        }
+        if (am_tape_is_active())
+            am_tape_record3(out, AM_OP_LAYERNORM,
+                            tape_ensure_entry(vx->array), gamma_idx, beta_idx, 0, 0);
+        return out;
+    }
+
+    // seq_layernorm(x, gamma, beta, T, D) — layernorm per T positions of size D
+    if (strcasecmp(fname, "seq_layernorm") == 0 && nargs >= 5) {
+        AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);
+        if (!vx || vx->type != AML_TYPE_ARRAY || !vx->array) return NULL;
+        int T = (int)ctx_float(ctx, arg_strs[3]);
+        int D = (int)ctx_float(ctx, arg_strs[4]);
+        if (T <= 0 || D <= 0 || T * D > vx->array->len) return NULL;
+        AM_Array* out = am_array_new(T * D);
+        if (!out) return NULL;
+
+        for (int t = 0; t < T; t++) {
+            float* x_t = vx->array->data + t * D;
+            float* o_t = out->data + t * D;
+            float mean = 0;
+            for (int d = 0; d < D; d++) mean += x_t[d];
+            mean /= D;
+            float var = 0;
+            for (int d = 0; d < D; d++) { float dd = x_t[d] - mean; var += dd * dd; }
+            var /= D;
+            float inv_std = 1.0f / sqrtf(var + 1e-5f);
+            for (int d = 0; d < D; d++) o_t[d] = (x_t[d] - mean) * inv_std;
+        }
+
+        int gamma_idx = -1, beta_idx = -1;
+        AML_Var* vg = resolve_var_full(ctx, arg_strs[1]);
+        if (vg && vg->type == AML_TYPE_ARRAY && vg->array && vg->array->len >= D) {
+            for (int t = 0; t < T; t++)
+                for (int d = 0; d < D; d++)
+                    out->data[t * D + d] *= vg->array->data[d];
+            gamma_idx = tape_ensure_entry(vg->array);
+        }
+        AML_Var* vb = resolve_var_full(ctx, arg_strs[2]);
+        if (vb && vb->type == AML_TYPE_ARRAY && vb->array && vb->array->len >= D) {
+            for (int t = 0; t < T; t++)
+                for (int d = 0; d < D; d++)
+                    out->data[t * D + d] += vb->array->data[d];
+            beta_idx = tape_ensure_entry(vb->array);
+        }
+        if (am_tape_is_active())
+            am_tape_record3(out, AM_OP_SEQ_LAYERNORM,
+                            tape_ensure_entry(vx->array), gamma_idx, beta_idx,
+                            (float)T, (float)D);
+        return out;
+    }
+
     // spa_embed(token_ids, W, D, alpha) — Sentence Phonon Attention embedding.
     // Exponentially weighted mean of token embeddings (alpha^(n-1-i)), then L2 normalize.
     // Returns a single [D]-vector per sentence. W is flat [V*D] row-major.
     // SPA is forward-only by design — "coherence without training".
-    // Mirrored from canonical AML ef52cde 2026-04-16; matches reference in
-    // ~/arianna/q/postgpt_q.c (Q's third pillar). For molequla Phase B
-    // coherence layer: weightless cross-sentence repair pass after the
-    // generation chain — closes the early-stage Karpathy-gibberish gap
-    // without retraining.
     if (strcasecmp(fname, "spa_embed") == 0 && nargs >= 4) {
         AML_Var* vt = resolve_var_full(ctx, arg_strs[0]); // token ids (floats cast to int)
         AML_Var* vW = resolve_var_full(ctx, arg_strs[1]); // embedding matrix, flat
@@ -3952,8 +5187,7 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
 
     // spa_connectedness(E, S, D[, bias]) — SPA cross-attention.
     // Given S stacked sentence embeddings (flat [S*D] row-major), computes
-    // connectedness score per sentence:
-    //   scores[i] = sum_{j != i} exp(E_i · E_j / sqrt(D) + bias[|i-j|]).
+    // connectedness score per sentence: scores[i] = sum_{j!=i} exp(E_i · E_j / sqrt(D) + bias[|i-j|]).
     // bias is an optional [S]-sized array indexed by distance; zero bias if omitted.
     if (strcasecmp(fname, "spa_connectedness") == 0 && nargs >= 3) {
         AML_Var* vE = resolve_var_full(ctx, arg_strs[0]);
@@ -4118,6 +5352,36 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             float* W = vw->array->data;
             float* X = vx->array->data;
             float* Y = out->data;
+#ifdef USE_CUDA
+            // GPU tensor: keep data on GPU between ops
+            {
+                ensure_gpu(vw->array);
+                ensure_gpu(vx->array);
+                if (vw->array->d_data && vx->array->d_data) {
+                    out->d_data = gpu_alloc(T * out_dim);
+                    if (out->d_data) {
+                        gpu_sgemm_nt(T, out_dim, in_dim,
+                                     vx->array->d_data, vw->array->d_data, out->d_data);
+                        out->gpu_valid = 1;
+                    }
+                }
+                if (!out->gpu_valid) {
+                    // CPU fallback with BLAS
+                    ensure_cpu(vw->array); ensure_cpu(vx->array);
+                    W = vw->array->data; X = vx->array->data; Y = out->data;
+                    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                               T, out_dim, in_dim,
+                               1.0f, X, in_dim, W, in_dim,
+                               0.0f, Y, out_dim);
+                }
+            }
+#elif defined(USE_BLAS)
+            // BLAS batch: Y(T,out) = X(T,in) * W^T(in,out)
+            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                        T, out_dim, in_dim,
+                        1.0f, X, in_dim, W, in_dim,
+                        0.0f, Y, out_dim);
+#else
             #ifdef _OPENMP
             #pragma omp parallel for schedule(static) if(T * out_dim > 4096)
             #endif
@@ -4131,6 +5395,7 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
                     y_t[i] = s;
                 }
             }
+#endif
             if (am_tape_is_active())
                 am_tape_record3(out, AM_OP_SEQ_MATVEC,
                     tape_ensure_entry(vw->array), tape_ensure_entry(vx->array), -1,
@@ -4150,6 +5415,17 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             if (T * D > vx->array->len) return NULL;
             AM_Array* out = am_array_new(T * D);
             if (!out) return NULL;
+#ifdef USE_CUDA
+            if (vx->array->d_data && vx->array->gpu_valid) {
+                out->d_data = gpu_alloc(T * D);
+                if (out->d_data) {
+                    gpu_rmsnorm(out->d_data, vx->array->d_data, T, D);
+                    out->gpu_valid = 1;
+                    goto rmsnorm_done;
+                }
+            }
+            ensure_cpu(vx->array);
+#endif
             float* Xr = vx->array->data;
             float* Or = out->data;
             #ifdef _OPENMP
@@ -4164,6 +5440,9 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
                 for (int d = 0; d < D; d++) o_t[d] = x_t[d] / rms;
             }
             if (am_tape_is_active())
+#ifdef USE_CUDA
+            rmsnorm_done: ;
+#endif
                 am_tape_record3(out, AM_OP_SEQ_RMSNORM,
                     tape_ensure_entry(vx->array), -1, -1, (float)T, (float)D);
             return out;
@@ -4247,6 +5526,22 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             float scale = 1.0f / sqrtf((float)head_dim);
             AM_Array* out = am_array_new(T * D);
             if (!out) return NULL;
+#ifdef USE_CUDA
+            if (vq->array->d_data && vq->array->gpu_valid &&
+                vk->array->d_data && vk->array->gpu_valid &&
+                vv->array->d_data && vv->array->gpu_valid) {
+                out->d_data = gpu_alloc(T * D);
+                float* d_scores = gpu_scratch(5, n_heads * T * T);
+                if (out->d_data && d_scores) {
+                    gpu_multi_head_attention(vq->array->d_data, vk->array->d_data,
+                                             vv->array->d_data, out->d_data, d_scores,
+                                             T, D, n_heads);
+                    out->gpu_valid = 1;
+                    goto attn_done;
+                }
+            }
+            ensure_cpu(vq->array); ensure_cpu(vk->array); ensure_cpu(vv->array);
+#endif
             float* Qd = vq->array->data;
             float* Kd = vk->array->data;
             float* Vd = vv->array->data;
@@ -4292,6 +5587,9 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             free(scores_buf);
             #endif
             if (am_tape_is_active())
+#ifdef USE_CUDA
+            attn_done: ;
+#endif
                 am_tape_record3(out, AM_OP_MH_CAUSAL_ATTN,
                     tape_ensure_entry(vq->array), tape_ensure_entry(vk->array),
                     tape_ensure_entry(vv->array), (float)T, (float)head_dim);
@@ -4313,6 +5611,19 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             if (T * V > vl->array->len || T > vt->array->len) return NULL;
             AM_Array* out = am_array_new(1);
             if (!out) return NULL;
+#ifdef USE_CUDA
+            if (vl->array->d_data && vl->array->gpu_valid) {
+                ensure_gpu(vt->array);
+                float* d_losses = gpu_scratch(6, T);
+                if (d_losses && vt->array->d_data) {
+                    float avg_loss = gpu_cross_entropy(vl->array->d_data,
+                                                       vt->array->d_data, d_losses, T, V);
+                    out->data[0] = avg_loss;
+                    goto ce_done;
+                }
+            }
+            ensure_cpu(vl->array); ensure_cpu(vt->array);
+#endif
             float total_loss = 0;
             for (int t = 0; t < T; t++) {
                 float* logits_t = vl->array->data + t * V;
@@ -4329,6 +5640,9 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
             }
             out->data[0] = total_loss / T;
             if (am_tape_is_active())
+#ifdef USE_CUDA
+            ce_done: ;
+#endif
                 am_tape_record3(out, AM_OP_SEQ_CROSSENT,
                     tape_ensure_entry(vl->array), tape_ensure_entry(vt->array), -1,
                     (float)T, (float)V);
@@ -4765,6 +6079,419 @@ int am_exec(const char* script) {
         return 1;
     }
     return 0;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// BYTECODE COMPILATION — eliminate interpreter overhead
+// ═══════════════════════════════════════════════════════════════════
+//
+// am_compile() pre-parses each line into an opcode + pre-split args.
+// am_exec_compiled() executes opcodes via switch — no string matching.
+//
+// Eliminates per-line: 6 strncmp, strchr, fname parsing, 20+ strcasecmp
+// function dispatch, arg parsing, upcase, sscanf.
+
+enum {
+    BC_NOP = 0,
+    // TAPE commands
+    BC_TAPE_START, BC_TAPE_CLEAR, BC_TAPE_BACKWARD,
+    BC_TAPE_PARAM, BC_TAPE_PARAM_NO_DECAY,
+    BC_TAPE_ACCUM_GRADS, BC_TAPE_APPLY_ACCUM,
+    BC_TAPE_CLIP_GRADS, BC_TAPE_ADAMW_STEP,
+    // Array function calls: result = func(args...)
+    BC_CALL_SEQ_EMBED,      // h = seq_embed(wte, wpe, tokens, seq_len)
+    BC_CALL_SEQ_MATVEC,     // y = seq_matvec(W, x, seq_len)
+    BC_CALL_SEQ_RMSNORM,    // y = seq_rmsnorm(x, seq_len, dim)
+    BC_CALL_MULTI_HEAD_ATTN,// y = multi_head_attention(q,k,v,seq,dim,heads)
+    BC_CALL_SEQ_CROSS_ENTROPY, // loss = seq_cross_entropy(logits,targets,seq,vocab)
+    BC_CALL_ADD,            // y = add(a, b)
+    BC_CALL_MUL,            // y = mul(a, b)
+    BC_CALL_SILU,           // y = silu(x)
+    // Fallback — use interpreter
+    BC_FALLBACK,
+};
+
+typedef struct {
+    int opcode;
+    char result[AML_MAX_NAME];     // LHS variable name
+    char args[8][AML_MAX_NAME];    // pre-split argument strings
+    int nargs;
+    int orig_idx;                  // original line index (for error reporting)
+} AML_BytecodeOp;
+
+typedef struct {
+    AML_Line*       lines;
+    int             nlines;
+    AML_Functab     funcs;
+    AML_BytecodeOp* ops;
+    int             nops;
+} AM_Compiled;
+
+// ── Bytecode compiler: parse each line into opcode + args ──
+
+static int bc_parse_func_call(const char* rhs, char* fname, char args[][AML_MAX_NAME], int* nargs) {
+    // Parse: fname(arg1, arg2, ...) from RHS
+    while (*rhs == ' ') rhs++;
+    int fi = 0;
+    while ((isalnum((unsigned char)rhs[fi]) || rhs[fi] == '_') && fi < AML_MAX_NAME - 1) {
+        fname[fi] = rhs[fi]; fi++;
+    }
+    fname[fi] = 0;
+    const char* p = rhs + fi;
+    while (*p == ' ') p++;
+    if (*p != '(') return 0;
+    p++; // skip '('
+    *nargs = 0;
+    while (*p && *p != ')' && *nargs < 8) {
+        while (*p == ' ' || *p == ',') p++;
+        if (*p == ')') break;
+        int ai = 0;
+        int pdepth = 0;
+        while (*p && (pdepth > 0 || (*p != ',' && *p != ')')) && ai < AML_MAX_NAME - 1) {
+            if (*p == '(') pdepth++;
+            if (*p == ')') { if (pdepth > 0) pdepth--; else break; }
+            args[*nargs][ai++] = *p++;
+        }
+        while (ai > 0 && args[*nargs][ai-1] == ' ') ai--;
+        args[*nargs][ai] = 0;
+        (*nargs)++;
+    }
+    return 1;
+}
+
+static int bc_fname_to_opcode(const char* fname) {
+    if (strcasecmp(fname, "seq_embed") == 0) return BC_CALL_SEQ_EMBED;
+    if (strcasecmp(fname, "seq_matvec") == 0) return BC_CALL_SEQ_MATVEC;
+    if (strcasecmp(fname, "seq_rmsnorm") == 0) return BC_CALL_SEQ_RMSNORM;
+    if (strcasecmp(fname, "multi_head_attention") == 0) return BC_CALL_MULTI_HEAD_ATTN;
+    if (strcasecmp(fname, "seq_cross_entropy") == 0) return BC_CALL_SEQ_CROSS_ENTROPY;
+    if (strcasecmp(fname, "add") == 0) return BC_CALL_ADD;
+    if (strcasecmp(fname, "mul") == 0) return BC_CALL_MUL;
+    if (strcasecmp(fname, "silu") == 0) return BC_CALL_SILU;
+    return -1; // unknown
+}
+
+static void bc_compile_line(AML_BytecodeOp* op, const char* text, int idx) {
+    memset(op, 0, sizeof(*op));
+    op->orig_idx = idx;
+
+    // TAPE commands (start with "TAPE ")
+    if (strncasecmp(text, "TAPE ", 5) == 0) {
+        const char* sub = text + 5;
+        while (*sub == ' ') sub++;
+        if (strncasecmp(sub, "START", 5) == 0) { op->opcode = BC_TAPE_START; return; }
+        if (strncasecmp(sub, "CLEAR", 5) == 0) { op->opcode = BC_TAPE_CLEAR; return; }
+        if (strncasecmp(sub, "ACCUM_GRADS", 11) == 0) { op->opcode = BC_TAPE_ACCUM_GRADS; return; }
+        if (strncasecmp(sub, "BACKWARD ", 9) == 0) {
+            op->opcode = BC_TAPE_BACKWARD;
+            sscanf(sub + 9, "%31s", op->args[0]); op->nargs = 1; return;
+        }
+        if (strncasecmp(sub, "PARAM_NO_DECAY ", 15) == 0) {
+            op->opcode = BC_TAPE_PARAM_NO_DECAY;
+            sscanf(sub + 15, "%31s", op->args[0]); op->nargs = 1; return;
+        }
+        if (strncasecmp(sub, "PARAM ", 6) == 0) {
+            op->opcode = BC_TAPE_PARAM;
+            sscanf(sub + 6, "%31s", op->args[0]); op->nargs = 1; return;
+        }
+        if (strncasecmp(sub, "APPLY_ACCUM ", 12) == 0) {
+            op->opcode = BC_TAPE_APPLY_ACCUM;
+            sscanf(sub + 12, "%31s", op->args[0]); op->nargs = 1; return;
+        }
+        if (strncasecmp(sub, "CLIP_GRADS ", 11) == 0 || strncasecmp(sub, "CLIP ", 5) == 0) {
+            op->opcode = BC_TAPE_CLIP_GRADS;
+            const char* a = strchr(sub, ' ');
+            if (a) { while (*a == ' ') a++; snprintf(op->args[0], AML_MAX_NAME, "%s", a); }
+            op->nargs = 1; return;
+        }
+        if (strncasecmp(sub, "ADAMW_STEP ", 11) == 0 || strncasecmp(sub, "ADAMW ", 6) == 0) {
+            op->opcode = BC_TAPE_ADAMW_STEP;
+            const char* a = sub + (sub[5] == '_' ? 11 : 6);
+            sscanf(a, "%31s %31s %31s %31s", op->args[0], op->args[1], op->args[2], op->args[3]);
+            op->nargs = 4; return;
+        }
+        op->opcode = BC_FALLBACK; return;
+    }
+
+    // Assignment: var = expr
+    const char* eq = strchr(text, '=');
+    if (eq && eq > text && eq[1] != '=' && eq[-1] != '!' && eq[-1] != '<' && eq[-1] != '>') {
+        // Extract LHS var name
+        const char* p = text;
+        int ni = 0;
+        while (p < eq && ni < AML_MAX_NAME - 1) {
+            if (!isspace((unsigned char)*p)) op->result[ni++] = *p;
+            p++;
+        }
+        op->result[ni] = 0;
+
+        // Parse RHS as function call
+        const char* rhs = eq + 1;
+        while (*rhs == ' ') rhs++;
+        char fname[AML_MAX_NAME] = {0};
+        if (bc_parse_func_call(rhs, fname, op->args, &op->nargs)) {
+            int opc = bc_fname_to_opcode(fname);
+            if (opc >= 0) { op->opcode = opc; return; }
+        }
+        // Unknown function or not a function call
+        op->opcode = BC_FALLBACK; return;
+    }
+
+    op->opcode = BC_FALLBACK;
+}
+
+void* am_compile(const char* script) {
+    if (!script || !*script) return NULL;
+
+    AM_Compiled* c = (AM_Compiled*)calloc(1, sizeof(AM_Compiled));
+    if (!c) return NULL;
+
+    c->lines = (AML_Line*)malloc(AML_MAX_LINES * sizeof(AML_Line));
+    if (!c->lines) { free(c); return NULL; }
+
+    c->nlines = aml_preprocess(script, c->lines, AML_MAX_LINES);
+    if (c->nlines == 0) { free(c->lines); free(c); return NULL; }
+
+    // Pre-register builtins and functions
+    AML_ExecCtx tmp;
+    memset(&tmp, 0, sizeof(tmp));
+    tmp.lines = c->lines;
+    tmp.nlines = c->nlines;
+    aml_register_builtins(&tmp);
+    aml_register_funcs(&tmp);
+    memcpy(&c->funcs, &tmp.funcs, sizeof(AML_Functab));
+
+    // Compile to bytecode
+    c->ops = (AML_BytecodeOp*)malloc(c->nlines * sizeof(AML_BytecodeOp));
+    if (!c->ops) { free(c->lines); free(c); return NULL; }
+    c->nops = c->nlines;
+    for (int i = 0; i < c->nlines; i++)
+        bc_compile_line(&c->ops[i], c->lines[i].text, i);
+
+    return c;
+}
+
+// ── Bytecode executor — direct dispatch, no string matching ──
+
+// Helper: resolve var to array (inlined, frequent operation)
+static inline AM_Array* bc_get_array(AML_ExecCtx* ctx, const char* name) {
+    AML_Var* v = resolve_var_full(ctx, name);
+    return (v && v->type == AML_TYPE_ARRAY) ? v->array : NULL;
+}
+
+static inline float bc_get_float(AML_ExecCtx* ctx, const char* name) {
+    float val = 0;
+    resolve_var(ctx, name, &val);
+    return val;
+}
+
+static inline void bc_set_array(AML_ExecCtx* ctx, const char* name, AM_Array* arr) {
+    if (arr) symtab_set_array(&ctx->globals, name, arr);
+}
+
+int am_exec_compiled(void* handle) {
+    if (!handle) return 0;
+    AM_Compiled* c = (AM_Compiled*)handle;
+    g_error[0] = 0;
+
+    AML_ExecCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.lines = c->lines;
+    ctx.nlines = c->nlines;
+    memcpy(&ctx.funcs, &c->funcs, sizeof(AML_Functab));
+    persistent_restore(&ctx.globals);
+    aml_register_builtins(&ctx);
+    aml_register_funcs(&ctx);
+
+    for (int i = 0; i < c->nops; i++) {
+        AML_BytecodeOp* op = &c->ops[i];
+        switch (op->opcode) {
+
+        case BC_NOP: break;
+
+        // ── TAPE commands ──
+        case BC_TAPE_START: am_tape_start(); break;
+        case BC_TAPE_CLEAR: am_tape_clear(); break;
+        case BC_TAPE_ACCUM_GRADS: am_tape_accum_grads(); break;
+
+        case BC_TAPE_PARAM:
+        case BC_TAPE_PARAM_NO_DECAY: {
+            AM_Array* arr = bc_get_array(&ctx, op->args[0]);
+            if (arr) {
+                int idx = am_tape_record_param(arr);
+                if (op->opcode == BC_TAPE_PARAM_NO_DECAY && idx >= 0)
+                    g_tape.entries[idx].no_decay = 1;
+            }
+            break;
+        }
+
+        case BC_TAPE_BACKWARD: {
+            AM_Array* arr = bc_get_array(&ctx, op->args[0]);
+            if (arr) {
+                int tidx = tape_find_entry(arr);
+                if (tidx >= 0) am_tape_backward(tidx);
+            }
+            break;
+        }
+
+        case BC_TAPE_APPLY_ACCUM: {
+            int n = (int)bc_get_float(&ctx, op->args[0]);
+            if (n < 1) n = 1;
+            am_tape_apply_accum(n);
+            break;
+        }
+
+        case BC_TAPE_CLIP_GRADS: {
+            float max_norm = bc_get_float(&ctx, op->args[0]);
+            if (max_norm <= 0) max_norm = 1.0f;
+            float norm = am_tape_clip_grads(max_norm);
+            symtab_set(&ctx.globals, "grad_norm", norm);
+            break;
+        }
+
+        case BC_TAPE_ADAMW_STEP: {
+            float lr = bc_get_float(&ctx, op->args[0]);
+            float wd = op->args[1][0] ? bc_get_float(&ctx, op->args[1]) : 0.1f;
+            float b1 = op->args[2][0] ? bc_get_float(&ctx, op->args[2]) : 0.9f;
+            float b2 = op->args[3][0] ? bc_get_float(&ctx, op->args[3]) : 0.95f;
+            am_tape_adamw_step(lr, wd, b1, b2);
+#ifdef USE_CUDA
+            for (int pi = 0; pi < g_tape.count; pi++) {
+                if (g_tape.entries[pi].is_param && g_tape.entries[pi].output)
+                    invalidate_gpu(g_tape.entries[pi].output);
+            }
+#endif
+            break;
+        }
+
+        // ── Array function calls — direct dispatch ──
+
+        case BC_CALL_ADD: {
+            AM_Array* a = bc_get_array(&ctx, op->args[0]);
+            AM_Array* b = bc_get_array(&ctx, op->args[1]);
+            if (a && b) {
+                int n = a->len < b->len ? a->len : b->len;
+                AM_Array* out = am_array_new(n);
+                if (out) {
+#ifdef USE_CUDA
+                    if (a->d_data && a->gpu_valid && b->d_data && b->gpu_valid) {
+                        out->d_data = gpu_alloc(n);
+                        if (out->d_data) { gpu_add(out->d_data, a->d_data, b->d_data, n); out->gpu_valid = 1; goto add_bc_done; }
+                    }
+                    ensure_cpu(a); ensure_cpu(b);
+#endif
+                    for (int j = 0; j < n; j++) out->data[j] = a->data[j] + b->data[j];
+#ifdef USE_CUDA
+                    add_bc_done:
+#endif
+                    if (am_tape_is_active())
+                        am_tape_record(out, AM_OP_ADD, tape_ensure_entry(a), tape_ensure_entry(b), 0);
+                    bc_set_array(&ctx, op->result, out);
+                }
+            }
+            break;
+        }
+
+        case BC_CALL_MUL: {
+            AM_Array* a = bc_get_array(&ctx, op->args[0]);
+            AM_Array* b = bc_get_array(&ctx, op->args[1]);
+            if (a && b) {
+                int n = a->len < b->len ? a->len : b->len;
+                AM_Array* out = am_array_new(n);
+                if (out) {
+#ifdef USE_CUDA
+                    if (a->d_data && a->gpu_valid && b->d_data && b->gpu_valid) {
+                        out->d_data = gpu_alloc(n);
+                        if (out->d_data) { gpu_mul(out->d_data, a->d_data, b->d_data, n); out->gpu_valid = 1; goto mul_bc_done; }
+                    }
+                    ensure_cpu(a); ensure_cpu(b);
+#endif
+                    for (int j = 0; j < n; j++) out->data[j] = a->data[j] * b->data[j];
+#ifdef USE_CUDA
+                    mul_bc_done:
+#endif
+                    if (am_tape_is_active())
+                        am_tape_record(out, AM_OP_MUL, tape_ensure_entry(a), tape_ensure_entry(b), 0);
+                    bc_set_array(&ctx, op->result, out);
+                }
+            }
+            break;
+        }
+
+        case BC_CALL_SILU: {
+            AM_Array* x = bc_get_array(&ctx, op->args[0]);
+            if (x) {
+                AM_Array* out = am_array_new(x->len);
+                if (out) {
+#ifdef USE_CUDA
+                    if (x->d_data && x->gpu_valid) {
+                        out->d_data = gpu_alloc(x->len);
+                        if (out->d_data) { gpu_silu(out->d_data, x->d_data, x->len); out->gpu_valid = 1; goto silu_bc_done; }
+                    }
+                    ensure_cpu(x);
+#endif
+                    for (int j = 0; j < x->len; j++) {
+                        float s = 1.0f / (1.0f + expf(-x->data[j]));
+                        out->data[j] = x->data[j] * s;
+                    }
+#ifdef USE_CUDA
+                    silu_bc_done:
+#endif
+                    if (am_tape_is_active())
+                        am_tape_record(out, AM_OP_SILU, tape_ensure_entry(x), -1, 0);
+                    bc_set_array(&ctx, op->result, out);
+                }
+            }
+            break;
+        }
+
+        // For the heavy ops (seq_matvec, seq_embed, seq_rmsnorm, attention, cross_entropy)
+        // we call the existing interpreter path for that single line — still avoids
+        // all the command parsing overhead, just reuses the array expr implementation
+        case BC_CALL_SEQ_EMBED:
+        case BC_CALL_SEQ_MATVEC:
+        case BC_CALL_SEQ_RMSNORM:
+        case BC_CALL_MULTI_HEAD_ATTN:
+        case BC_CALL_SEQ_CROSS_ENTROPY: {
+            static const char* bc_fnames[] = {
+                [BC_CALL_SEQ_EMBED] = "seq_embed",
+                [BC_CALL_SEQ_MATVEC] = "seq_matvec",
+                [BC_CALL_SEQ_RMSNORM] = "seq_rmsnorm",
+                [BC_CALL_MULTI_HEAD_ATTN] = "multi_head_attention",
+                [BC_CALL_SEQ_CROSS_ENTROPY] = "seq_cross_entropy",
+            };
+            AM_Array* out = aml_array_dispatch(&ctx, bc_fnames[op->opcode], op->args, op->nargs);
+            if (out) bc_set_array(&ctx, op->result, out);
+            break;
+        }
+
+        case BC_FALLBACK:
+        default:
+            aml_exec_line(&ctx, op->orig_idx);
+            break;
+        }
+
+        if (ctx.error[0]) break;
+    }
+
+    persistent_save(&ctx.globals);
+    symtab_clear_arrays(&ctx.globals);
+
+    if (ctx.error[0]) {
+        snprintf(g_error, sizeof(g_error), "%s", ctx.error);
+        return 1;
+    }
+    return 0;
+}
+
+void am_free_compiled(void* handle) {
+    if (!handle) return;
+    AM_Compiled* c = (AM_Compiled*)handle;
+    if (c->lines) free(c->lines);
+    if (c->ops) free(c->ops);
+    free(c);
 }
 
 int am_exec_file(const char* path) {

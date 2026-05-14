@@ -20,9 +20,17 @@
 
 #include <stdlib.h>  // for rand(), RAND_MAX
 #include <math.h>    // for fabsf, sinf, sqrtf, fmaxf, fminf, expf
-
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+// Compiled script execution
+void* am_compile(const char* script);
+int am_exec_compiled(void* cs);
+void am_free_compiled(void* cs);
+
+#ifdef __cplusplus
+}
 #endif
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -260,6 +268,10 @@ typedef struct {
     // v4.0 Phase 2: matrix shape (0,0 = 1D array; rows>0, cols>0 = 2D matrix)
     int    rows;
     int    cols;
+#ifdef USE_CUDA
+    float* d_data;    // GPU device pointer
+    int    gpu_valid;  // 1 = GPU copy is current
+#endif
 } AM_Array;
 
 // Preprocessed line
@@ -414,6 +426,32 @@ float am_compute_prophecy_debt(const float* logits, int chosen, int n);
 void am_apply_field_to_logits(float* logits, int n);
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FIELD STATE PERSISTENCE — save/load AM_State G across sessions
+//
+// Inferences (yent.aml, resonance.aml, jannus-r) carry no memory between runs
+// without this — every am_init resets chambers, scars, prophecy debt, calendar
+// snapshots, etc. am_field_save dumps the whole AM_State to a binary file
+// (magic "AMSO" + version + sizeof + timestamp + raw struct); am_field_load
+// reads it back, refusing if version or sizeof differ (recompiled libaml).
+//
+// Bound to top-level AML directives:
+//     LOAD "path.soma"   → am_field_load(path)
+//     SAVE "path.soma"   → am_field_save(path)
+//
+// File format (little-endian):
+//     [0..3]   magic        "AMSO"           (0x4F534D41)
+//     [4..7]   version      uint32           (currently 1)
+//     [8..11]  state_size   uint32           (sizeof(AM_State))
+//     [12..19] timestamp    uint64           (UTC seconds)
+//     [20..]   raw AM_State bytes
+//
+// Returns 0 on success, negative on failure (with stderr message).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+int am_field_save(const char* path);
+int am_field_load(const char* path);
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // NOTORCH — Hebbian plasticity without PyTorch
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -565,6 +603,10 @@ const AM_Pipe* am_pipe_get(int idx);
 #define AM_OP_CAUSAL_ATTN   14  // causal self-attention over T positions
 #define AM_OP_SEQ_CROSSENT  15  // cross-entropy over T positions
 #define AM_OP_MH_CAUSAL_ATTN 16 // multi-head causal self-attention
+#define AM_OP_GELU          17  // y = 0.5*x*(1 + tanh(sqrt(2/pi)*(x + 0.044715*x^3)))
+#define AM_OP_DROPOUT       18  // y = x * mask (inverted dropout, train-mode only)
+#define AM_OP_LAYERNORM     19  // y = gamma*(x-mean)/sqrt(var+eps) + beta
+#define AM_OP_SEQ_LAYERNORM 20  // layernorm per T positions of size D
 
 typedef struct {
     AM_Array* output;       // forward result (owned by tape)
@@ -576,14 +618,65 @@ typedef struct {
     float     aux;          // auxiliary scalar (target index for CE, scale for SCALE, T for seq ops)
     float     aux2;         // second auxiliary (D for seq ops, V for seq_cross_entropy)
     int       is_param;     // 1 = this is a trainable parameter (not freed on CLEAR)
+    int       no_decay;     // 1 = skip weight decay for this param (embeddings)
 } AM_TapeEntry;
 
 // Adam optimizer state per parameter
 typedef struct {
     AM_Array* m;            // first moment (mean of gradients)
     AM_Array* v;            // second moment (mean of squared gradients)
+    AM_Array* acc_grad;     // accumulated gradients for grad accumulation (NULL when not used)
     int       t;            // timestep counter
 } AM_AdamState;
+
+// Chuck optimizer — self-aware Adam (github.com/ariannamethod/chuck-optimizer)
+// θ -= (α × λ × λ_l) × m̂/(√v̂ + ε) + η
+// Level 1: Global loss trend (λ)      — 16-step window, dampen/boost
+// Level 2: Per-param grad norm (λ_l)  — per-param modulation + freeze
+// Level 3: Stagnation escape (η)      — noise injection after plateau
+
+// Synced with PyTorch chuck.py (iamolegataeff/chuck.optimizer) 2026-04-06
+#define CHUCK_WINDOW       16
+#define CHUCK_DAMP_LO      0.3f
+#define CHUCK_DAMP_HI      2.0f
+#define CHUCK_DAMP_DOWN    0.97f     // was 0.95, PyTorch = 0.97 (less aggressive)
+#define CHUCK_DAMP_UP      1.03f     // was 1.05, PyTorch = 1.03 (less aggressive)
+#define CHUCK_TREND_BRAKE  0.02f     // loss rising > 2% → brake
+#define CHUCK_TREND_PUSH  -0.02f     // loss falling > 2% → push (symmetric)
+#define CHUCK_STAG_THRESH  0.001f
+#define CHUCK_STAG_STEPS   8
+#define CHUCK_NOISE_MAG    0.001f
+#define CHUCK_NOISE_DECAY  0.9f      // exponential noise decay per step
+#define CHUCK_FREEZE_THRESH 0.01f
+#define CHUCK_MACRO_INT    1000      // was 500, PyTorch = 1000
+#define CHUCK_MACRO_PAT    3
+#define CHUCK_MACRO_DECAY  0.5f
+#define CHUCK_MEAN_REVERT  0.999f    // dampen → 1.0 EMA (prevents drift)
+
+typedef struct {
+    float grad_hist[CHUCK_WINDOW];  // gradient norm history (ring buffer)
+    float dampen;                   // per-param λ_l multiplier
+    int   frozen;                   // 1 = param converged, skip updates
+    int   pos;                      // ring buffer write position
+    int   full;                     // buffer fully populated?
+    int   stag;                     // stagnation counter for this param
+} AM_ChuckParamState;
+
+typedef struct {
+    float loss_hist[CHUCK_WINDOW];  // loss history (ring buffer)
+    float dampen;                   // global λ multiplier
+    float noise;                    // stagnation noise η magnitude
+    float loss_ema;                 // EMA-smoothed loss (batch noise filter, α=0.01)
+    float macro_ema;                // slow EMA (α=0.001) for epoch-scale trend
+    float best_macro;               // best macro_ema seen (for patience)
+    float lr_scale;                 // macro LR multiplier (patience decay)
+    int   macro_stag;               // macro patience counter
+    int   global_step;              // total steps (for macro interval check)
+    int   pos;                      // ring buffer write position
+    int   full;                     // buffer fully populated?
+    int   stag;                     // global stagnation counter
+    int   initialized;              // 1 after first loss recorded
+} AM_ChuckState;
 
 typedef struct {
     AM_TapeEntry entries[AM_TAPE_MAX_ENTRIES];
@@ -593,6 +686,10 @@ typedef struct {
     // Parameter registry for Adam
     AM_AdamState adam[AM_TAPE_MAX_PARAMS];
     int          n_params;
+
+    // Chuck optimizer state (survives TAPE CLEAR, same as Adam)
+    AM_ChuckState      chuck;
+    AM_ChuckParamState chuck_params[AM_TAPE_MAX_PARAMS];
 } AM_Tape;
 
 // Tape API
@@ -604,13 +701,46 @@ int  am_tape_record3(AM_Array* output, int op, int p1, int p2, int p3, float aux
 int  am_tape_record_param(AM_Array* param);
 void am_tape_backward(int loss_idx);
 void am_tape_adam_step(float lr);
+void am_tape_adamw_step(float lr, float weight_decay, float beta1, float beta2);
+float am_tape_clip_grads(float max_norm);
+void am_tape_accum_grads(void);   // save param grads to acc_grad buffer (for grad accumulation)
+void am_tape_apply_accum(int n_accum); // apply accumulated grads (divide by n_accum, copy to entries)
+void am_tape_chuck_step(float lr, float loss_val);
 AM_Tape* am_tape_get(void);
 
+// Save/Load params to binary file. All tape entries marked is_param are written
+// in tape-order. Load verifies magic + per-param length, writes into existing
+// param arrays in tape-order. Model layout must match between save and load.
+int am_tape_save(const char* path);
+int am_tape_load(const char* path);
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// NaN/Inf GUARD — detect divergence in param grads, dynamic loss scaling.
-// Mirrored from canonical AML faa4d9b 2026-04-16. API-only pull at this stage;
-// not wired into molequla's aml_trainer.go generated script until verified
-// needed on a RunPod measurement (Phase C).
+// LR SCHEDULE — cosine / step / linear decay with warmup
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#define AM_SCHED_NONE     0
+#define AM_SCHED_COSINE   1   // cosine annealing to min_lr
+#define AM_SCHED_STEP     2   // multiply by gamma every step_size steps
+#define AM_SCHED_LINEAR   3   // linear decay to min_lr
+
+typedef struct {
+    int   type;               // AM_SCHED_*
+    float base_lr;            // starting learning rate
+    float min_lr;             // floor
+    int   warmup_steps;       // linear warmup from min_lr to base_lr
+    int   total_steps;        // for cosine/linear: total training steps
+    int   step_size;          // decay every N steps (AM_SCHED_STEP)
+    float step_gamma;         // multiply factor (AM_SCHED_STEP, default 0.1)
+    int   current_step;       // internal counter
+} AM_Schedule;
+
+AM_Schedule am_schedule_cosine(float base_lr, int warmup_steps, int total_steps, float min_lr);
+AM_Schedule am_schedule_step(float base_lr, int warmup_steps, int step_size, float gamma);
+AM_Schedule am_schedule_linear(float base_lr, int warmup_steps, int total_steps, float min_lr);
+float am_schedule_get_lr(AM_Schedule* s);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NaN/Inf GUARD — detect divergence, auto loss scaling
 // ═══════════════════════════════════════════════════════════════════════════════
 
 typedef struct {
@@ -623,10 +753,16 @@ typedef struct {
 } AM_NanGuard;
 
 AM_NanGuard am_nan_guard_new(void);
-// Returns 1 if clean, 0 if NaN/Inf detected. On NaN: zeros all param grads,
-// halves loss_scale (floor 1.0). On clean: increments stable_steps, doubles
-// loss_scale every scale_window clean steps.
+// Returns 1 if clean, 0 if NaN/Inf detected. On NaN: zeros grads, halves loss_scale.
+// On clean: increments stable_steps, doubles loss_scale every scale_window steps.
 int am_nan_guard_check(AM_NanGuard* guard);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRAINING MODE — global flag consulted by dropout and similar training-only ops
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void am_train_mode(int training);   // 1 = training, 0 = eval
+int  am_is_training(void);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ASYNC (v4.0 Phase 4) — SPAWN/AWAIT/CHANNEL
@@ -907,5 +1043,9 @@ void am_persistent_clear(void);
 #ifdef __cplusplus
 }
 #endif
+
+
+// Compiled script execution — parse once, execute many
+
 
 #endif // ARIANNAMETHOD_H
