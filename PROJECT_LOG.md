@@ -1543,3 +1543,152 @@ Codex audit on plan v2 update + watchdog: two findings (PID file
 path mismatch, 90-min vs 8h pass criterion mismatch), both folded
 in same commit. Final codex pass clean.
 
+
+---
+
+## 2026-05-14 (PM, pod live) — Phase 1 sweep on A40 + EOS-mask regression
+
+### Pod setup
+
+Pod `pqp86pfbfy9wo9` resume failed: A100 SXM global capacity exhausted
+across all 10 DCs (per `memory/milestone_polygon_arianna_inference_2026_05_14.md`,
+same window). 3 retries all returned `"There are not enough free GPUs on the host
+machine to start this pod."`. Sibling Neo session running
+`n63dfughdyxsde` (nanollama-arianna-mh-fwd) on cheaper GPU.
+
+Migrated: fresh pod `mpw33bhmeyybrm`, A40 SECURE, $0.44/hr, 9 vCPU,
+50 GB RAM, 50 GB volume, location CA. Image
+`runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04`. SSH keys
+auto-injected from account (4 keys including `neo@ataeff`).
+
+Toolchain bootstrap on pod:
+- apt-get install golang-go libopenblas-dev (then replaced go1.18 with
+  go 1.22.5 from go.dev tarball — go.mod requires 1.21).
+- nvcc 11.8 present at `/usr/local/cuda/bin/nvcc`.
+- libcudart.so + libcublas.so present at `/usr/local/cuda/lib64/`.
+
+Phase 0.5 build:
+- `nvcc -O2 -DUSE_CUDA -Xcompiler -fPIC -c notorch_cuda.cu -o notorch_cuda.o`
+  (the `-DUSE_CUDA` guard is required — `notorch_cuda.h:71-72`
+  `GPU_WeightSlot` typedef + `GPU_MAX_WEIGHTS` define are inside
+  `#ifdef USE_CUDA`, omitting the flag fails compile).
+- `make` produced `libaml.so` (233 KB).
+- `go build -tags cgo` produced `molequla_cgo` (9.95 MB).
+- Zero-warmup smoke (`--corpus-overlay --zero-warmup`) emitted coherent
+  embryo voice: «What is a music?» / «kilometers percentrates the
+  countrying muches the earth's a delt?» / «running a music, and eclipse?».
+  Phase 0.5 PASS.
+
+### Phase 1 sweep run #1 (commit `b7e2f01`, 5 cells)
+
+Per-cell 10-min, isolated workdirs `/workspace/runs/sweep/work_cell_$cell`.
+
+| Cell | FLAGS | Status |
+|---|---|---|
+| 0 | (none) | PASS — coherent fragments at embryo + infant |
+| 1 | `--spa-gate` | PASS — coherent fragments (overlay off, SPA only logs) |
+| 2 | `--corpus-overlay` | **FAIL** — empty answers («A: ?» / «A: ...») at embryo + infant |
+| 3 | killed mid-run after cell-2 regression diagnosed |
+| 4 | skipped pending fix |
+
+### EOS-mask regression — root cause + fix
+
+Cell 2 stage 0 / stage 1 emit «...» for every probe. Cell 0 (no overlay)
+stage 0 emits «You show started of the square an cool air?» —
+coherent. Comparison shows overlay path broke after the 400-step
+warmup the loop does at each stage.
+
+Diagnosis:
+- After warmup, `mean|logit| > 1.0` → `untrainedRegime = false`
+  (`molequla.go:4346`).
+- The greedy-first-10 path that excludes EOS (`molequla.go:4357-4396`)
+  is bypassed.
+- Normal sampling path: hard top-K=15 mask + softmax + multinomial.
+  `overlay` adds `c_bg=5 * bigram_prob[i]` — for token sequences
+  ending in `.`, `bigram[period][EOS]` is high enough in
+  `nonames_*.txt` corpora to put EOS in the top-15 raw logits.
+- Sampling picks EOS → `if nxt == eosID && step >= MinGenTokens
+  break; if nxt == eosID continue` (`molequla.go:4505-4510`) skips
+  the append → `outIDs` stays empty across the whole generation →
+  decode returns "" → caller substitutes "...".
+
+Fix (commit `2bc1176`):
+
+```go
+// Exclude EOS from top-K selection AND mask EOS to -1e10. Generation
+// terminates via the `. ! ?` punctuation rule (molequla.go:~4530)
+// once a real sentence-end appears — EOS is redundant for
+// overlay-driven generation.
+for i, v := range overlaidLogits {
+    if i == eosID { continue }
+    if v > topVals[topK-1] { ... }
+}
+threshold := topVals[topK-1]
+for i, v := range overlaidLogits {
+    if i == eosID || v < threshold {
+        scaled[i] = -1e10
+    } else {
+        scaled[i] = v / temp
+    }
+}
+```
+
+Verified zero-warmup smoke on neo (`/tmp/molequla_smoke_*` post-rebuild)
+still coherent — fragment length actually grew because EOS no longer
+truncates mid-stride.
+
+### Phase 1 sweep run #2 (commit `2bc1176`, cells 2/3/4 only)
+
+In progress on pod. Cell 0/1 reused from run #1 (no overlay path
+touched, regression-safe).
+
+
+### Sweep iterations + overlay-warmed regression
+
+Sweep cycles v1→v5 chasing overlay coherence post-warmup:
+
+| v | Commit | Fix | Cell 2 voice |
+|---|---|---|---|
+| v1 | b7e2f01 | initial overlay | empty («A: ...») after 400-step warmup |
+| v2 | 2bc1176 | EOS-mask in top-K | empty still (different reason — EOS not in mask but logits gated 0.33) |
+| v3 | 770fb9f | gate-conditional (gate untrained only) | subword salad («,iieriying the isa?yenanan?») |
+| v4 | 76be641 | hard-mask only untrained | empty («A: .» / «A: ...») |
+| v5 | 969a8aa | overlay self-disable warmed (mag>1.0) | still subword salad — untrainedRegime stays TRUE at embryo even post-400-step warmup because mag~0.5 seeded wte after gradient remains below 1.0 threshold |
+
+**Structural finding (4 iterations on pod, ~$0.30 burned):** Q's overlay
+formulation (additive raw bigram_prob * c_bg=5/15) on a 16-dim BPE
+subword vocab interacts badly with gradient-warmed wte. Post-warmup
+the transformer learns to assign mass to word-level merge tokens; the
+overlay adds bias to bigram-successor subwords (mostly short BPE
+fragments). Hard top-K and soft sampling both collapse the chain to
+subword level. Zero-warmup retains seeded structure cleanly because
+no gradient has perturbed wte yet; overlay drives word-level chain
+through clean Hebbian seeding + greedy bootstrap.
+
+**Proper fix (deferred):** sigmoid-blend (postgpt.c:949-952) — 
+`logits = 0.5*transformer + 0.5*metaweight` instead of additive. 
+Preserves transformer's word-level distribution while mixing corpus
+prior. Requires overlay function refactor; not done under pod-clock
+pressure.
+
+**Pragmatic compromise for Phase 2:** drop `--corpus-overlay`. Cells
+0/1 baseline + rep-penalty simplification (b7e2f01) already kills
+the lock-in pattern observed in pre-Q `runpod/2026-05-14/
+organism_voice_samples_2026_05_14/*.txt` («The work is the most of
+the most…»). Cell 1 stage 0 v1 produced «Those to outer cool, and
+shape river in num?» — Karpathy-style but coherent.
+
+### Phase 2 launch
+
+Ecology started 2026-05-14 **13:31:30 UTC** on pod `mpw33bhmeyybrm`.
+4 organisms (earth/air/water/fire) in `/workspace/runs/eco/work_$e/`:
+- PIDs `7037 / 7110 / 7183 / 7268`
+- Flags `--evolution --element $e --spa-gate` (no `--corpus-overlay`)
+- 8h timer → expected DONE ~**21:31:30 UTC**
+
+Watchdog `pod_watchdog.sh` running pid 7795, polling every 30s,
+emitting FAIL / HEARTBEAT_STALE / RSS_HIGH / DEAD / DISK_LOW events
+to `/workspace/runs/eco/watchdog.log`. neo-side `Monitor` tool tails
+both `watchdog.log` and `eco_master.log` via SSH, filters and emits
+per-event chat notifications.
+
