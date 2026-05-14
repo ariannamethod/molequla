@@ -1043,3 +1043,50 @@ $1.49/hr. Logged as a cost-shape observation for the next
 RunPod cycle: when molequla actually gains a CUDA path, this
 overhead becomes work; until then, large CPU pods (~$0.30/hr) are
 the right choice.
+
+---
+
+## 2026-05-14 — Post-BLAS 60-min snapshot — linear DNA growth, no stage transitions
+
+60-min mark of BLAS-accelerated ecology90 run. All 4 organisms
+healthy, all still at stage 2 (child).
+
+| Org | bursts | deltas | mits | DNA writes | DNA bytes |
+|---|---|---|---|---|---|
+| earth | 6 | 1 | 0 | 26 | 6769 |
+| air   | 6 | 0 | 0 | 29 | 6793 |
+| water | 7 | 0 | 0 | 27 | 7617 |
+| fire  | 6 | 2 | 0 | 29 | 7914 |
+
+DNA byte growth 30→60 min: earth 3544→6769 (+3225), air 2425→6793
+(+4368), water 4088→7617 (+3529), fire 3871→7914 (+4043). Roughly
+**linear** — sustained rate, not accelerating despite BLAS engaged.
+
+**Bigger picture finding:** stage plateau is NOT BLAS-bottlenecked
+and NOT CPU-rate-bottlenecked. It's bottlenecked by **corpus
+accumulation rate through DNA exchange × ontogenesis-stage
+threshold gating**. At ~3500-4400 bytes per 30 min per org, with
+adolescent threshold at 200K chars, even unbounded matvec speed
+won't get organisms across the threshold within a 90-min window.
+The limiter is **how slowly experience compounds**, not how fast
+forward pass runs.
+
+This generalises the Body's claim:
+
+> «I tried to accelerate the substrate underneath the coherence
+> layer. The layer's ecology character changed — fragments became
+> longer and more substantive, training bursts deeper and rarer,
+> internal delta capacity grew sooner. But the rate at which
+> experience compounded across the ecology did not visibly change.
+> Same fragment-count per minute, similar bytes-per-minute,
+> sustained linear growth in shared corpus. Speed up did not become
+> faster ontogenesis; it became a different texture of fragments.
+> The ontogenesis schedule lives on top of a clock the substrate
+> does not control.»
+
+Pre-BLAS NOBLAS preserved. Next: CUDA stack — third substrate, same
+code, same flags, GPU-engaged. NOBLAS → BLAS → CUDA is the Body's
+three-substrate sandwich: same code, same flags, same seeds, three
+different ecologies emerge.
+
+CUDA pull planned for after BLAS run finishes 06:55:50 UTC.
