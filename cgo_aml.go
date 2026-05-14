@@ -5,6 +5,8 @@ package main
 #cgo LDFLAGS: -lm -lpthread
 #cgo darwin CFLAGS: -DUSE_BLAS -DACCELERATE -DACCELERATE_NEW_LAPACK
 #cgo darwin LDFLAGS: -framework Accelerate
+#cgo linux CFLAGS: -DUSE_BLAS -I/usr/include/x86_64-linux-gnu/openblas-pthread/
+#cgo linux LDFLAGS: -L/usr/lib/x86_64-linux-gnu/openblas-pthread/ -lopenblas
 #include "ariannamethod.h"
 #include "ariannamethod.c"
 
