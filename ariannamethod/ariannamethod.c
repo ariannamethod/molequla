@@ -3911,6 +3911,82 @@ static AM_Array* aml_try_array_expr(AML_ExecCtx* ctx, const char* rhs) {
         return NULL;
     }
 
+    // spa_embed(token_ids, W, D, alpha) — Sentence Phonon Attention embedding.
+    // Exponentially weighted mean of token embeddings (alpha^(n-1-i)), then L2 normalize.
+    // Returns a single [D]-vector per sentence. W is flat [V*D] row-major.
+    // SPA is forward-only by design — "coherence without training".
+    // Mirrored from canonical AML ef52cde 2026-04-16; matches reference in
+    // ~/arianna/q/postgpt_q.c (Q's third pillar). For molequla Phase B
+    // coherence layer: weightless cross-sentence repair pass after the
+    // generation chain — closes the early-stage Karpathy-gibberish gap
+    // without retraining.
+    if (strcasecmp(fname, "spa_embed") == 0 && nargs >= 4) {
+        AML_Var* vt = resolve_var_full(ctx, arg_strs[0]); // token ids (floats cast to int)
+        AML_Var* vW = resolve_var_full(ctx, arg_strs[1]); // embedding matrix, flat
+        int D = (int)ctx_float(ctx, arg_strs[2]);
+        float alpha = ctx_float(ctx, arg_strs[3]);
+        if (!vt || vt->type != AML_TYPE_ARRAY || !vt->array) return NULL;
+        if (!vW || vW->type != AML_TYPE_ARRAY || !vW->array) return NULL;
+        if (D <= 0) return NULL;
+        int n = vt->array->len;
+        int V = vW->array->len / D;
+        AM_Array* out = am_array_new(D);
+        if (!out) return NULL;
+        float total_w = 0;
+        for (int i = 0; i < n; i++) {
+            int id = (int)vt->array->data[i];
+            if (id < 0 || id >= V) continue;
+            float w = powf(alpha, (float)(n - 1 - i));
+            const float* row = vW->array->data + (size_t)id * D;
+            for (int d = 0; d < D; d++) out->data[d] += w * row[d];
+            total_w += w;
+        }
+        if (total_w > 0) for (int d = 0; d < D; d++) out->data[d] /= total_w;
+        // L2 normalize
+        float norm = 0;
+        for (int d = 0; d < D; d++) norm += out->data[d] * out->data[d];
+        norm = 1.0f / sqrtf(norm + 1e-8f);
+        for (int d = 0; d < D; d++) out->data[d] *= norm;
+        return out;
+    }
+
+    // spa_connectedness(E, S, D[, bias]) — SPA cross-attention.
+    // Given S stacked sentence embeddings (flat [S*D] row-major), computes
+    // connectedness score per sentence:
+    //   scores[i] = sum_{j != i} exp(E_i · E_j / sqrt(D) + bias[|i-j|]).
+    // bias is an optional [S]-sized array indexed by distance; zero bias if omitted.
+    if (strcasecmp(fname, "spa_connectedness") == 0 && nargs >= 3) {
+        AML_Var* vE = resolve_var_full(ctx, arg_strs[0]);
+        int S = (int)ctx_float(ctx, arg_strs[1]);
+        int D = (int)ctx_float(ctx, arg_strs[2]);
+        if (!vE || vE->type != AML_TYPE_ARRAY || !vE->array) return NULL;
+        if (S <= 0 || D <= 0 || S * D > vE->array->len) return NULL;
+        AM_Array* bias_arr = NULL;
+        if (nargs >= 4) {
+            AML_Var* vb = resolve_var_full(ctx, arg_strs[3]);
+            if (vb && vb->type == AML_TYPE_ARRAY && vb->array) bias_arr = vb->array;
+        }
+        AM_Array* out = am_array_new(S);
+        if (!out) return NULL;
+        float inv_sd = 1.0f / sqrtf((float)D);
+        for (int i = 0; i < S; i++) {
+            const float* ei = vE->array->data + (size_t)i * D;
+            float total_attn = 0;
+            for (int j = 0; j < S; j++) {
+                if (i == j) continue;
+                const float* ej = vE->array->data + (size_t)j * D;
+                float dot = 0;
+                for (int d = 0; d < D; d++) dot += ei[d] * ej[d];
+                dot *= inv_sd;
+                int dist = (i > j) ? (i - j) : (j - i);
+                if (bias_arr && dist < bias_arr->len) dot += bias_arr->data[dist];
+                total_attn += expf(dot);
+            }
+            out->data[i] = total_attn;
+        }
+        return out;
+    }
+
     // relu(x) — ReLU activation
     if (strcasecmp(fname, "relu") == 0 && nargs >= 1) {
         AML_Var* vx = resolve_var_full(ctx, arg_strs[0]);

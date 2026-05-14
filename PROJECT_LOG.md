@@ -467,3 +467,270 @@ ERROR: 'make simd' requires x86_64 with AVX2 (Intel/Linux).
 - All on default build PASS; SIMD path verify deferred to polygon.
 
 **Ready for Phase B.**
+
+---
+
+## 2026-05-14 — Phase B1 in flight — SPA wiring
+
+### B1 step 1 — pull SPA ops into vendored AML — DONE
+
+**Canonical reference:** commit `ef52cde` 2026-04-16 «add SPA — Sentence Phonon Attention (forward-only)» in `~/arianna/ariannamethod.ai/core/ariannamethod.c`.
+
+**Patches applied:** `ariannamethod/ariannamethod.c` — inserted two AML built-in dispatch ops in `aml_array_dispatch`, just before the `relu` op (line ~3914):
+- `spa_embed(token_ids, W, D, alpha)` — exponentially weighted mean of token embeddings (`alpha^(n-1-i)`) + L2 normalize. Returns single [D]-vector per sentence.
+- `spa_connectedness(E_stacked, S, D[, bias])` — bidirectional cross-attention score per sentence: `scores[i] = sum_{j ≠ i} exp(E_i · E_j / sqrt(D) + bias[|i-j|])`.
+- Both verbatim from canonical, +78 lines total. Forward-only, weightless by design — no tape recording, no backward.
+
+**Build verification (neo, USE_BLAS + ACCELERATE):**
+- `make clean && make` PASS.
+- `libaml.dylib` 230288 → **246800 bytes** (+16512). No new warnings.
+
+### B1 step 2 — Go-side SPA helper — DONE (skeleton, not yet wired)
+
+**New file: `~/arianna/molequla/spa_coherence.go`** (~120 lines pure Go).
+
+Why pure Go, not AML/CGO routing: SPA math is trivial (embed + L2 + cross-attention dot products). Per-sentence `amlExec` + script-string building + element-wise array assignment in AML script would add CGO crossings and a fragile string-builder pattern for negligible expressive gain. AML still carries the ops for AML-script consumers per parallel-stack consistency (B1 step 1).
+
+**API surface:**
+- `SPACoherenceScores(W []float32, sentenceTokens [][]int, D int, alpha float32) []float32` — returns S connectedness scores. Mirrors canonical AML math exactly (verbatim port).
+- `SPAWeakSentences(scores []float32) []int` — applies Q's reseed gate (sentence weak iff score < 0.6 × mean). Empty result = all passed.
+- `SPAWeakThresholdRatio = 0.6` — Q's default; tunable later.
+
+**Go build verification (neo):** `CGO_ENABLED=1 go build -tags cgo` PASS, binary 10.4 MB. `spa_coherence.go` compiles cleanly with the rest of molequla.
+
+### B1 step 3 — wire SPA call into generation path — NOT STARTED
+
+**Hook point candidate:** post-`GenerateResonant` step in `~/arianna/molequla/molequla.go:4196`. After response text is returned, split into sentences via `extractCandidateSentences` (line 3423), tokenize each, call `SPACoherenceScores`, identify weak sentences via `SPAWeakSentences`, optionally reseed.
+
+**Reseed strategy (per Q `q/README.md:177-179`):** weak sentence i → take last 3 tokens of sentence i-1 (or i+1 if i==0) as new prompt → regenerate sentence → re-score → accept if improved (coherence gate).
+
+**Behavior change risk:** non-trivial. Wiring SPA into production `GenerateResonant` changes generation output. Should be **gated by config flag** (e.g. `CFG.SPACoherenceGate bool`, default false) so RunPod measurement run can compare before/after on the same weights / prompts / seeds.
+
+**Decision pending:** wire now (config-gated default-off) or defer to Phase C RunPod-plan step where the measurement plan defines the toggle.
+
+### B1 step 3 — gated wiring in `GenerateResonant` — DONE
+
+Oleg 2026-05-14: «без пауз, ебашим» → wire now, config-gated default-off.
+
+**Patches:**
+
+1. **`molequla.go` Config struct (line ~77):** added two fields:
+   ```go
+   SPACoherenceGate  bool    `json:"spa_coherence_gate"`
+   SPAEmbedAlpha     float32 `json:"spa_embed_alpha"`
+   ```
+2. **`molequla.go` CFG defaults (line ~206):**
+   ```go
+   SPACoherenceGate:     false,    // off by default — paper RunPod toggles on
+   SPAEmbedAlpha:        0.85,     // Q's default (q/README.md:179)
+   ```
+3. **`molequla.go` GenerateResonant (line ~4429):** inserted SPA pass block just before `return response`:
+   - Decode response into text once (was twice-decoded before; cleaner).
+   - If `CFG.SPACoherenceGate` is set: split response on `.` / `!` / `?` boundaries (min 4 chars), tokenize each sentence via `tok.Encode`, flatten `model.Base["wte"]` rows into `[V*D]float32`, call `SPACoherenceScores` → `SPAWeakSentences`, log `[spa-gate] S=... D=... alpha=... scores=... weak=...` to stderr.
+   - Returns the original `response` unchanged. **No behaviour change to generated text.**
+
+**Why log-only (not reseed):** reseed of weak sentences requires `GenerateResonant` restructuring to regenerate individual sentences with neighbor-context prompts, then splice back into the response. That's a structural change with multi-call accounting (KV-cache reset, repetition guard reset, conscience-α reset) — Phase C activation step backed by a measurement plan. The gated log gives RunPod a comparable signal in transcripts without touching molequla's generation invariants.
+
+**Build verification (neo, USE_BLAS + ACCELERATE):**
+- `CGO_ENABLED=1 go build -tags cgo` PASS, binary 10.4 MB (`/tmp/molequla_b1_check` 10407794 bytes).
+- `make clean && make` in `ariannamethod/` PASS. `libaml.dylib` 246800 bytes (unchanged — AML side already had ops from step 1).
+- No new warnings.
+
+### B1 complete. Going straight to B2 — metaweights overlay calibration.
+
+---
+
+## 2026-05-14 — Phase B2 DONE — Q-style additive metaweights logit overlay (gated)
+
+**Why this layer:** molequla's existing corpus blend in `GenerateResonant`
+(line ~4334) lives in **probability space**: convex `tokenAlpha·modelProbs +
+(1-tokenAlpha)·corpusProbs` weighted by sigmoid-fade. Q's overlay lives
+in **logit space**: additive bias before softmax with explicit
+coefficients per signal class
+(`q/README.md:50` — `logits += c_heb·H + c_pro·F + c_ds·A + c_bg·bigram + c_tg·trigram`).
+
+Different mechanic with different sharpness — logit-space addition lets a
+strong corpus signal dominate model preferences in a way prob-space
+convex blend cannot. Useful precisely when transformer is immature
+(early ontogenesis stages) and statistical priors should lead.
+
+**Scope landed:** bigram + trigram only — these are already computed
+from `field.TrigramByContext` and `field.BigramByFirst` (CooccurField
+data already in scope at the `GenerateResonant` site). Hebbian, prophecy,
+destiny defer to a later iteration (would require adding
+prophecy/destiny vectors to molequla's runtime — out of paper-cycle
+scope).
+
+**Patches in `molequla.go`:**
+
+1. **Config struct (line ~85):** added four fields:
+   ```go
+   CorpusLogitOverlay     bool    `json:"corpus_logit_overlay"`
+   MetaCBigram            float64 `json:"meta_c_bigram"`
+   MetaCTrigram           float64 `json:"meta_c_trigram"`
+   MetaLogitOverlayFloor  float64 `json:"meta_logit_overlay_floor"`
+   ```
+2. **CFG defaults (line ~210):**
+   ```go
+   CorpusLogitOverlay:    false,
+   MetaCBigram:           15.0,   // Q's weightless default (q/README.md:53)
+   MetaCTrigram:          10.0,
+   MetaLogitOverlayFloor: 1e-6,   // log-prob floor for unseen tokens
+   ```
+3. **`GenerateResonant` pre-softmax (line ~4288):** added gated overlay block.
+   - When `CFG.CorpusLogitOverlay && field != nil && len(ids) >= 1`:
+     - Compute trigram counts from `field.TrigramByContext[[2]int{ids[-2], ids[-1]}]` (if 2+ context tokens) and bigram counts from `field.BigramByFirst[ids[-1]]`.
+     - Build `overlaidLogits := copy(logits.Data)`, then for each vocab token `i`:
+       `overlaidLogits[i] += c_bg·log(bigram_prob_i) + c_tg·log(trigram_prob_i)`, with `log_floor = log(MetaLogitOverlayFloor)` for unseen tokens (prevents `-inf` mask).
+   - When off: `overlaidLogits` is a zero-cost alias to `logits.Data`.
+   - `scaled[i] = overlaidLogits[i] / temp` uses the overlay version.
+4. **Dissonance re-scale (line ~4328):** updated to read from `overlaidLogits` instead of raw `logits.Data` so the overlay survives a dissonance-triggered re-scale. No-op when overlay is off (alias).
+
+**Coexistence with existing post-softmax prob-blend:** the legacy
+sigmoid-fade convex blend (lines ~4334-4391) stays unchanged. When
+overlay is on, both signals layer: logit-space corpus bias before
+softmax, then post-softmax convex blend with the same data source. This
+is **additive**, not replacement — observed signal in RunPod measurement
+will tell whether we need to disable the post-softmax leg when overlay
+is on.
+
+**Build verification (neo):** `CGO_ENABLED=1 go build -tags cgo` PASS,
+binary 10407794 bytes. No new warnings, no regressions.
+
+**Default behaviour unchanged.** With `CorpusLogitOverlay=false`, neither
+the overlay block executes nor the dissonance re-scale path differs from
+pre-B2 code — `overlaidLogits` is literally `logits.Data` (Go slice
+aliasing).
+
+---
+
+## 2026-05-14 — Phase B complete
+
+| Step | Landed | Behaviour change (default) |
+|---|---|---|
+| B1.1 SPA ops in vendored AML | yes | none — AML ops dormant until called |
+| B1.2 spa_coherence.go Go helper | yes | none — helper not called by default |
+| B1.3 SPA gate in GenerateResonant | yes | none — gate off; stderr log when on |
+| B2 Q-style logit overlay | yes | none — overlay off; logit bias when on |
+| B3 persistent prophecy field | deferred | — |
+
+**Footprint:** vendored AML +78 lines (SPA ops); molequla.go ~+90 lines
+(2 CFG additions, 2 wiring blocks); new file `spa_coherence.go` ~120
+lines. Total ~290 LOC for the coherence layer + matching defaults.
+
+**Two opt-in toggles ready for RunPod measurement:**
+- `CFG.SPACoherenceGate = true` — log per-sentence connectedness + weak indices.
+- `CFG.CorpusLogitOverlay = true` — apply Q-style additive logit bias.
+
+Either can be flipped independently, or both together. Default state
+keeps molequla's pre-B behaviour exactly.
+
+**Phase C next:** Codex audit on Phase B delta → push molequla-evolution
+branch → plan RunPod measurement run with the toggles as cell-axes (off/SPA-only/overlay-only/both).
+
+---
+
+## 2026-05-14 — B2 extended — full Q Dario field signal stack (B + H + A + F)
+
+Oleg pushback: «не пропускать важные шаги — физика prophecy destiny хорошо реализована и в дарио и в самом языке». Extended B2 overlay from {bigram, trigram} to the full Q stack {bigram, trigram, Hebbian, Destiny, Prophecy} using molequla's existing analogs.
+
+**Sources surveyed:**
+- `~/arianna/dario/dario.c` lines 73-83 — ALPHA=0.30 (Hebbian), BETA=0.15 (Prophecy), GAMMA_D=0.25 (Destiny) reference weights; explicit B/H/F/A force code paths.
+- `~/arianna/ariannamethod.ai/core/ariannamethod.h` lines 119-220 — AML state has prophecy horizon, destiny scalar, debt accumulator, `am_apply_destiny_to_logits`, `am_compute_prophecy_debt`, `am_get_destiny_bias`. AML language already exposes the API.
+- `~/arianna/q/README.md:50-66` — Dario field eq with adaptive coefficients; persistent prophecy field with age + decay + collapse.
+
+**molequla analogs found (already in code, just not routed to logit overlay):**
+- **H Hebbian:** `CooccurField.CooccurWindow[t1][t2]` (window-weighted proximity counts, `GenerateSentence:3015-3019` uses for prob-blend already).
+- **A Destiny:** `GPT.ComputePurposeVector()` at `molequla.go:2498` returns direction of last delta A matrices (mean) — direct analog of «destiny gravitational attractor».
+- **F Prophecy debt:** `molequla.go:5450-5463` computes `debt = diff / (diff+1)` inline (mirror of AML `am_compute_prophecy_debt`) in `notorchTrainSteps`. Used only for training signal, not generation.
+- **F Prophecy field (stateful expectations):** **absent in molequla** — needed adding.
+
+**Patches landed in `molequla.go`:**
+
+### Config additions (line ~85)
+```go
+MetaCHebbian      float64  // c_heb — default 1.0 (q/README.md:53)
+MetaCDestiny      float64  // c_ds  — default 0.15
+MetaCProphecy     float64  // c_pro — default 0.7
+MetaProphecyDecay float64  // age multiplier per step — default 0.95
+```
+
+### Pre-loop state (`GenerateResonant`, line ~4240)
+```go
+var destinyBias  []float64    // lazy precompute once
+var prophecyField []float64   // persistent expectation, seeded on first overlay step
+```
+
+### Overlay block (extended) — adds three new terms inside the existing `if CFG.CorpusLogitOverlay && field != nil` block, alongside bigram + trigram:
+
+- **H Hebbian.** Walks `ids[-windowSize:]`, aggregates `field.CooccurWindow[c][tid]` per neighbor token, normalises, adds `c_heb · log(cooccur_prob)` for seen tokens (one-sided positive bias; unseen tokens unaffected).
+- **A Destiny.** First overlay step only: calls `model.ComputePurposeVector()`, projects each row of `model.Base["wte"]` onto purpose direction, caches in `destinyBias`. Per step: `overlaidLogits[i] += c_ds · destinyBias[i]`.
+- **F Prophecy.** First overlay step: seeds from trigram-by-ctx (primary) + 0.5×bigram-by-prev (fallback), normalises to unit total. Subsequent steps: ages by × `MetaProphecyDecay` (default 0.95). Bias: `c_pro · log(prophecy_prob)` for tokens with weight > 0.
+- After sample (`nxt := TopKTopPSample`): collapse — `prophecyField[nxt] = 0` (the chosen token fulfilled its expectation, shift field toward what's still unsaid).
+
+### Defaults (CFG, line ~210)
+```go
+CorpusLogitOverlay:   false,   // gate off by default
+MetaCBigram:          15.0,
+MetaCTrigram:         10.0,
+MetaCHebbian:         1.0,
+MetaCDestiny:         0.15,
+MetaCProphecy:        0.7,
+MetaProphecyDecay:    0.95,
+MetaLogitOverlayFloor: 1e-6,
+```
+
+**Build verification (neo, USE_BLAS + ACCELERATE):**
+- `CGO_ENABLED=1 go build -tags cgo` PASS, binary 10.4 MB.
+- No new warnings.
+
+**Behaviour change at default:** zero. `CorpusLogitOverlay = false` → entire overlay block skipped → `overlaidLogits == logits.Data` → prophecy collapse line is conditional on `prophecyField != nil` → no-op. Pre-B2 behaviour preserved exactly.
+
+**Behaviour when `CorpusLogitOverlay = true`:** full Q Dario field stack applied additively to model logits before softmax. Each signal independently controllable via its `MetaC*` coefficient (set any to 0 to disable individual term while keeping others). Coexists with the legacy post-softmax prob-blend.
+
+**Still NOT in this iteration (explicitly):**
+- Coefficient adaptation by transformer maturity (Q's Transformer Gate based on `avg_logit_magnitude`; molequla currently treats coefficients as static). Could be added in Phase C as adaptive scaling.
+- Prophecy debt feedback to coefficient modulation (Q's `q/README.md:64` — «numeric prophecy debt pressure back into coefficient modulation»). Skeleton has the field; debt-driven coefficient adaptation deferred.
+- Calibration of these weightless defaults against molequla's actual generation behaviour — needs RunPod measurement (Phase C).
+
+**Phase B — actually complete now.**
+
+---
+
+## 2026-05-14 — Codex audit on Phase B delta — 2 findings, both fixed
+
+Tool: `codex review --uncommitted --title "Phase B — coherence layer (SPA gate + Q-style additive logit overlay: B+H+A+F)"`. Codex inspected the entire B delta (SPA AML ops + spa_coherence.go + GenerateResonant SPA gate + B+H+A+F overlay).
+
+Both findings are real functional bugs in **opt-in** paths (default-off paths untouched). Fixed in this session.
+
+### [P2] Destiny term was silently dead — FIXED
+
+**Codex finding:** `molequla.go:4417-4418` — `ComputePurposeVector()` averages `DeltaAdapter.A` rows, whose row length is the **adapter rank** (`DeltaRank`, default 8). `wte.Nin` is the **embedding size** (`NEmbd`, default 16 for embryo, grows larger). The guard `D <= len(purposeDir)` becomes `16 <= 8` → false → `destinyBias` stays nil → `MetaCDestiny` had no effect under default model settings.
+
+**Why this slipped past me:** I assumed `ComputePurposeVector` returned embedding-dim direction. Did not check — purpose vector lives in **rank-space** (intentional design — see comment at `molequla.go:2498` «direction of weight movement in last delta layer»).
+
+**Fix:** swap source to `GammaContrastiveProjection()` (`molequla.go:1932`) — this **does** return an embedding-space direction (length = `wte.Nin`, normalised). The destinyBias projection `dot(wte_row, gammaDir)` now actually computes a meaningful destiny pull per token.
+
+Patched at `molequla.go:4417-4427`. The dim guard stays as cheap safety check; will now pass by construction since `GammaContrastiveProjection` returns exactly `wte` column count.
+
+### [P2] SPA scores biased by BOS/EOS sentinels — FIXED
+
+**Codex finding:** `molequla.go:4703-4704` — `tok.Encode(s)` wraps every sentence with BOS at start + EOS at end. In `spa_embed`, weight = `alpha^(n-1-i)`, so the **last** token gets weight 1 (largest), prior tokens decay. Shared EOS at every sentence's tail → EOS embedding dominates each sentence's representation → all sentences look artificially connected to each other.
+
+**Why this slipped past me:** I called `tok.Encode` blindly to get token IDs without thinking about the sentinel-wrapping semantics. SPA in Q (`postgpt_q.c`) operates on raw content tokens, not pretrained-LM-style wrapped sequences.
+
+**Fix:** strip leading BOS and trailing EOS tokens before passing to `SPACoherenceScores`. Patched at `molequla.go:4708-4719` — extra loop trims sentinel IDs identified via `tok.Stoi[tok.BOS]` / `tok.Stoi[tok.EOS]`.
+
+### Verification after fixes
+
+- `CGO_ENABLED=1 go build -tags cgo` PASS, binary 10407794 bytes.
+- No new warnings.
+
+### Out-of-scope items NOT flagged by Codex (clean)
+
+- SPA AML ops byte-fidelity with canonical ef52cde — no findings.
+- B+H+A+F overlay logic structure, log-floor handling, prophecy seed/age/collapse — no findings.
+- Build hygiene, CFG struct additions — no findings.
+- Sibling Neo session coordination, feature branch discipline — no findings.
+
+**Phase B — actually-actually complete now. Ready for commit + push.**
