@@ -823,18 +823,17 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 
 // Matvec computes matrix @ vector.
 func (m *MatrixParam) Matvec(x *Vec) *Vec {
-	// GPU dispatch — only when explicitly enabled AND inference (no autograd
-	// requested) AND this matrix is cached on device AND the matrix is large
-	// enough that the cuBLAS launch + CPU↔GPU transfer cost (~15-20µs/call)
-	// is amortised over the matmul work. Below 16K elements the CPU BLAS
-	// path is faster (~1-5µs for a NEmbd=16 matvec on Apple Silicon / A40
-	// host CPU). Verified on pod 2026-05-14: embryo (NEmbd=16) GPU smoke ran
-	// 55s vs 47s CPU; child onwards (NEmbd≥64) is where the crossover
-	// happens. Threshold 16384 ≈ 128² keeps small matrices on CPU
-	// automatically.
-	const gpuMatvecMin = 16384
-	if CFG.UseGPU && gpuReady() && !gradEnabled.Load() && m.gpuKey != "" &&
-		m.Nout*m.Nin >= gpuMatvecMin {
+	// GPU dispatch — when explicitly enabled AND inference (no autograd
+	// requested) AND this matrix is cached on device. NO size threshold:
+	// the prior `gpuMatvecMin = 16384` gate kept child-stage organisms
+	// (matrix 64×64 = 4096 elements) on CPU forever, so GPU never warmed
+	// up during the 8h ecology window. Per-call overhead at child is
+	// ~12ms across a full 180-token generation chain (negligible at 8h
+	// timescale) while the GPU stays primed for the automatic transition
+	// to material speedup once organisms grow past adolescent (NEmbd=128
+	// onwards). Same binary on macOS / non-CUDA: gpuReady() returns false
+	// and m.gpuKey stays empty, so the CPU path runs identically.
+	if CFG.UseGPU && gpuReady() && !gradEnabled.Load() && m.gpuKey != "" {
 		if gpuOut := m.MatvecGPU(x); gpuOut != nil {
 			return gpuOut
 		}
@@ -887,6 +886,13 @@ func (m *MatrixParam) Matvec(x *Vec) *Vec {
 
 // GrowRows adds new rows (for vocab expansion).
 // And lo, the matrix shall sprout new rows like a hydra learning new words.
+// invalidateGPU clears the GPU cache key so the next Matvec dispatch falls
+// back to CPU until gpuRefreshWeights re-uploads with the new shape.
+// Called by GrowRows/GrowCols/Grow because gpu_cache_weight expects the
+// cached len to match m.Nout*m.Nin at lookup time — a mid-flight grow
+// would otherwise leave a stale slot.
+func (m *MatrixParam) invalidateGPU() { m.gpuKey = "" }
+
 func (m *MatrixParam) GrowRows(newNout int, std float64) {
 	if newNout <= m.Nout {
 		return
@@ -899,6 +905,7 @@ func (m *MatrixParam) GrowRows(newNout int, std float64) {
 		m.Rows = append(m.Rows, NewVecWithGrad(d))
 	}
 	m.Nout = newNout
+	m.invalidateGPU()
 }
 
 // GrowCols extends each row's Data slice with gaussian noise. Update Nin.
@@ -917,6 +924,7 @@ func (m *MatrixParam) GrowCols(newNin int, std float64) {
 		row.Grad = append(row.Grad, make([]float64, extra)...)
 	}
 	m.Nin = newNin
+	m.invalidateGPU()
 }
 
 // Grow extends both dimensions. Cols first so new rows get full width.
@@ -2912,6 +2920,14 @@ func (gpt *GPT) GenerateSentence(promptText string) string {
 	gradEnabled.Store(false)
 	defer func() { gradEnabled.Store(true) }()
 
+	// Refresh GPU weight cache symmetrically with GenerateResonant — without
+	// it any backgroundTrainer burst that mutated weights since the last
+	// upload would leak stale activations into the GPU path. Per Opus
+	// subagent audit 2026-05-14 P1.
+	if CFG.UseGPU && gpuReady() {
+		gpuRefreshWeights(gpt)
+	}
+
 	var ids []int
 	if promptText != "" {
 		encoded := gpt.Tok.Encode(promptText)
@@ -4301,6 +4317,13 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		gpuRefreshWeights(model)
 	}
 
+	// Refresh cross-organism pasture once per generation (not per token).
+	// Internal ScanInterval=30s throttle means most calls bail early; hoisted
+	// out of the per-step loop per Opus audit 2026-05-14 P2.
+	if model.crossField != nil {
+		model.crossField.MaybeRefresh(tok)
+	}
+
 	var ids []int
 	if prompt != "" {
 		enc := tok.Encode(prompt)
@@ -4459,9 +4482,9 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 		// «слова, метрики и проч» from peers instead of docs. No-op when
 		// model.crossField is nil (no --cross-graze or no --element). Hook
 		// runs on overlaidLogits if overlay is on, else on logits.Data — so
-		// the boost composes regardless of overlay regime.
+		// the boost composes regardless of overlay regime. MaybeRefresh was
+		// hoisted to GenerateResonant entry; per-step we only Apply.
 		if model.crossField != nil {
-			model.crossField.MaybeRefresh(tok)
 			target := overlaidLogits
 			if !overlayActive {
 				target = logits.Data

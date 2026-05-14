@@ -47,6 +47,7 @@ type CrossField struct {
 	LastScan     time.Time                         // throttle FS reads
 	ScanInterval time.Duration                     // min gap between rescans
 	SeenFiles    map[string]bool                   // dedup of ingested gen_*.txt files
+	SeenCap      int                               // hard cap on SeenFiles before purging oldest sibling/* prefix
 	MetricBoost  func(sibling string) float64      // optional per-sibling coef multiplier
 	mu           sync.Mutex
 }
@@ -71,6 +72,7 @@ func NewCrossField(element, pastureBase string) *CrossField {
 		RecentCap:    64,
 		ScanInterval: 30 * time.Second,
 		SeenFiles:    make(map[string]bool, 256),
+		SeenCap:      2048, // ~8h × 3 siblings × ~1 emission/min keeps under bound
 	}
 }
 
@@ -139,6 +141,13 @@ func (c *CrossField) MaybeRefresh(tok *EvolvingTokenizer) {
 				c.Recent[sib] = c.Recent[sib][len(c.Recent[sib])-c.RecentCap:]
 			}
 		}
+	}
+	// Hard cap on SeenFiles dedup map — wipe to empty when over SeenCap.
+	// Loses dedup state across the rebuild, so a few duplicate ingestions
+	// possible right after wipe; acceptable vs unbounded growth over 24h+
+	// runs (Opus audit P1, 2026-05-14).
+	if c.SeenCap > 0 && len(c.SeenFiles) > c.SeenCap {
+		c.SeenFiles = make(map[string]bool, c.SeenCap/2)
 	}
 }
 
