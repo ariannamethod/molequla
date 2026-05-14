@@ -5673,7 +5673,11 @@ func notorchTrainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps 
 	}
 }
 
-// parseCLIArgs parses --organism-id, --config, --element, and --evolution from os.Args.
+// parseCLIArgs parses --organism-id, --config, --element, --evolution, and
+// the Phase B coherence-layer toggles (--spa-gate, --corpus-overlay) from
+// os.Args. The two coherence-gate flags write directly into CFG so that
+// pod-side measurement cells can flip them without rebuilding or editing
+// the config file. Mutually orthogonal — pass either, both, or neither.
 func parseCLIArgs() (organismID string, configPath string, element string, evolution bool) {
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--organism-id" && i+1 < len(os.Args) {
@@ -5687,6 +5691,10 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 			i++
 		} else if os.Args[i] == "--evolution" {
 			evolution = true
+		} else if os.Args[i] == "--spa-gate" {
+			CFG.SPACoherenceGate = true
+		} else if os.Args[i] == "--corpus-overlay" {
+			CFG.CorpusLogitOverlay = true
 		}
 	}
 	return

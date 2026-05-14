@@ -734,3 +734,47 @@ Patched at `molequla.go:4417-4427`. The dim guard stays as cheap safety check; w
 - Sibling Neo session coordination, feature branch discipline — no findings.
 
 **Phase B — actually-actually complete now. Ready for commit + push.**
+
+---
+
+## 2026-05-14 — Phase B committed + pushed; RunPod plan drafted + Codex-audited
+
+**Commit:** `c748621` on `molequla-evolution` — Phase B coherence
+layer (SPA gate + Q-style B+H+A+F overlay + Codex P2 fixes), 4 files
+786+/4-. Pushed `3544841..c748621 molequla-evolution -> molequla-evolution`.
+
+**RunPod plan v1 drafted** at `~/arianna/molequla/runpod_plan_v1.md`
+following Dario `runpod_plan_v{1,2,3}.md` template — pre-flight on
+polygon (free) → 4-cell single-organism sweep + ecology cell on
+RunPod CPU pod (~$2 envelope) → post-run metrics + paper Body.
+
+### Codex audit on plan v1.0 — 3 findings, 2 P2 + 1 P1
+
+- **[P1] No executable path for cells.** Plan flipped CFG flags but
+  binary's `parseCLIArgs` only recognised `--organism-id / --config
+  / --element / --evolution`. Cells 1-3 would silently stay
+  baseline.
+- **[P2] Smoke pass criterion unreachable.** 5-min single-organism
+  smoke can't reach adult (needs 500K corpus); pass criterion
+  bogus.
+- **[P2] Stage table thresholds wrong.** Listed «infant ~5K»;
+  actual per `molequla/README.md:319-328` is 20K. Snapshots would
+  be mislabelled.
+
+### Fixes applied 2026-05-14
+
+**Code fix (P1):** added `--spa-gate` and `--corpus-overlay` CLI flags
+to `parseCLIArgs` in `molequla.go:5676-5697`. Flags write directly
+into `CFG.SPACoherenceGate` / `CFG.CorpusLogitOverlay`. Default off,
+flags additive (pass either, both, or neither). Build PASS after
+addition. **Cells 1-3 are now executable.**
+
+**Plan fixes (P2 × 2):** plan v1 updated in place with «Codex audit
+response» section at top + corrected stage table + corrected smoke
+pass criterion (child stage = 50K chars, achievable on default
+corpus in 5 min). Each cell now has its exact CLI invocation listed.
+
+**Status:** plan v1.1 ready for next Codex review pass (or directly
+to pod boot, Oleg's call). CLI fix not yet committed — will land
+in a follow-up commit on `molequla-evolution` together with the
+final plan revision.
