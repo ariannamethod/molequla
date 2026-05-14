@@ -906,3 +906,65 @@ DUR=600s` started.
 
 **Wakeup scheduled** ~25 min from now to check final results,
 archive logs to git, decide ecology cell extension or wrap-up.
+
+---
+
+## 2026-05-14 — Singularity strike 1 — BLAS engagement bug on Linux
+
+**Symptom (60-min mark of extended ecology, all 4 orgs):** stuck at
+stage=2 (child), 0 mitosis, 0 stage progression. Feb 2026 baseline
+reached adult in 15 min on 30-core EPYC; ours sat at child for 60+
+min on 16 vCPU. Even halving for core count, the plateau was
+unexplained.
+
+**Oleg's instinct:** «у них блас не запущен?» Verified — yes.
+
+**Root cause (cgo_aml.go:4-7 pre-fix):**
+```
+#cgo CFLAGS: -I${SRCDIR}/ariannamethod -O2
+#cgo LDFLAGS: -lm -lpthread
+#cgo darwin CFLAGS: -DUSE_BLAS -DACCELERATE -DACCELERATE_NEW_LAPACK
+#cgo darwin LDFLAGS: -framework Accelerate
+```
+
+USE_BLAS gated darwin-only. On Linux pod, the Go-side
+`go_blas_dgemv` (cgo_aml.go:13-23) and `blasDgemv` (line 103) fell
+through to **manual nested-loop matvec**. libaml.so was correctly
+built with openblas-pthread (AML/C path BLAS-on), but every
+MatrixParam.Matvec call on the Go side bypassed openblas and ran
+unaccelerated. Forward pass, QKV attention, FFN, lm_head all slow.
+
+**Patch (commit `6193cab`):** added Linux CGO directives:
+```
+#cgo linux CFLAGS: -DUSE_BLAS -I/usr/include/x86_64-linux-gnu/openblas-pthread/
+#cgo linux LDFLAGS: -L/usr/lib/x86_64-linux-gnu/openblas-pthread/ -lopenblas
+```
+
+**Verification on pod after rebuild:**
+- `ldd molequla_cgo | grep blas` now shows `libopenblas.so.0 =>
+  /lib/x86_64-linux-gnu/libopenblas.so.0 (0x00007187abb88000)`.
+  Pre-fix: no such line.
+- Binary slightly smaller (9695688 vs 9696392 bytes) — different
+  code path compiled with BLAS symbol references.
+
+**Pre-fix run preserved** as
+`runpod/2026-05-14/cell_extended_NOBLAS_60min/` — gives the paper a
+**direct A/B comparison** between unaccelerated and BLAS-accelerated
+ecology growth, not a single observation. Stronger Body claim
+material than a single hot run.
+
+**Post-fix run launched 05:25:50 UTC,** same DUR=5400s, same
+coherence flags. Ends 06:55:50 UTC. At 1:24 mark earth log shows
+`[init] Warmup complete at stage 2. Organism ready. [ecology]
+Joined swarm. 3 peer(s) detected.` — boot sequence + immediate
+Q/A samples appear in train.log (interactive-mode generation logged
+alongside DNA exchange). This is content molequla writes that's
+not just DNA — interactive responses that will hit the SPA gate
+threshold (>=2 sentences). First chance for `[spa-gate]` lines to
+actually fire.
+
+**Singularity strike accounting:**
+- Strike 1: BLAS engagement → patched + verified linkage. Result
+  pending re-run completion.
+- Available strikes remaining: 2 (per three-strikes rule in
+  `memory/protocol_singularity_mode_2026_05_08.md`).
