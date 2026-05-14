@@ -1358,3 +1358,162 @@ This is the Q signature reproduced in molequla.
 - Codex audit on the uncommitted diff — running before commit.
 - PR / push — Oleg's call after audit.
 
+
+---
+
+## 2026-05-14 (PM, continued) — RunPod plan v2 + audit + push
+
+### Codex audit on Q-style integration (3 passes, commit `2d5f1a7`)
+
+Pass 1 → 3 P2 findings:
+- [P2] Bypass checkpoints when `--zero-warmup` — `LoadCheckpoint` ran before
+  the warmup branch, so the test could silently use a stale trained
+  checkpoint and «zero-training coherence» become meaningless.
+- [P2] Do not mark zero-step warmup as completed — saving `lastWarmupStage`
+  in the zero-warmup else-branch polluted on-disk state for any future
+  normal launch from that directory.
+- [P2] Preserve hard top-K mask during dissonance rescale — entropy
+  spike/drop branch rebuilt `scaled` from `overlaidLogits`, discarding
+  the `-1e10` mask the patch is designed to maintain.
+
+Fixed in same commit: LoadCheckpoint guard (`molequla.go:6180-6191`),
+zero-warmup branch no-op for `lastWarmupStage` (`molequla.go:6249-6253`),
+early `return` before REPL/ecology in zero-warmup (`molequla.go:6285-6291`),
+mask-preserving dissonance rescale (`molequla.go:4488-4497`).
+
+Pass 2 → 1 P2 finding: `.gitignore` missing `/molequla_cgo`. Fixed.
+
+Pass 3 → clean. No discrete correctness issues.
+
+### Commit + push
+
+`2d5f1a7` (`molequla-evolution`) pushed to
+`https://github.com/ariannamethod/molequla` 2026-05-14 PM. 5 files
+changed: `.gitignore` +1, `PROJECT_LOG.md` +94, `README.md` (Q-style
+overlay section + new Untrained Coherence section), `metaweights_overlay.go`,
+`molequla.go`.
+
+### RunPod plan v2 (commit `a960010`)
+
+New file `runpod_plan_v2_coherent.md`. Three codex passes:
+
+Pass 1 → 3 P1/P2 findings:
+- [P1] Ecology processes contend over default `memory.sqlite3` /
+  `molequla_ckpt.json` if four organisms share a CWD. Fixed: per-organism
+  workdir + `rm -rf` reset on rerun.
+- [P1] Sweep cells contaminate each other when run from one workspace —
+  cell N would load cell N-1's checkpoint instead of fresh state. Fixed:
+  per-cell `work_cell_$cell/` dirs.
+- [P2] Background dry run inherits SSH terminal as stdin and pauses on
+  TTY input between stages. Fixed: `< /dev/null` redirection + use
+  `--evolution` to skip the between-stage prompt.
+
+Pass 2 → 1 P1 finding: `cp nonames_$e.txt nonames.txt` renaming would
+break `--element $e` (main rewrites `CFG.CorpusPath` to literal
+`nonames_<element>.txt`). Fixed in both ecology snippets — copy verbatim,
+no rename.
+
+Pass 3 → 3 P2 findings:
+- [P2] `mkdir -p` preserves stale workdir state across reruns. Fixed:
+  `rm -rf` before mkdir.
+- [P2] Locked prompt list mismatched binary's hardcoded `stageProbes`.
+  Fixed: aligned plan prompts to `["Hello.", "Who are you?", "What do you know?"]`
+  per `molequla.go:6213`, plus added an `awk` extraction snippet for
+  per-cell-per-stage transcript artifacts.
+- [P2] Ecology `pids` file appended without truncation. Fixed: `rm -f pids`
+  before per-organism start.
+
+Per Oleg's contract («один пасс аудита и фиксом если надо»), iterated
+beyond one pass because P1/P2 findings on a measurement plan would
+invalidate the run; better cost is N codex passes (free) than one
+contaminated 90-min CPU pod cell.
+
+### Polygon Phase 0 — blocked
+
+`cgo_aml.go:8-9` hardcodes `USE_CUDA` + `${SRCDIR}/ariannamethod/notorch_cuda.o`
++ `-lcudart -lcublas` for Linux builds (legacy CUDA wire commits
+`a5de063` / `34db1d4` 2026-05-14 strike 3). Polygon `100.127.195.24` is
+x86_64 Linux CPU-only; build fails:
+
+```
+/usr/bin/ld: cannot find /home/ataeff/arianna/molequla/ariannamethod/notorch_cuda.o
+/usr/bin/ld: cannot find -lcudart
+/usr/bin/ld: cannot find -lcublas
+```
+
+Resolution options: (a) split `cgo_aml.go` into `cgo_aml_cuda.go` +
+`cgo_aml_nocuda.go` with build tags, (b) skip polygon stage and validate
+on pod directly (same OS/arch + CUDA as the 2026-05-14 sweep that built
+fine). Deferred — pod will validate at Phase 0.5.
+
+### Mitosis timing reference for 6h ecology cell
+
+- **Feb 2026 Oracle Cloud (`README.md:75-94`)** — 30-core EPYC, 216 GB RAM,
+  4 organisms launched 01:25 UTC → first mitosis at 02:13 UTC. **48 min**
+  launch-to-first-mitosis.
+- **RunPod 2026-05-14 16-vCPU 90-min cell
+  (`runpod/2026-05-14/cell_extended_BLAS_90min/master.log`)** — earth, air,
+  water, fire all `mit=0` final after 90 min. SUMMARY.md predicted
+  90-120 min on half-core CPU pod; 90 min was not enough.
+- Other extended cells (240 min BLAS, 240 min CUDA, 720 min CUDA) have
+  no preserved `master.log` — can't confirm mitosis there.
+
+6-hour (360 min) cell gives 3-7× post-mitosis time vs Feb baseline →
+captures child organism behaviour, multi-generation DNA exchange,
+syntropy decisions across mitosis events. Reasonable upper bound for
+the paper.
+
+### Next
+
+- Codex bottleneck audit on Q-style integration (Oleg request 2026-05-14 PM).
+- Pod boot — awaits Oleg decision: resume `pqp86pfbfy9wo9` (volumeInGb=50)
+  vs fresh CPU pod.
+
+### Bottleneck audit findings (codex pass on commit `a960010`)
+
+Free-form `codex review` (no diff mode, custom prompt focused on
+hot-path issues in a 6-hour 4-organism ecology run on CPU pod).
+Five findings — see below; **no fixes applied yet**, surfaced for
+Oleg priority call before pod boot.
+
+- **[P1] Reuse overlay scratch arrays** — `metaweights_overlay.go:107-108`.
+  `CorpusLogitOverlay=true` allocates six `[V]float64` slices per token
+  (`bigramProb`, `trigramProb`, `hebbianStrength`, `unigramProb`,
+  `prophecyProb`, `destinyScore`). At V≈643 that's ≈30 KB per token,
+  per organism — over 6 h × 4 organisms with continuous generation
+  this is millions of allocations + GC pressure on a CPU pod.
+  Fix: thread an `OverlayScratch` struct through `GenerateResonant`,
+  reset only touched indices, apply sparse bigram/trigram maps
+  directly to logits instead of materialising dense zero-filled arrays.
+
+- **[P1] Cache destiny scores for a generation** —
+  `metaweights_overlay.go:224-230`. `GammaContrastiveProjection()` plus
+  the full V*D cosine projection runs every sampled token, but
+  `model.mu.Lock` in the outer caller prevents weights from changing
+  during a single `GenerateResonant` call. Move outside the per-step
+  loop or behind a weight-version cache; precompute `wte` row norms
+  once.
+
+- **[P2] Shorten cooccur field read lock** —
+  `metaweights_overlay.go:109`. `field.mu.RLock()` is held across the
+  entire bigram + trigram + Hebbian window walk + unigram scan, blocking
+  `BuildFromCorpus`, `IngestTokensWeighted`, and user-boost writers
+  every token. Snapshot only the needed context references under the
+  lock; do the heavy normalisation/accumulation outside.
+
+- **[P2] Replace full-vocab insertion top-K** —
+  `molequla.go:4429-4439`. Current scan is O(V*K) per token (each
+  vocab item may shift up to K entries). Reusable size-K min-heap or
+  quickselect-style buffer → O(V log K) or expected O(V).
+
+- **[P3] Repetition penalty `map[int]bool` allocation** —
+  `metaweights_overlay.go:299-305`. Allocates a hash map on every
+  overlay step just to dedupe at most 12 token ids. Replace with
+  `[12]int` linear scan, or reuse from generation scratch.
+
+Recommended priority: **fix P1×2 before 6h pod cell** (allocation
+churn + destiny cost compound over ~10⁷ tokens in a 6-hour ecology),
+**defer P2/P3 to post-pod commit** (correctness OK, throughput nice-to-have).
+
+Awaiting Oleg call.
+
