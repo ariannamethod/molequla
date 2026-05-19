@@ -3,7 +3,6 @@ package main
 /*
 #cgo CFLAGS: -I/usr/local/include/ariannamethod -O2
 #cgo linux CFLAGS: -DUSE_BLAS -I/usr/include/x86_64-linux-gnu/openblas-pthread/
-#cgo linux LDFLAGS: -L/usr/local/lib -lnotorch -L/usr/lib/x86_64-linux-gnu/openblas-pthread/ -lopenblas -lm
 #include <notorch.h>
 #include <string.h>
 

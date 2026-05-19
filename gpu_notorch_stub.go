@@ -12,3 +12,6 @@ package main
 func ntGPUEnable() (bool, string) {
 	return false, "trainer on CPU/BLAS (built without -tags cuda)"
 }
+
+// ntGPUDispatchCount — cuBLAS dispatch count. Always 0 on a non-CUDA build.
+func ntGPUDispatchCount() int64 { return 0 }

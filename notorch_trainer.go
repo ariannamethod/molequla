@@ -249,8 +249,8 @@ func ntBurstTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, 
 		}
 	}
 	if n > 0 {
-		fmt.Printf("[notorch] burst complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s\n",
-			steps, avg, ms, ntStepsPerSec(n, ms))
+		fmt.Printf("[notorch] burst complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d\n",
+			steps, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount())
 	}
 }
 
@@ -299,7 +299,7 @@ func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int,
 		}
 	}
 	if n > 0 {
-		fmt.Printf("[notorch] warmup complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s\n",
-			steps, avg, ms, ntStepsPerSec(n, ms))
+		fmt.Printf("[notorch] warmup complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d\n",
+			steps, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount())
 	}
 }
