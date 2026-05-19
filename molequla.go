@@ -6328,6 +6328,15 @@ func main() {
 		}
 	}
 
+	// notorch trainer GPU (06_PLAN §8): gpu_init() at startup — on success
+	// nt_set_gpu_mode(1) routes the training tape's matvecs through cuBLAS;
+	// on failure the trainer stays on CPU/BLAS. Automatic, no flag. The real
+	// bodies are in gpu_notorch_cuda.go (built with -tags cuda); the !cuda
+	// stub keeps the default CPU build a no-op.
+	if _, msg := ntGPUEnable(); msg != "" {
+		fmt.Fprintln(os.Stderr, "[notorch] "+msg)
+	}
+
 	// Element → corpus path: each element eats its own food
 	if element != "" {
 		switch element {
