@@ -58,6 +58,10 @@ type Config struct {
 	// this. Replaces a desynced literal pair (write 5 / read 10) that
 	// destroyed every sub-10-byte emission unconsumed.
 	DNAMinFragmentBytes int `json:"dna_min_fragment_bytes"`
+	// DNAFragmentTargetBytes — dnaWrite pads each DNA fragment with sampled
+	// corpus text toward this size, so fragments carry real substance
+	// instead of a child model's ~9-byte degenerate generation.
+	DNAFragmentTargetBytes int `json:"dna_fragment_target_bytes"`
 
 	// model
 	TieEmbeddings bool `json:"tie_embeddings"`
@@ -235,6 +239,7 @@ var CFG = Config{
 	MaxLineChars:         240,
 	MinNewChars:          480,
 	DNAMinFragmentBytes:  5, // unified DNA emit+consume gate (Fix A)
+	DNAFragmentTargetBytes: 200, // dnaWrite pads fragments toward this (Fix B)
 	TieEmbeddings:        true,
 	NLayer:               1,
 	NEmbd:                16,
@@ -5437,15 +5442,34 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	// GenerateResonant takes model.mu.Lock internally — do NOT double-lock
 	answer := GenerateResonant(model, tok, field, probe, docs, true)
 
-	if answer == "" || len(answer) < CFG.DNAMinFragmentBytes {
+	// DNA fragment = the organism's voice (answer) plus a sample of the
+	// real text it holds, padded toward CFG.DNAFragmentTargetBytes. A
+	// child-stage model generates only a few degenerate bytes; the corpus
+	// sample carries the substance so the fragment is worth exchanging. As
+	// the organism matures `answer` grows into real text and the generation
+	// share of the fragment rises on its own.
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(answer))
+	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 64; i++ {
+		line := strings.TrimSpace(docs[rand.Intn(len(docs))])
+		if line == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(line)
+	}
+	frag := strings.TrimSpace(b.String())
+	if len(frag) < CFG.DNAMinFragmentBytes {
 		return
 	}
 
 	dir := filepath.Join("../dna/output", element)
 	os.MkdirAll(dir, 0755)
 	fname := filepath.Join(dir, fmt.Sprintf("gen_%d_%d.txt", time.Now().Unix(), step))
-	os.WriteFile(fname, []byte(answer+"\n"), 0644)
-	fmt.Printf("[dna] %s wrote %d bytes to ecology\n", element, len(answer))
+	os.WriteFile(fname, []byte(frag+"\n"), 0644)
+	fmt.Printf("[dna] %s wrote %d bytes to ecology\n", element, len(frag))
 }
 
 // dnaRead consumes text from other organisms' output directories, returns bytes added.
