@@ -1740,6 +1740,7 @@ type GPT struct {
 	growthFreezeRemaining int // ontogenesis: freeze base after growth, train only deltas
 	growthStepOffset      int // reset to globalStep on each growth — for LR warmup phase
 	lastWarmupStage       int // last stage that completed warmup (-1 = none)
+	corpusIngestedTotal   int // ontogenesis growth clock: monotonic Σ of all text ever ingested (seed + dnaRead). Replaces reservoir file size as the stage gate.
 
 	corpusField *CooccurField // set by backgroundTrainer for adaptive blend
 
@@ -2126,7 +2127,7 @@ func (gpt *GPT) TargetGrowthStage(corpusChars int) int {
 }
 
 // MaybeGrowArchitecture checks if growth is needed and executes it. Returns true if grew.
-func (gpt *GPT) MaybeGrowArchitecture(corpusChars int) bool {
+func (gpt *GPT) MaybeGrowArchitecture() bool {
 	current := gpt.CurrentGrowthStage()
 	if current < 0 {
 		return false // legacy checkpoint, skip growth
@@ -2134,7 +2135,7 @@ func (gpt *GPT) MaybeGrowArchitecture(corpusChars int) bool {
 	if gpt.growthFreezeRemaining > 0 {
 		return false // still stabilizing from last growth
 	}
-	target := gpt.TargetGrowthStage(corpusChars)
+	target := gpt.TargetGrowthStage(gpt.corpusIngestedTotal)
 	if target <= current {
 		return false
 	}
@@ -3686,6 +3687,7 @@ type CheckpointData struct {
 	GlobalStep        int                    `json:"global_step"`
 	GrowthStepOffset  int                    `json:"growth_step_offset"`
 	LastWarmupStage   *int                   `json:"last_warmup_stage,omitempty"`
+	CorpusIngestedTotal int                  `json:"corpus_ingested_total"`
 }
 
 type TokenizerJSON struct {
@@ -3770,6 +3772,7 @@ func SaveCheckpoint(model *GPT, tok *EvolvingTokenizer, path string) error {
 		GlobalStep:        model.globalStep,
 		GrowthStepOffset:  model.growthStepOffset,
 		LastWarmupStage:   intPtr(model.lastWarmupStage),
+		CorpusIngestedTotal: model.corpusIngestedTotal,
 	}
 
 	// Atomic write: temp file + rename (prevents corruption on crash)
@@ -3898,6 +3901,13 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 	// Restore global step and growth state
 	model.globalStep = ckpt.GlobalStep
 	model.growthStepOffset = ckpt.GrowthStepOffset
+	model.corpusIngestedTotal = ckpt.CorpusIngestedTotal
+	if model.corpusIngestedTotal == 0 {
+		// pre-Fix-C checkpoint or fresh — seed the growth clock from the corpus
+		for _, d := range docs {
+			model.corpusIngestedTotal += len(d)
+		}
+	}
 	if ckpt.LastWarmupStage != nil {
 		model.lastWarmupStage = *ckpt.LastWarmupStage
 	} else if ckpt.GlobalStep > 0 {
@@ -6162,6 +6172,10 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			dnaWrite(element, model, tok, field, docs, tickCount)
 			// Read: consume other organisms' output → corpus grows → ontogenesis unlocks
 			if consumed := dnaRead(element, CFG.CorpusPath, qbuf, tok); consumed > 0 {
+				// Monotonic growth clock — every byte ever ingested counts.
+				model.mu.Lock()
+				model.corpusIngestedTotal += consumed
+				model.mu.Unlock()
 				// Reload corpus with new food
 				docs = loadCorpusLines(CFG.CorpusPath)
 				if len(docs) > 0 {
@@ -6175,14 +6189,15 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 		// Ontogenesis: check if architecture should grow (every 50 ticks — corpus grows via DNA)
 		if tickCount%50 == 0 {
-			// Use file size for threshold — loadCorpusLines truncates long lines via MaxLineChars
+			// corpus = bounded reservoir file size (saturates); ingested =
+			// the monotonic clock MaybeGrowArchitecture actually gates on.
 			corpusChars := 0
 			if fi, err := os.Stat(CFG.CorpusPath); err == nil {
 				corpusChars = int(fi.Size())
 			}
 			model.mu.Lock()
-			fmt.Printf("[debug-onto] tick=%d corpus=%d stage=%d freeze=%d\n", tickCount, corpusChars, model.CurrentGrowthStage(), model.growthFreezeRemaining)
-			if model.MaybeGrowArchitecture(corpusChars) {
+			fmt.Printf("[debug-onto] tick=%d corpus=%d ingested=%d stage=%d freeze=%d\n", tickCount, corpusChars, model.corpusIngestedTotal, model.CurrentGrowthStage(), model.growthFreezeRemaining)
+			if model.MaybeGrowArchitecture() {
 				SaveCheckpoint(model, tok, "")
 				nP := 0
 				for _, m := range model.Base {
@@ -6379,9 +6394,11 @@ func main() {
 		// Per-stage warmup: train at each stage before growing.
 		// Corpus size determines ceiling (which stages are reachable), not starting point.
 		// The organism always starts as embryo and grows through training.
-		corpusChars := 0
+		// Seed the monotonic growth clock from the starting corpus — the
+		// organism's initial text mass counts as ingested; from here it
+		// only grows (dnaRead accumulates into it).
 		for _, d := range docs {
-			corpusChars += len(d)
+			model.corpusIngestedTotal += len(d)
 		}
 		stageNames := []string{"embryo", "infant", "child", "adolescent", "teen", "adult"}
 
@@ -6463,7 +6480,7 @@ func main() {
 				break
 			}
 			// Try to grow to next stage (gated by corpus size)
-			if !model.MaybeGrowArchitecture(corpusChars) {
+			if !model.MaybeGrowArchitecture() {
 				break // corpus too small for next stage, or already at max
 			}
 			model.growthFreezeRemaining = 0 // skip freeze during init — we're about to warmup anyway
