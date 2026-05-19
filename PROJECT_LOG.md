@@ -1981,3 +1981,63 @@ Pod `6h6utc5a8ybfny`, +2h43m into 8h:
    then begin paper Body in Dario.c style (Olleg → Abstract; Claude →
    Body; joint → Conclusion).
 
+---
+
+## Growth-dynamics deep-fix — 2026-05-19 (polygon node)
+
+Oleg routed a fresh-eyes diagnosis of the growth wall (paper Result 5)
+to the polygon Claude — deliberately a different node, so the fix is
+not anchored to the freeze-counter mental model. Brief: neo Claude's
+`~/arianna/_notes/molequla_deepfix/00..03*.md`. Plan delivered to
+`~/arianna/_notes/molequla_deepfix/04_PLAN.md`.
+
+### Diagnosis — four stacked structural faults
+
+The Body frames the wall as "DNA exchange too slow" (Result 3/5). The
+run-3 data (`work_water/train.log`, pulled from neo via Tailscale)
+shows it is not a rate problem — it is a wall, four faults deep:
+
+1. **Degenerate emissions.** Run-3 water emitted 2659 DNA fragments;
+   2654 are exactly 9 bytes. `GenerateResonant` at child stage
+   (154K params) produces a near-constant 9-byte string.
+2. **Emit/consume gate desync.** `dnaWrite` writes at `len >= 5`
+   (`molequla.go:5424`); `dnaRead` consumes only at `len >= 10`,
+   deleting the rest (`:5462-5464`). Mean emission 9.07 B < 10 →
+   99.8% of DNA destroyed unconsumed. Water: emitted 24,105 B, the
+   ecology consumed 315 B in 8 h.
+3. **Bounded reservoir.** The corpus is capped at
+   `MaxCorpusLines = 8000` (`:229`) by `reservoirMixKeep` (`:3570`,
+   hard cap `:3604-3606`).
+4. **Gate reads the bounded file.** Ontogenesis is clocked on
+   `os.Stat(corpus).Size()` (`:6175`) — the bounded reservoir. It
+   saturates ~126 K (run-3 water flat 125,860 → 126,028 over 2,600
+   ticks), below the 200 K adolescent gate. Run length is irrelevant.
+
+### Mitosis gate (was untested — now verified)
+
+`molequla.go:5049-5057`, CASE 6: `divide` requires adult stage (5)
+**and** `isSustainedOverload()` (`:5104-5116`) **and** a 300 s
+cooldown. Adult is necessary but **not** sufficient.
+
+### Fix — A+B+C (04_PLAN §3)
+
+- A — unify the DNA fragment threshold into one `CFG.DNAMinFragmentBytes`.
+- B — `dnaWrite` emits real corpus text, not 9-byte degenerate generation.
+- C — ontogenesis gates on a monotonic `corpusIngestedTotal`, not the
+  reservoir file size.
+
+Rejected D (re-dimension thresholds) and E (raise the reservoir cap) —
+symptom-only.
+
+### Implementation — branch `molequla-growthfix` (off `b0f073e`)
+
+- **Step 0 — CPU build tag** (`b832809`). The linux cgo directives
+  hardwired CUDA, so there was no CPU build path. Split behind a
+  `cuda` build tag: `go build` is CPU-only (OpenBLAS),
+  `go build -tags cuda` adds the CUDA backend. Verified building
+  CPU-only on polygon. Unblocks the free CPU smoke.
+- Fix A / C / B — pending.
+- CPU ecology smoke on polygon — pending (verification).
+
+— polygon Claude (Arianna Method)
+
