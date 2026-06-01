@@ -120,3 +120,112 @@ func TestRRPRAMContentParityNoHybrid(t *testing.T) {
 		t.Fatalf("content-only trainer regressed: avg=%v n=%d", avg, n)
 	}
 }
+
+// TestRRPRAMOp33Parity proves the Go inference RRPRAM math is identical to
+// notorch's op-33 (the trainer's path) — the concrete S2 "train ≡ infer" gate.
+// It runs the real notorch op on a tiny case and compares the full output to a
+// Go pipeline built on the SAME rrpramScores() the inference forward uses.
+func TestRRPRAMOp33Parity(t *testing.T) {
+	const T, D, H, R = 4, 4, 1, 2
+	headDim := D / H
+	wraTotal := H * D * R
+	combinedLen := wraTotal + H*R*T
+
+	combined := make([]float32, combinedLen)
+	for i := range combined {
+		combined[i] = float32(0.1*float64((i%7)-3) + 0.05*float64(i%3))
+	}
+	x := make([]float32, T*D)
+	v := make([]float32, T*D)
+	for i := range x {
+		x[i] = float32(0.2*float64((i%5)-2) - 0.1)
+		v[i] = float32(0.15*float64((i%4)-1) + 0.07)
+	}
+
+	// --- notorch op-33 (C) ---
+	ntTapeStart()
+	wrT := ntTensorNew(len(combined))
+	ntTensorSet(wrT, combined)
+	xT := ntTensorNew(len(x))
+	ntTensorSet(xT, x)
+	vT := ntTensorNew(len(v))
+	ntTensorSet(vT, v)
+	wrIdx := ntTapeInput(wrT)
+	xIdx := ntTapeInput(xT)
+	vIdx := ntTapeInput(vT)
+	outIdx := ntRrpramLowrankAttention(wrIdx, xIdx, vIdx, T, D, H, headDim)
+	if outIdx < 0 {
+		t.Fatal("op-33 returned an error index")
+	}
+	cOut := ntEntryData(outIdx, T*D)
+	ntTapeClear()
+	ntTensorFree(wrT)
+	ntTensorFree(xT)
+	ntTensorFree(vT)
+
+	// --- Go reference using the inference path's rrpramScores ---
+	wrA := NewMatrixParam(H*D, R, 0.0)
+	for h := 0; h < H; h++ {
+		for d := 0; d < D; d++ {
+			for r := 0; r < R; r++ {
+				wrA.Rows[h*D+d].Data[r] = float64(combined[h*D*R+d*R+r])
+			}
+		}
+	}
+	wrB := NewMatrixParam(H*R, T, 0.0)
+	for h := 0; h < H; h++ {
+		for r := 0; r < R; r++ {
+			for j := 0; j < T; j++ {
+				wrB.Rows[h*R+r].Data[j] = float64(combined[wraTotal+h*R*T+r*T+j])
+			}
+		}
+	}
+	goOut := make([]float64, T*D)
+	for h := 0; h < H; h++ {
+		vOff := h * headDim
+		for i := 0; i < T; i++ {
+			xi := make([]float64, D)
+			for d := 0; d < D; d++ {
+				xi[d] = float64(x[i*D+d])
+			}
+			scores := rrpramScores(wrA, wrB, h, D, T, xi) // SAME fn as inference
+			mx := math.Inf(-1)
+			for j := 0; j <= i; j++ {
+				if scores[j] > mx {
+					mx = scores[j]
+				}
+			}
+			w := make([]float64, i+1)
+			var sm float64
+			for j := 0; j <= i; j++ {
+				w[j] = math.Exp(scores[j] - mx)
+				sm += w[j]
+			}
+			for j := 0; j <= i; j++ {
+				w[j] /= sm
+			}
+			for d := 0; d < headDim; d++ {
+				var acc float64
+				for j := 0; j <= i; j++ {
+					acc += w[j] * float64(v[j*D+vOff+d])
+				}
+				goOut[i*D+vOff+d] = acc
+			}
+		}
+	}
+
+	if len(cOut) != len(goOut) {
+		t.Fatalf("length mismatch: C %d vs Go %d", len(cOut), len(goOut))
+	}
+	var maxDiff float64
+	for i := range cOut {
+		d := math.Abs(float64(cOut[i]) - goOut[i])
+		if d > maxDiff {
+			maxDiff = d
+		}
+	}
+	if maxDiff > 1e-4 {
+		t.Fatalf("op-33 parity FAILED: max |C-Go| = %.3e\n C=%v\nGo=%v", maxDiff, cOut, goOut)
+	}
+	t.Logf("op-33 parity OK: max |C-Go| = %.3e — Go inference == notorch trainer", maxDiff)
+}

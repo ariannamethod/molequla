@@ -2781,6 +2781,35 @@ func (gpt *GPT) applyWithDeltas(name string, x *Vec) *Vec {
 	return y
 }
 
+// rrpramScores computes the op-33 low-rank RRPRAM scores for head h: the query
+// x (full nEmbd) scored against T key positions via (x @ Wr_a[h]) @ Wr_b[h].
+// wrA is [NHead·nEmbd × R] (head h block = rows [h·nEmbd : (h+1)·nEmbd]), wrB is
+// [NHead·R × BlockSize] (head h block = rows [h·R : (h+1)·R]). This is the exact
+// arithmetic of notorch's nt_rrpram_lowrank_attention, so Go inference and the
+// notorch trainer run one identical model (S2). Verified by TestRRPRAMOp33Parity.
+func rrpramScores(wrA, wrB *MatrixParam, h, nEmbd, T int, x []float64) []float64 {
+	R := wrA.Nin
+	u := make([]float64, R)
+	aBase := h * nEmbd
+	for d := 0; d < nEmbd; d++ {
+		xd := x[d]
+		row := wrA.Rows[aBase+d].Data
+		for r := 0; r < R; r++ {
+			u[r] += xd * row[r]
+		}
+	}
+	bBase := h * R
+	out := make([]float64, T)
+	for j := 0; j < T; j++ {
+		var s float64
+		for r := 0; r < R; r++ {
+			s += u[r] * wrB.Rows[bBase+r].Data[j]
+		}
+		out[j] = s
+	}
+	return out
+}
+
 // ForwardStep runs one token through the model, updating KV cache.
 func (gpt *GPT) ForwardStep(tokenID, posID int, keys, values [][]*Vec) *Vec {
 	tokEmb := gpt.Base["wte"].Rows[tokenID]
@@ -2851,46 +2880,42 @@ func (gpt *GPT) ForwardStep(tokenID, posID int, keys, values [][]*Vec) *Vec {
 				}
 			}
 
-			// RRPRAM attention logits
+			// RRPRAM attention scores — low-rank op-33 (Resonance form), the SAME
+			// math the notorch trainer runs (S2: train ≡ infer). The current query
+			// (full-D post-RMSNorm x) scores every cached key j via
+			// scores[j] = ((x @ Wr_a[h]) @ Wr_b[h])[j]. Wr_a[h] = wr_a rows
+			// [h·NEmbd : (h+1)·NEmbd] ([NEmbd × R]); Wr_b[h] = wr_b rows
+			// [h·R : (h+1)·R] ([R × BlockSize]). Replaces the never-trained
+			// position-bias w_pattern (07_AUDIT B1).
 			var rrpramLogits []*Scalar
+			haveRRPRAM := false
 			if htype == "rrpram" || htype == "hybrid" {
-				patternKey := lk.headPattern[h]
-				xh := x.Slice(hs, he)
-				patternFull := gpt.applyWithDeltas(patternKey, xh)
-				pLen := len(patternFull.Data) // safety cap for RRPRAM
-				rrpramLogits = make([]*Scalar, T)
-				for t := 0; t < T; t++ {
-					tIdx := t
-					if tIdx >= pLen {
-						tIdx = pLen - 1
+				wrA := gpt.Base[lk.wrA]
+				wrB := gpt.Base[lk.wrB]
+				if wrA != nil && wrB != nil {
+					haveRRPRAM = true
+					scores := rrpramScores(wrA, wrB, h, gpt.NEmbd, T, x.Data)
+					rrpramLogits = make([]*Scalar, T)
+					for j := 0; j < T; j++ {
+						rrpramLogits[j] = NewScalar(scores[j])
 					}
-					rrpramLogits[t] = patternFull.Element(tIdx)
 				}
 			}
 
-			// Dispatch by head type
-			var attnWeights []*Scalar
-			switch htype {
-			case "content":
-				attnWeights = ScalarSoftmax(contentLogits)
-			case "rrpram":
-				attnWeights = ScalarSoftmax(rrpramLogits)
-			default: // hybrid
-				alphaKey := lk.headAlpha[h]
-				alphaScalar := gpt.Base[alphaKey].Rows[0].Element(0) // gradient flows to MatrixParam
-				a := alphaScalar.Sigmoid()                            // learnable sigmoid gate
-				oneMinusA := a.MulF(-1.0).AddF(1.0)                  // 1 - sigmoid(alpha)
-				blendedLogits := make([]*Scalar, T)
-				for t := 0; t < T; t++ {
-					// blended = (1-a)*content + a*rrpram — both sides in autograd graph
-					c := contentLogits[t].MulS(oneMinusA)
-					r := rrpramLogits[t].MulS(a)
-					blendedLogits[t] = c.AddS(r)
-				}
-				attnWeights = ScalarSoftmax(blendedLogits)
+			// Dispatch by head type. Hybrid blends at the OUTPUT level (two
+			// separately-softmaxed attentions), matching the trainer's frozen-gate
+			// blend: out = (1-a)·content_out + a·rrpram_out, a = sigmoid(alpha).
+			switch {
+			case htype == "rrpram" && haveRRPRAM:
+				headOutputs[h] = AttentionWeightedSum(ScalarSoftmax(rrpramLogits), vh)
+			case htype == "hybrid" && haveRRPRAM:
+				aVal := 1.0 / (1.0 + math.Exp(-gpt.Base[lk.headAlpha[h]].Rows[0].Data[0])) // sigmoid(alpha), frozen
+				cOut := AttentionWeightedSum(ScalarSoftmax(contentLogits), vh)
+				rOut := AttentionWeightedSum(ScalarSoftmax(rrpramLogits), vh)
+				headOutputs[h] = cOut.Scale(1.0 - aVal).Add(rOut.Scale(aVal))
+			default: // content, or a hybrid/rrpram head whose factors are not yet allocated
+				headOutputs[h] = AttentionWeightedSum(ScalarSoftmax(contentLogits), vh)
 			}
-
-			headOutputs[h] = AttentionWeightedSum(attnWeights, vh)
 		}
 
 		xAttn := Concat(headOutputs)

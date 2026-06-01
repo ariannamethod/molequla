@@ -21,6 +21,15 @@ static float ntx_entry_scalar(int idx) {
     nt_tensor* o = tp->entries[idx].output;
     return (o && o->len > 0) ? o->data[0] : 0.0f;
 }
+// Copy a tape entry's full output tensor out (for op-output parity checks).
+static void ntx_entry_data(int idx, float* dst, int n) {
+    nt_tape* tp = nt_tape_get();
+    if (!tp || idx < 0 || idx >= tp->count || !dst) return;
+    nt_tensor* o = tp->entries[idx].output;
+    if (!o) return;
+    int m = (n < o->len) ? n : o->len;
+    for (int i = 0; i < m; i++) dst[i] = o->data[i];
+}
 */
 import "C"
 import "unsafe"
@@ -87,6 +96,17 @@ func ntTapeChuckStep(lr, lossVal float64)     { C.nt_tape_chuck_step(C.float(lr)
 
 // ntEntryScalar reads output->data[0] of a tape entry (e.g. the loss).
 func ntEntryScalar(idx int) float64 { return float64(C.ntx_entry_scalar(C.int(idx))) }
+
+// ntEntryData copies a tape entry's full output tensor into a Go slice (first n
+// floats). Used to compare an op's output against a Go reimplementation.
+func ntEntryData(idx, n int) []float32 {
+	if n <= 0 {
+		return nil
+	}
+	out := make([]float32, n)
+	C.ntx_entry_data(C.int(idx), (*C.float)(unsafe.Pointer(&out[0])), C.int(n))
+	return out
+}
 
 // ── NaN/Inf guard ──
 
