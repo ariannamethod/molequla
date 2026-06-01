@@ -89,10 +89,13 @@ func ntUnflattenMatrix(mp *MatrixParam, flat []float32) {
 	}
 }
 
-// ntBuildForward builds molequla's content transformer on the active notorch
-// tape and returns the cross-entropy loss tape index. pIdx holds the param
-// tape indices in ntContentParams order; tokIdx/tgtIdx are input tape indices.
-func ntBuildForward(model *GPT, pIdx []int, tokIdx, tgtIdx, T, vocab int) int {
+// ntBuildForward builds molequla's transformer on the active notorch tape and
+// returns the cross-entropy loss tape index. pIdx holds the CONTENT param tape
+// indices in ntContentParams order (unchanged from Inc1 — wte, 7·NLayer content,
+// lm_head). wrIdx/gateCIdx/gateRIdx are the Inc2 per-layer RRPRAM tape indices
+// (registered separately, AFTER content, so content Chuck slots are untouched —
+// B1); a layer with no hybrid head has wrIdx[l] < 0. tokIdx/tgtIdx are inputs.
+func ntBuildForward(model *GPT, pIdx, wrIdx, gateCIdx, gateRIdx []int, tokIdx, tgtIdx, T, vocab int) int {
 	D := model.NEmbd
 	headDim := D / model.NHead
 	wte := pIdx[0]
@@ -109,6 +112,16 @@ func ntBuildForward(model *GPT, pIdx []int, tokIdx, tgtIdx, T, vocab int) int {
 		k := ntRope(ntSeqLinear(wk, hn, T), T, headDim)
 		v := ntSeqLinear(wv, hn, T)
 		attn := ntMHCausalAttention(q, k, v, T, headDim)
+
+		// Inc2: low-rank RRPRAM head (Resonance form, op 33), output-level blend.
+		// rrpram_out = (xn @ Wr_a) @ Wr_b → causal softmax → @ v, packed over all
+		// heads (full D input, same v as content). Per-head frozen gate masks
+		// content-only heads (gateR=0) and weights hybrid heads by sigmoid(alpha):
+		//   out = gateC ⊙ content_out + gateR ⊙ rrpram_out
+		if l < len(wrIdx) && wrIdx[l] >= 0 {
+			rAttn := ntRrpramLowrankAttention(wrIdx[l], hn, v, T, D, model.NHead, headDim)
+			attn = ntAdd(ntMul(attn, gateCIdx[l]), ntMul(rAttn, gateRIdx[l]))
+		}
 		h = ntAdd(h, ntSeqLinear(wo, attn, T))
 
 		hn = ntSeqRMSNorm(h, -1, T, D)
@@ -119,6 +132,74 @@ func ntBuildForward(model *GPT, pIdx []int, tokIdx, tgtIdx, T, vocab int) int {
 	hf := ntSeqRMSNorm(h, -1, T, D)
 	logits := ntSeqLinear(lmHead, hf, T)
 	return ntSeqCrossEntropy(logits, tgtIdx, T, vocab)
+}
+
+// ntPackWr flattens the per-layer factors wr_a [NHead·NEmbd × R] then
+// wr_b [NHead·R × BlockSize] into the single combined buffer notorch op-33 reads
+// (all Wr_a then all Wr_b, row-major). Returns nil if the layer has no factors.
+func ntPackWr(model *GPT, l int) []float32 {
+	a := model.Base[fmt.Sprintf("l%d.wr_a", l)]
+	b := model.Base[fmt.Sprintf("l%d.wr_b", l)]
+	if a == nil || b == nil {
+		return nil
+	}
+	out := make([]float32, 0, a.Nout*a.Nin+b.Nout*b.Nin)
+	out = append(out, ntFlattenMatrix(a)...)
+	out = append(out, ntFlattenMatrix(b)...)
+	return out
+}
+
+// ntUnpackWr splits a trained combined buffer back into the wr_a / wr_b Base
+// matrices (the canonical Go-side store), mirroring ntPackWr.
+func ntUnpackWr(model *GPT, l int, combined []float32) {
+	a := model.Base[fmt.Sprintf("l%d.wr_a", l)]
+	b := model.Base[fmt.Sprintf("l%d.wr_b", l)]
+	if a == nil || b == nil {
+		return
+	}
+	aLen := a.Nout * a.Nin
+	if aLen > len(combined) {
+		return
+	}
+	ntUnflattenMatrix(a, combined[:aLen])
+	ntUnflattenMatrix(b, combined[aLen:])
+}
+
+// ntBuildGateVectors returns the per-head output-level blend masks for layer l,
+// each of length T·NEmbd. content-out weight gateC = 1 - g_h, rrpram-out weight
+// gateR = g_h, where g_h = sigmoid(alpha_{l,h}) for a hybrid head and 0 for a
+// content head (so content heads stay pure content and their factors get zero
+// gradient). The gate is FROZEN this increment — sigmoid is precomputed Go-side,
+// keeping nt_sigmoid/nt_scale_by_t off the tape (notorch GPU-sync bug class).
+func ntBuildGateVectors(model *GPT, l, T int) (gateC, gateR []float32) {
+	D := model.NEmbd
+	hd := model.HeadDim
+	htypes := headTypesForNHead(model.NHead)
+	hg := make([]float32, model.NHead)
+	for h := 0; h < model.NHead; h++ {
+		g := float32(0.0) // content head → pure content (gateR = 0)
+		if h < len(htypes) && (htypes[h] == "hybrid" || htypes[h] == "rrpram") {
+			if mp := model.Base[fmt.Sprintf("l%d.h%d.alpha", l, h)]; mp != nil &&
+				len(mp.Rows) > 0 && len(mp.Rows[0].Data) > 0 {
+				g = float32(1.0 / (1.0 + math.Exp(-mp.Rows[0].Data[0]))) // sigmoid(alpha)
+			} else {
+				g = float32(1.0 / (1.0 + math.Exp(-CFG.HybridAlphaInit)))
+			}
+		}
+		hg[h] = g
+	}
+	gateC = make([]float32, T*D)
+	gateR = make([]float32, T*D)
+	for t := 0; t < T; t++ {
+		for h := 0; h < model.NHead; h++ {
+			for d := 0; d < hd; d++ {
+				idx := t*D + h*hd + d
+				gateR[idx] = hg[h]
+				gateC[idx] = 1.0 - hg[h]
+			}
+		}
+	}
+	return gateC, gateR
 }
 
 // ntTrainCore runs `steps` training steps of molequla's content model on
@@ -132,6 +213,13 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		return 0, 0, 0
 	}
 	vocab := tok.VocabSize
+	// Inc2 (B3): op-33 assumes T_r == T and the combined Wr is packed at width
+	// BlockSize, so RRPRAM-bearing bursts MUST run at T = BlockSize (this also
+	// satisfies the documented gpu_rrpram_lr T-vs-T_max stride workaround). Pin it.
+	hasRRPRAM := layerHasHybrid()
+	if hasRRPRAM {
+		seqLen = model.BlockSize
+	}
 	params := ntContentParams(model)
 
 	// Mirror model.Base weights into notorch tensors (created once per burst).
@@ -146,6 +234,44 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 			ntTensorFree(t)
 		}
 	}()
+
+	// Inc2: per-layer combined Wr tensors (packed wr_a++wr_b) + frozen per-head
+	// gate vectors, created once per burst (the gate is frozen — alpha does not
+	// train this increment, so the vectors are constant across the burst).
+	wrTensors := make([]ntTensor, model.NLayer) // nil when a layer has no factors
+	gateCT := make([]ntTensor, model.NLayer)
+	gateRT := make([]ntTensor, model.NLayer)
+	if hasRRPRAM {
+		for l := 0; l < model.NLayer; l++ {
+			combined := ntPackWr(model, l)
+			if combined == nil {
+				continue
+			}
+			wt := ntTensorNew(len(combined))
+			ntTensorSet(wt, combined)
+			wrTensors[l] = wt
+			gc, gr := ntBuildGateVectors(model, l, seqLen)
+			gct := ntTensorNew(len(gc))
+			ntTensorSet(gct, gc)
+			grt := ntTensorNew(len(gr))
+			ntTensorSet(grt, gr)
+			gateCT[l] = gct
+			gateRT[l] = grt
+		}
+		defer func() {
+			for l := 0; l < model.NLayer; l++ {
+				if wrTensors[l] != nil {
+					ntTensorFree(wrTensors[l])
+				}
+				if gateCT[l] != nil {
+					ntTensorFree(gateCT[l])
+				}
+				if gateRT[l] != nil {
+					ntTensorFree(gateRT[l])
+				}
+			}
+		}()
+	}
 
 	// Post-growth: wipe positional Chuck slots before the first step (S1).
 	if ntTapeNeedsReset {
@@ -191,6 +317,23 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		}
 		ntTapeNoDecay(pIdx[0]) // wte — no weight decay on embeddings
 
+		// Inc2: register the combined Wr (trainable, AFTER the content params so
+		// content Chuck slots keep their identity — B1) and the frozen gate
+		// vectors (frozen → consume no param slot). wrIdx[l] < 0 → layer has none.
+		wrIdx := make([]int, model.NLayer)
+		gateCIdx := make([]int, model.NLayer)
+		gateRIdx := make([]int, model.NLayer)
+		for l := 0; l < model.NLayer; l++ {
+			wrIdx[l] = -1
+			if wrTensors[l] == nil {
+				continue
+			}
+			wrIdx[l] = ntTapeParam(wrTensors[l])
+			ntTapeNoDecay(wrIdx[l]) // low-rank factors: no weight decay (double-shrink)
+			gateCIdx[l] = ntTapeParamFrozen(gateCT[l])
+			gateRIdx[l] = ntTapeParamFrozen(gateRT[l])
+		}
+
 		tokT := ntTensorNew(seqLen)
 		ntTensorSet(tokT, tokBuf)
 		tgtT := ntTensorNew(seqLen)
@@ -200,7 +343,7 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		ntTensorFree(tokT)
 		ntTensorFree(tgtT)
 
-		lossIdx := ntBuildForward(model, pIdx, tokIdx, tgtIdx, seqLen, vocab)
+		lossIdx := ntBuildForward(model, pIdx, wrIdx, gateCIdx, gateRIdx, tokIdx, tgtIdx, seqLen, vocab)
 		loss := ntEntryScalar(lossIdx)
 		ntTapeBackward(lossIdx)
 		if guard.check() {
@@ -220,6 +363,20 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 	// Mirror trained weights back into the canonical model.Base store.
 	for i, p := range params {
 		ntUnflattenMatrix(p.mp, ntTensorGet(tensors[i], p.mp.Nout*p.mp.Nin))
+	}
+	// Inc2: split the trained combined Wr back into the wr_a / wr_b Base matrices.
+	if hasRRPRAM {
+		for l := 0; l < model.NLayer; l++ {
+			if wrTensors[l] == nil {
+				continue
+			}
+			a := model.Base[fmt.Sprintf("l%d.wr_a", l)]
+			b := model.Base[fmt.Sprintf("l%d.wr_b", l)]
+			if a == nil || b == nil {
+				continue
+			}
+			ntUnpackWr(model, l, ntTensorGet(wrTensors[l], a.Nout*a.Nin+b.Nout*b.Nin))
+		}
 	}
 	if lossN > 0 {
 		return lossSum / float64(lossN), lossN, elapsedMs
