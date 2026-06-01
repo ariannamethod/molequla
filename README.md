@@ -172,7 +172,9 @@ Full differentiable computation in pure Go: vector arithmetic, ReLU/SiLU activat
 
 **2. AML/C Autograd** (`ariannamethod.c`, 6000+ lines, via CGO)
 
-The [Arianna Method Language](https://github.com/ariannamethod/ariannamethod.ai) — a custom programming language for differentiable computation. Sequence-level ops (`seq_embed`, `seq_matvec`, `seq_rmsnorm`, `silu`, `multi_head_attention`, `seq_cross_entropy`), TAPE-based reverse-mode autodiff, Chuck optimizer with persistent state, OpenMP. Primary training path — C is faster than Go for matrix math.
+The [Arianna Method Language](https://github.com/ariannamethod/ariannamethod.ai) — a custom programming language for differentiable computation. Sequence-level ops (`seq_embed`, `seq_matvec`, `seq_rmsnorm`, `silu`, `multi_head_attention`, `seq_cross_entropy`), TAPE-based reverse-mode autodiff, Chuck optimizer with persistent state, OpenMP.
+
+> **Training-engine update (GPU rework, Increments 1–2).** The canonical trainer is now the **notorch** tape (`notorch_trainer.go` + `cgo_notorch.go`): molequla's content + low-rank-RRPRAM transformer built in notorch ops, trained with Chuck, **automatic GPU (cuBLAS) / CPU** with no flag. The AML/C path above is the fallback (`--trainer aml`). AML remains the organism's inference / field-physics language; notorch is how it *learns*.
 
 Wire: Go (`molequla.go`) → CGO bridge (`cgo_aml.go`) → AML/C engine (`ariannamethod.c`) → AML training wrapper (`aml_trainer.go`). Per training step: `amlPushWeights` (Go → C, named matrices), `amlExec(script)` (forward + backward + optim), `amlPullWeights` (C → Go), `amlClear` (free).
 
@@ -233,17 +235,17 @@ Starts at 259 tokens (256 bytes + BOS + EOS + PAD). After 20K chars: trains BPE 
 
 ### Hybrid Attention Heads
 
-Half **content heads** (standard QK^T with RoPE), half **hybrid heads**:
+Half **content heads** (standard QK^T with RoPE), half **hybrid heads** that blend content with **low-rank RRPRAM attention** (Increment 2 — the Resonance form):
 
 ```
-hybrid_output = α * content_attention + (1 - α) * rrpram_attention
+hybrid_output = (1 - α) * content_attention + α * rrpram_attention
 
-content_attention = softmax(QK^T / sqrt(d)) * V     (standard, with RoPE)
-rrpram_attention  = learnable_weight_matrix * V       (pattern-based)
-α                 = sigmoid(learnable_gate)           (per-head, trained)
+content_attention = softmax(QK^T / sqrt(d)) * V        (standard, with RoPE)
+rrpram_attention  = softmax((x·Wr_a)·Wr_b) * V         (low-rank, factored)
+α                 = sigmoid(gate)                      (per-head)
 ```
 
-The sigmoid gate `α` is a learnable parameter — each hybrid head discovers its own blend of content-based and pattern-based attention during training. RRPRAM (Recurrent Resonant Pattern Recognition Attention Mechanism) learns fixed co-occurrence patterns that complement the dynamic content attention.
+RRPRAM is a low-rank causal attention `Wr = Wr_a × Wr_b` — notorch op 33, the matured form trained at scale on Resonance 200M. It is trained on the notorch tape alongside the content path, and Go inference runs the identical math (verified numerically: op-33 vs Go forward, max |Δ| = 1.49e-8). The per-head gate `α = sigmoid(gate)` blends the two attention **outputs**; it is held fixed in the current increment (a trainable gate is the follow-up). This replaces an earlier position-indexed `w_pattern` bias that was allocated but never trained — pure noise on ~half the heads from the infant stage — now retired.
 
 ### Delta Adapters — LoRA-style, Never Forget
 
