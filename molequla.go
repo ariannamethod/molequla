@@ -152,6 +152,7 @@ type Config struct {
 
 	// deltas
 	DeltaRank      int     `json:"delta_rank"`
+	RRPRAMRank     int     `json:"rrpram_rank"` // low-rank RRPRAM factor rank (Inc2)
 	MaxDeltaModules int    `json:"max_delta_modules"`
 	DeltaGrowProb  float64 `json:"delta_grow_prob"`
 
@@ -289,6 +290,7 @@ var CFG = Config{
 	CosineWarmupSteps:    200,
 	AccumSteps:           1,
 	DeltaRank:            8,
+	RRPRAMRank:           32,
 	MaxDeltaModules:      12,
 	DeltaGrowProb:        0.08,
 	Temperature:          0.85,
@@ -837,6 +839,47 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 		rows[i] = NewVecWithGrad(d) // parameters always need grad for Adam
 	}
 	return &MatrixParam{Rows: rows, Nout: nout, Nin: nin}
+}
+
+// rrpramRank is the low-rank RRPRAM factor rank (Increment 2). Default 32.
+func rrpramRank() int {
+	if CFG.RRPRAMRank > 0 {
+		return CFG.RRPRAMRank
+	}
+	return 32
+}
+
+// layerHasHybrid reports whether the current head topology assigns any
+// hybrid/rrpram head — i.e. whether a layer needs RRPRAM factors at all.
+func layerHasHybrid() bool {
+	for _, t := range CFG.HeadTypes {
+		if t == "hybrid" || t == "rrpram" {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureRRPRAMFactors allocates the per-layer low-rank RRPRAM factors for layer
+// li when the topology has hybrid heads and they are absent. The pair packs the
+// exact row-major order notorch op-33 (nt_rrpram_lowrank_attention) reads:
+// wr_a as [NHead·NEmbd × R] (head h block = NEmbd×R), wr_b as [NHead·R × BlockSize]
+// (head h block = R×BlockSize), with T_r == BlockSize. These are the Resonance
+// low-rank attention factors that REPLACE the per-head position-bias w_pattern
+// (Inc2); w_pattern stays allocated until the inference rewrite lands, then drops.
+func (gpt *GPT) ensureRRPRAMFactors(li int) {
+	if !layerHasHybrid() {
+		return
+	}
+	R := rrpramRank()
+	aKey := fmt.Sprintf("l%d.wr_a", li)
+	bKey := fmt.Sprintf("l%d.wr_b", li)
+	if _, ok := gpt.Base[aKey]; !ok {
+		gpt.Base[aKey] = NewMatrixParam(gpt.NHead*gpt.NEmbd, R, 0.02)
+	}
+	if _, ok := gpt.Base[bKey]; !ok {
+		gpt.Base[bKey] = NewMatrixParam(gpt.NHead*R, gpt.BlockSize, 0.02)
+	}
 }
 
 // Matvec computes matrix @ vector.
@@ -1725,7 +1768,8 @@ type GammaStatsResult struct {
 // layerKeySet holds pre-computed string keys for a single layer, avoiding fmt.Sprintf per call.
 type layerKeySet struct {
 	wq, wk, wv, wo, fcG, fcV, fc2 string
-	headPattern []string // per head
+	wrA, wrB    string   // per-layer low-rank RRPRAM factors (Inc2, Resonance form)
+	headPattern []string // per head (legacy position-bias, retired by Inc2)
 	headAlpha   []string // per head
 }
 
@@ -1835,6 +1879,8 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 			gpt.Base[alphaKey] = NewMatrixParam(1, 1, 0.0)
 			gpt.Base[alphaKey].Rows[0].Data[0] = CFG.HybridAlphaInit
 		}
+		// Inc2: per-layer low-rank RRPRAM factors (Resonance form, op 33).
+		gpt.ensureRRPRAMFactors(li)
 	}
 
 	// Pre-compute layer key strings to avoid fmt.Sprintf per ForwardStep call
@@ -1849,6 +1895,8 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 			fcG: pfx + "fc_g",
 			fcV: pfx + "fc_v",
 			fc2: pfx + "fc2",
+			wrA: pfx + "wr_a",
+			wrB: pfx + "wr_b",
 		}
 		nHeads := len(CFG.HeadTypes)
 		if nHeads > 0 {
@@ -3943,6 +3991,10 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 				model.Base[alphaKey] = m
 			}
 		}
+		// Inc2: fresh-init per-layer low-rank RRPRAM factors for old checkpoints
+		// (which carry only the legacy per-head w_pattern). Safe — w_pattern was
+		// never trained (07_AUDIT B1), so there is no signal to migrate.
+		model.ensureRRPRAMFactors(li)
 	}
 
 	return model, tok, nil
