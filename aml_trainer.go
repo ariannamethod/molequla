@@ -52,7 +52,7 @@ func amlModelScript(nLayers, nEmbd, nHeads, seqLen, vocabSize int) string {
 			"logits = seq_matvec(lm_head, h_norm, seq_len)\n" +
 			"loss = seq_cross_entropy(logits, targets, seq_len, vocab_size)\n" +
 			"TAPE BACKWARD loss\n" +
-			"TAPE ADAM_STEP lr\n" +
+			"TAPE CHUCK_STEP lr loss\n" +
 			"TAPE CLEAR\n")
 
 	return b.String()

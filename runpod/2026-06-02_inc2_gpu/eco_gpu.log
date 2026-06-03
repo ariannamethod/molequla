@@ -1,0 +1,40 @@
+[notorch] notorch trainer on GPU — tape dispatching to cuBLAS
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+[notorch] warmup complete: 160 steps, avg loss 5.0979 | 841ms 190.3 steps/s | gpu-dispatch=15822
+[notorch] warmup complete: 120 steps, avg loss 4.2078 | 424ms 282.9 steps/s | gpu-dispatch=27693
+[notorch] warmup complete: 120 steps, avg loss 3.4015 | 401ms 299.3 steps/s | gpu-dispatch=39123
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: �Onow.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+[notorch] warmup complete: 320 steps, avg loss 1.6128 | 1322ms 242.1 steps/s | gpu-dispatch=78658
+[notorch] warmup complete: 240 steps, avg loss 1.3889 | 980ms 244.9 steps/s | gpu-dispatch=108178
+[notorch] warmup complete: 240 steps, avg loss 1.4444 | 959ms 250.3 steps/s | gpu-dispatch=137558
+
+[stage 1 — infant] What it sounds like now:
+  Q: Hello.
+  A: Through computer afternoon.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ther day is the silk ability the supply overuse compounds.
+
+[init] Warmup complete at stage 1. Organism ready.
+[ecology] First organism in the swarm.
+molequla is alive. Type and press Enter. Ctrl+C to exit.
+> [debug-onto] tick=50 corpus=51119 ingested=49617 stage=1 freeze=0
+[debug-onto] tick=100 corpus=51119 ingested=49617 stage=1 freeze=0
+[trainer] micro-train burst (14 bytes, novelty 0.90) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.055 | purpose_align=0.000 | lr_mul=1.30
+[notorch] burst complete: 32 steps, avg loss 2.8162 | 251ms 127.7 steps/s | gpu-dispatch=141660
+A smallest of stars, and shortest river is the difference between their interactions prunes balirror number.
+> 

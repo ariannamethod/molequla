@@ -1,0 +1,69 @@
+[notorch] notorch trainer on GPU â€” tape dispatching to cuBLAS
+[ecology] Element: earth â†’ corpus: nonames_earth.txt
+[evolution] Autonomous evolution mode â€” organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 â€” warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+[notorch] warmup complete: 160 steps, avg loss 4.9352 | 1785ms 89.6 steps/s | gpu-dispatch=15822
+[notorch] warmup complete: 120 steps, avg loss 4.3066 | 1575ms 76.2 steps/s | gpu-dispatch=27585
+[notorch] warmup complete: 120 steps, avg loss 3.5689 | 1823ms 65.8 steps/s | gpu-dispatch=39249
+
+[stage 0 â€” embryo] What it sounds like now:
+  Q: Hello.
+  A: The dam deposit is not sea stalagm
+  Q: Who are you?
+  A: ƒThat under40,00 core.
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 â€” warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+[notorch] warmup complete: 320 steps, avg loss 2.7048 | 9145ms 35.0 steps/s | gpu-dispatch=79194
+[notorch] warmup complete: 240 steps, avg loss 2.6643 | 6850ms 35.0 steps/s | gpu-dispatch=108864
+[notorch] warmup complete: 240 steps, avg loss 2.6563 | 8275ms 29.0 steps/s | gpu-dispatch=138894
+
+[stage 1 â€” infant] What it sounds like now:
+  Q: Hello.
+  A: Both crust €Óroots and stacked to the felsic gravel bury.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: difference between theæ±ground is the magniture, and time.
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 â€” warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+[notorch] warmup complete: 320 steps, avg loss 2.9473 | 13797ms 23.2 steps/s | gpu-dispatch=231010
+[notorch] warmup complete: 240 steps, avg loss 2.7471 | 14674ms 16.4 steps/s | gpu-dispatch=299502
+[notorch] warmup complete: 240 steps, avg loss 2.6427 | 14746ms 16.3 steps/s | gpu-dispatch=367656
+
+[stage 2 â€” child] What it sounds like now:
+  Q: Hello.
+  A: The blisions that continentless than youngth of years, which a riversžaring a drops subjected broad, and theRiver lise of a boulders the clay pull through the same communicating the igneous landform.
+  Q: Who are you?
+  A: ing multiple chemical choidally for plants fills on is the earth other store bankment were Biology in a bÎattern conepth it wedges.
+  Q: What do you know?
+  A: ere is a pumping.
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] earth cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] First organism in the swarm.
+molequla is alive. [evolution] Autonomous mode â€” background trainer running. Ctrl+C to stop.
+[dna] earth wrote 679 bytes to ecology
+[dna] earth wrote 609 bytes to ecology
+[dna] earth wrote 833 bytes to ecology
+[dna] earth wrote 676 bytes to ecology
+[dna] earth wrote 772 bytes to ecology
+[dna] earth wrote 759 bytes to ecology
+[dna] earth wrote 611 bytes to ecology
+[dna] earth wrote 618 bytes to ecology
+[dna] earth wrote 729 bytes to ecology
+[dna] earth wrote 681 bytes to ecology
+[debug-onto] tick=10 corpus=173643 ingested=134553 stage=2 freeze=0
+[dna] earth wrote 833 bytes to ecology
+[dna] earth wrote 749 bytes to ecology
+[dna] earth consumed 613 bytes from 1 files: [fire/gen_1780459702_1.txt]
+[trainer] micro-train burst (613 bytes, novelty 0.32) â€” and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.063 | purpose_align=-0.000 | lr_mul=1.30
+[notorch] burst complete: 32 steps, avg loss 4.4666 | 3393ms 9.4 steps/s | gpu-dispatch=376963

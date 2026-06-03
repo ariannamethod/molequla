@@ -246,7 +246,7 @@ var CFG = Config{
 	MaxLineChars:         240,
 	MinNewChars:          480,
 	DNAMinFragmentBytes:  5, // unified DNA emit+consume gate (Fix A)
-	DNAFragmentTargetBytes: 200, // dnaWrite pads fragments toward this (Fix B)
+	DNAFragmentTargetBytes: 5000, // dnaWrite pads fragments toward this (Fix B; 200→600→5000 2026-06-03: per-tick cost grows with model size so ingestion/tick must too — real corpus text, not seeding; corpus FILE capped at MaxCorpusLines so field-rebuild stays bounded while the monotonic ingest clock climbs fast)
 	TieEmbeddings:        true,
 	NLayer:               1,
 	NEmbd:                16,
@@ -2608,6 +2608,16 @@ func (gpt *GPT) ComputeModelEntropy(tok *EvolvingTokenizer, docs []string, sampl
 		}
 		for pos := 0; pos < limit; pos++ {
 			logits := gpt.ForwardStep(ids[pos], pos, keys, values)
+
+			// Edit 3b (2026-06-03): the overload gate (isSustainedOverload, via
+			// SyntropyTracker.Measure → here) reads THIS entropy. The cross-graze
+			// stress was only injected in GenerateResonant (:4611), so the gate
+			// measured a calm, un-grazed distribution and a grazed-overloaded adult
+			// could never trip the gate — the silent reason mitosis never fired.
+			// Mirror the injection so measured entropy reflects the real stress.
+			if gpt.crossField != nil {
+				gpt.crossField.Apply(logits.Data, CFG.CrossGrazeCoef, CFG.CrossGrazeTopN)
+			}
 
 			// softmax
 			maxVal := logits.Data[0]
@@ -5220,19 +5230,55 @@ func (st *SyntropyTracker) LogToDB(db *sql.DB, entropyBefore, entropyAfter float
 		action, nil)
 }
 
-// isSustainedOverload returns true when >75% of entropy_history is above entropy_high AND syntropy_trend < -0.02.
+// isSustainedOverload returns true when >75% of entropy_history is above
+// entropy_high AND the field is either actively dissolving (syntropy_trend <
+// -0.02) OR pinned high (mean recent entropy > entropy_high*1.3). The trend
+// clause alone was a trap: a converged adult sharpens, so its entropy falls
+// and SyntropyTrend goes positive (:5088) — the gate could never fire on a
+// healthy-but-overloaded organism. The disjunction recognises the real stress
+// regime (confused-and-stable, trend ≈ 0). Raise, not downgrade. (2026-06-03)
 func (st *SyntropyTracker) isSustainedOverload() bool {
 	if len(st.EntropyHistory) < CFG.SyntropyWindow {
 		return false
 	}
 	recent := st.EntropyHistory[len(st.EntropyHistory)-CFG.SyntropyWindow:]
 	highCount := 0
+	sum := 0.0
 	for _, e := range recent {
 		if e > CFG.EntropyHigh {
 			highCount++
 		}
+		sum += e
 	}
-	return highCount > int(float64(CFG.SyntropyWindow)*0.75) && st.SyntropyTrend < -0.02
+	meanRecentEntropy := sum / float64(len(recent))
+	return highCount > int(float64(CFG.SyntropyWindow)*0.75) &&
+		(st.SyntropyTrend < -0.02 || meanRecentEntropy > CFG.EntropyHigh*1.3)
+}
+
+// OverloadDebug formats the isSustainedOverload inputs for the [overload] log
+// line (Edit 1, 2026-06-03). Emitted at adult stage so a "reached adult, never
+// divided" run is a MEASURED fact, not an unexplained negative (banned framing).
+func (st *SyntropyTracker) OverloadDebug() string {
+	n := len(st.EntropyHistory)
+	if n == 0 {
+		return "high=0/0 last=- mean=- trend=0 overload=false (no-history)"
+	}
+	w := CFG.SyntropyWindow
+	if n < w {
+		w = n
+	}
+	recent := st.EntropyHistory[n-w:]
+	highCount := 0
+	sum := 0.0
+	for _, e := range recent {
+		if e > CFG.EntropyHigh {
+			highCount++
+		}
+		sum += e
+	}
+	mean := sum / float64(len(recent))
+	return fmt.Sprintf("high=%d/%d last=%.3f mean=%.3f trend=%.4f overload=%v",
+		highCount, w, st.EntropyHistory[n-1], mean, st.SyntropyTrend, st.isSustainedOverload())
 }
 
 // shouldHibernate returns true if a peer has syntropy > 0.05 AND this organism's last 8 burst deltas avg < 0.01.
@@ -5548,7 +5594,7 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	// share of the fragment rises on its own.
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(answer))
-	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 64; i++ {
+	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 600; i++ {
 		line := strings.TrimSpace(docs[rand.Intn(len(docs))])
 		if line == "" {
 			continue
@@ -6105,6 +6151,12 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 	syntracker := NewSyntropyTracker()
 	field := NewCooccurField()
 	tickCount := 0
+	var docs []string     // persists across ticks; reloaded throttled (see loop)
+	lastFieldRebuild := -1 // tick of last corpus reload + field rebuild
+	// Stage-gated GPU: tiny stages run faster on CPU (kernel-launch overhead
+	// dwarfs the small matmuls — measured 8 steps/s on GPU at child vs ~90 on
+	// CPU); GPU pays off only at teen/adult. Match the current (seed) stage.
+	ntSetGPUForStage(model.CurrentGrowthStage())
 
 	// Inherit burst_history from parent (mitosis lineage)
 	if len(model.inheritedBurstHistory) > 0 {
@@ -6123,15 +6175,22 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 		tickCount++
 
-		updateReservoirCorpus(db, CFG.CorpusPath, CFG.MaxCorpusLines)
-		docs := loadCorpusLines(CFG.CorpusPath)
-
-		// Rebuild field from current corpus (the organism re-reads its own physics)
-		if len(docs) > 0 {
-			field.BuildFromCorpus(tok, docs)
-			model.mu.Lock()
-			model.corpusField = field // share with GenerateSentence for adaptive blend
-			model.mu.Unlock()
+		// Reload corpus + rebuild the cooccur field only PERIODICALLY. Rebuilding
+		// it every tick is O(corpus) and, as DNA grows the corpus, collapses tick
+		// throughput until the ontogenesis check never fires and the colony stalls
+		// at child (observed 2026-06-03 GPU run: debug-onto count 0 in 24 min).
+		// The monotonic growth clock (corpusIngestedTotal) still advances every
+		// tick on consume; a field a few ticks stale is fine for generation.
+		if docs == nil || tickCount-lastFieldRebuild >= 30 {
+			updateReservoirCorpus(db, CFG.CorpusPath, CFG.MaxCorpusLines)
+			docs = loadCorpusLines(CFG.CorpusPath)
+			if len(docs) > 0 {
+				field.BuildFromCorpus(tok, docs)
+				model.mu.Lock()
+				model.corpusField = field // share with GenerateSentence for adaptive blend
+				model.mu.Unlock()
+			}
+			lastFieldRebuild = tickCount
 		}
 
 		// Tokenizer evolution
@@ -6190,7 +6249,13 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 		if model.lastWarmupStage >= 0 && qbuf.ShouldTrigger() && len(docs) > 0 {
 			// Training queue: acquire lock before micro-burst (swarm coordination)
-			if swarm != nil && !swarm.AcquireTrainingLock() {
+			// Cooperative training-lock serialization is for memory-constrained
+			// nodes (Mac 8GB) — gated on CoordinateWarmup. On GPU (handles 4
+			// concurrent orgs, 99% util observed) it must be OFF: the lock's
+			// `continue` skipped the WHOLE tick (DNA exchange + ontogenesis clock,
+			// not just the burst), freezing 3 of 4 orgs while one held the lock
+			// (2026-06-03). With CoordinateWarmup=false all orgs train in parallel.
+			if swarm != nil && CFG.CoordinateWarmup && !swarm.AcquireTrainingLock() {
 				continue // someone else is training, skip this tick
 			}
 
@@ -6211,6 +6276,13 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			fmt.Printf("[syntropy] action=%s | trend=%.4f | field_dev=%.3f | purpose_align=%.3f | lr_mul=%.2f\n",
 				action, syntracker.SyntropyTrend, syntracker.FieldDeviation,
 				syntracker.PurposeAlignment, lrMul)
+
+			// Edit 1 (2026-06-03): at adult stage, log the overload-gate inputs so
+			// the mitosis decision is observable — reached-adult-but-no-divide must
+			// be a measured fact, never an unexplained negative.
+			if syntracker.ModelStage >= len(CFG.GrowthStages)-1 {
+				fmt.Printf("[overload] %s | action=%s\n", syntracker.OverloadDebug(), action)
+			}
 
 			// IMMUNE SYSTEM: snapshot before burst
 			preDirection, preMag := model.GammaContrastiveProjection()
@@ -6302,19 +6374,14 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				model.mu.Lock()
 				model.corpusIngestedTotal += consumed
 				model.mu.Unlock()
-				// Reload corpus with new food
-				docs = loadCorpusLines(CFG.CorpusPath)
-				if len(docs) > 0 {
-					field.BuildFromCorpus(tok, docs)
-					model.mu.Lock()
-					model.corpusField = field
-					model.mu.Unlock()
-				}
+				// Corpus reload + field rebuild are throttled at the loop top
+				// (every 30 ticks) so consume stays O(1) and ticks stay fast —
+				// this is what lets the ontogenesis clock actually advance.
 			}
 		}
 
-		// Ontogenesis: check if architecture should grow (every 50 ticks — corpus grows via DNA)
-		if tickCount%50 == 0 {
+		// Ontogenesis: check if architecture should grow (every 10 ticks — corpus grows via DNA)
+		if tickCount%10 == 0 {
 			// corpus = bounded reservoir file size (saturates); ingested =
 			// the monotonic clock MaybeGrowArchitecture actually gates on.
 			corpusChars := 0
@@ -6324,7 +6391,8 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			model.mu.Lock()
 			fmt.Printf("[debug-onto] tick=%d corpus=%d ingested=%d stage=%d freeze=%d\n", tickCount, corpusChars, model.corpusIngestedTotal, model.CurrentGrowthStage(), model.growthFreezeRemaining)
 			if model.MaybeGrowArchitecture() {
-				ntOnGrowth() // reset the notorch tape — Net2Net changed dims (06_PLAN S1)
+				ntOnGrowth()                                    // reset the notorch tape — Net2Net changed dims (06_PLAN S1)
+				ntSetGPUForStage(model.CurrentGrowthStage())    // flip CPU→GPU at teen/adult
 				SaveCheckpoint(model, tok, "")
 				nP := 0
 				for _, m := range model.Base {

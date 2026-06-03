@@ -1,0 +1,48 @@
+================ Mon Jun  1 22:36:44 UTC 2026 molequla Inc2 GPU verify START ================
+--- environment ---
+NVIDIA GeForce RTX 3090, 24576 MiB, 580.65.06
+Cuda compilation tools, release 12.4, V12.4.131
+Build cuda_12.4.r12.4/compiler.34097967_0
+--- deps (git/build/openblas + Go 1.23.4) ---
+go version go1.23.4 linux/amd64
+--- notorch (main: op-33 + g_gpu_dispatch counter) ---
+notorch HEAD: 41145f8 cuda: GPU dispatch counter — g_gpu_dispatch
+  470 | static int tape_ensure(nt_tensor* t) {
+      |            ^~~~~~~~~~~
+Compiled: notorch_test (CPU + OpenBLAS)
+Built with OpenBLAS. Run: ./notorch_test
+install -m 0644 notorch_cuda.h /usr/local/include/ariannamethod/notorch_cuda.h
+Installed: /usr/local/lib/{libnotorch.a, libnotorch_gpu.a} + headers
+libnotorch_gpu.a: -rw-r--r-- 1 root root 344968 Jun  1 22:37 /usr/local/lib/libnotorch_gpu.a
+--- molequla (main: Inc2) — CUDA build ---
+molequla HEAD: 3b54bf5 docs: PROJECT_LOG — Increment 2 (low-rank RRPRAM) landed, CPU verified
+go: downloading golang.org/x/sys v0.16.0
+go: downloading github.com/google/uuid v1.3.0
+go: downloading github.com/dustin/go-humanize v1.0.1
+go: downloading modernc.org/mathutil v1.6.0
+go: downloading github.com/ncruces/go-strftime v0.1.9
+go: downloading github.com/mattn/go-isatty v0.0.16
+go: downloading modernc.org/memory v1.7.2
+go: downloading github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
+build exit: 0
+molq_gpu: -rwxr-xr-x 1 root root 10482272 Jun  1 22:37 /workspace/molq_gpu
+--- GPU verify run: ecology, RRPRAM active at infant, ~4 min ---
+================ KEY LINES ================
+[startup GPU enable]
+[notorch] notorch trainer on GPU — tape dispatching to cuBLAS
+[growth]
+[growth] ONTOGENESIS: stage 0 -> 1
+[notorch bursts — dispatch must climb]
+[notorch] warmup complete: 160 steps, avg loss 5.0979 | 841ms 190.3 steps/s | gpu-dispatch=15822
+[notorch] warmup complete: 120 steps, avg loss 4.2078 | 424ms 282.9 steps/s | gpu-dispatch=27693
+[notorch] warmup complete: 120 steps, avg loss 3.4015 | 401ms 299.3 steps/s | gpu-dispatch=39123
+[notorch] warmup complete: 320 steps, avg loss 1.6128 | 1322ms 242.1 steps/s | gpu-dispatch=78658
+[notorch] warmup complete: 240 steps, avg loss 1.3889 | 980ms 244.9 steps/s | gpu-dispatch=108178
+[notorch] warmup complete: 240 steps, avg loss 1.4444 | 959ms 250.3 steps/s | gpu-dispatch=137558
+[init] Warmup complete at stage 1. Organism ready.
+[notorch] burst complete: 32 steps, avg loss 2.8162 | 251ms 127.7 steps/s | gpu-dispatch=141660
+[NaN/crash check]
+0
+[gpu mem]
+1 MiB
+================ Mon Jun  1 22:41:43 UTC 2026 END ================

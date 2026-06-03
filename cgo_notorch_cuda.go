@@ -35,6 +35,17 @@ func ntGPUEnable() (bool, string) {
 	return true, "notorch trainer on GPU — tape dispatching to cuBLAS"
 }
 
+// ntSetGPUForStage keeps the notorch tape on GPU for ALL stages on the CUDA
+// build. A stage-gate to CPU for small models was tried (2026-06-03) and
+// backfired: the CPU path inside the USE_CUDA build runs ~0.3 steps/s on the
+// pod (naive/unthreaded matmul) — ~27x slower than GPU even at child. The fast
+// CPU substrate is polygon's !cuda build (proper OpenBLAS), where this is a
+// no-op stub. So on the device build, GPU is the only viable path.
+func ntSetGPUForStage(stage int) {
+	_ = stage
+	C.nt_set_gpu_mode(1)
+}
+
 // ntGPUDispatchCount returns the cuBLAS dispatch count — criterion-4 proof
 // that the training tape's matvecs reached the device.
 func ntGPUDispatchCount() int64 { return int64(C.nt_gpu_dispatch_count()) }

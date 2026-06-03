@@ -15,3 +15,6 @@ func ntGPUEnable() (bool, string) {
 
 // ntGPUDispatchCount — cuBLAS dispatch count. Always 0 on a non-CUDA build.
 func ntGPUDispatchCount() int64 { return 0 }
+
+// ntSetGPUForStage — no-op on a non-CUDA build (trainer always CPU/BLAS).
+func ntSetGPUForStage(stage int) {}
