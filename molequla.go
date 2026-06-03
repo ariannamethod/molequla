@@ -6249,7 +6249,13 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 		if model.lastWarmupStage >= 0 && qbuf.ShouldTrigger() && len(docs) > 0 {
 			// Training queue: acquire lock before micro-burst (swarm coordination)
-			if swarm != nil && !swarm.AcquireTrainingLock() {
+			// Cooperative training-lock serialization is for memory-constrained
+			// nodes (Mac 8GB) — gated on CoordinateWarmup. On GPU (handles 4
+			// concurrent orgs, 99% util observed) it must be OFF: the lock's
+			// `continue` skipped the WHOLE tick (DNA exchange + ontogenesis clock,
+			// not just the burst), freezing 3 of 4 orgs while one held the lock
+			// (2026-06-03). With CoordinateWarmup=false all orgs train in parallel.
+			if swarm != nil && CFG.CoordinateWarmup && !swarm.AcquireTrainingLock() {
 				continue // someone else is training, skip this tick
 			}
 
