@@ -246,7 +246,7 @@ var CFG = Config{
 	MaxLineChars:         240,
 	MinNewChars:          480,
 	DNAMinFragmentBytes:  5, // unified DNA emit+consume gate (Fix A)
-	DNAFragmentTargetBytes: 600, // dnaWrite pads fragments toward this (Fix B; raised 200→600 2026-06-03 for adult-reach margin, real corpus text not seeding)
+	DNAFragmentTargetBytes: 5000, // dnaWrite pads fragments toward this (Fix B; 200→600→5000 2026-06-03: per-tick cost grows with model size so ingestion/tick must too — real corpus text, not seeding; corpus FILE capped at MaxCorpusLines so field-rebuild stays bounded while the monotonic ingest clock climbs fast)
 	TieEmbeddings:        true,
 	NLayer:               1,
 	NEmbd:                16,
@@ -5594,7 +5594,7 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	// share of the fragment rises on its own.
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(answer))
-	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 64; i++ {
+	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 600; i++ {
 		line := strings.TrimSpace(docs[rand.Intn(len(docs))])
 		if line == "" {
 			continue
