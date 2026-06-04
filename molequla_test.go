@@ -1990,6 +1990,52 @@ func TestSyntropyIsSustainedOverload(t *testing.T) {
 	}
 }
 
+func TestSyntropyLossOverload(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.SyntropyWindow = 8
+	CFG.OverloadLossHigh = 6.0
+	CFG.OverloadLossEps = 0.05
+	CFG.OverloadLossWindow = 3
+
+	// Confidently-wrong adult: high loss bursts can't reduce, and NO entropy history
+	// (low/sharp output) — the entropy path must miss it, the loss path must catch it.
+	st := NewSyntropyTracker()
+	for i := 0; i < 8; i++ {
+		st.RecordBurst("steady", 8.5, 8.5) // loss high, delta 0 (not improving)
+	}
+	if st.entropyOverload() {
+		t.Error("entropy path should NOT fire with no entropy history")
+	}
+	if !st.lossOverload() {
+		t.Error("loss path should detect confidently-wrong overwhelm (loss 8.5, flat)")
+	}
+	if !st.isSustainedOverload() {
+		t.Error("isSustainedOverload should be true via the loss path")
+	}
+
+	// Healthy adult: low loss, improving — must NOT fire.
+	st2 := NewSyntropyTracker()
+	for i := 0; i < 8; i++ {
+		st2.RecordBurst("boost", 3.8, 3.6) // low loss, improving
+	}
+	if st2.lossOverload() {
+		t.Error("healthy low-loss organism must not register loss overload")
+	}
+	if st2.isSustainedOverload() {
+		t.Error("healthy organism must not be overloaded")
+	}
+
+	// Insufficient history: must NOT fire (length-guard, no 0/0 NaN misfire).
+	st3 := NewSyntropyTracker()
+	for i := 0; i < 2; i++ { // < OverloadLossWindow(3)
+		st3.RecordBurst("steady", 9.0, 9.0)
+	}
+	if st3.lossOverload() {
+		t.Error("loss overload must require >= OverloadLossWindow records")
+	}
+}
+
 func TestSyntropyShouldHibernateNoPeers(t *testing.T) {
 	st := NewSyntropyTracker()
 	// No SwarmInfo

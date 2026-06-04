@@ -213,6 +213,9 @@ type Config struct {
 	SyntropyLRBoost        float64 `json:"syntropy_lr_boost"`         // boost LR when syntropy is rising
 	SyntropyLRDampen       float64 `json:"syntropy_lr_dampen"`        // dampen LR when syntropy is falling
 	SyntropyDeltaGrowBoost float64 `json:"syntropy_delta_grow_boost"` // higher delta grow prob when syntropy is good
+	OverloadLossHigh       float64 `json:"overload_loss_high"`        // adult mitosis: mean recent burst loss above this = overwhelmed (confidently-wrong)
+	OverloadLossEps        float64 `json:"overload_loss_eps"`         // adult mitosis: loss-delta floor; meanDelta > -eps = bursts not reducing loss
+	OverloadLossWindow     int     `json:"overload_loss_window"`      // adult mitosis: # recent bursts for lossOverload (decoupled from SyntropyWindow: adult bursts are ~17min apart, so 8 would take ~2.3h; entropy is per-tick, loss is per-burst)
 
 	// consciousness: per-token dissonance feedback
 	DissonanceEMAAlpha      float64 `json:"dissonance_ema_alpha"`       // EMA smoothing for entropy within generation
@@ -333,6 +336,9 @@ var CFG = Config{
 	SyntropyLRBoost:        1.3,
 	SyntropyLRDampen:       0.6,
 	SyntropyDeltaGrowBoost: 0.15,
+	OverloadLossHigh:       5.0,  // healthy adult QuickLoss ~3.6; overwhelmed adult 5.3 (resume) climbing to 8-9 under cross-graze → 5.0 floor captures the regime, clears healthy
+	OverloadLossEps:        0.05, // loss-delta within ±0.05 of zero = not improving
+	OverloadLossWindow:     3,    // 3 sustained high-loss adult bursts = overwhelmed (burst cadence ~17min at adult; 8 would take ~2.3h)
 
 	// consciousness defaults
 	DissonanceEMAAlpha:       0.3,
@@ -5180,6 +5186,7 @@ func (st *SyntropyTracker) DecideAction() SyntropyDecision {
 	now := float64(time.Now().UnixMilli()) / 1000.0
 	if st.ModelStage >= maxStage &&
 		st.isSustainedOverload() &&
+		st.FieldDeviation < CFG.FieldDeviationCeiling && // sanity: don't fork a parent that has drifted off the corpus manifold
 		now-st.LastMitosisTime > 300 {
 		action = "divide"
 		lrMultiplier = CFG.SyntropyLRDampen // slow down while preparing to split
@@ -5238,6 +5245,12 @@ func (st *SyntropyTracker) LogToDB(db *sql.DB, entropyBefore, entropyAfter float
 // healthy-but-overloaded organism. The disjunction recognises the real stress
 // regime (confused-and-stable, trend ≈ 0). Raise, not downgrade. (2026-06-03)
 func (st *SyntropyTracker) isSustainedOverload() bool {
+	return st.entropyOverload() || st.lossOverload()
+}
+
+// entropyOverload: sustained high OUTPUT entropy — the model melts into noise
+// (>75% of the window above EntropyHigh, with a falling trend or very high mean).
+func (st *SyntropyTracker) entropyOverload() bool {
 	if len(st.EntropyHistory) < CFG.SyntropyWindow {
 		return false
 	}
@@ -5253,6 +5266,29 @@ func (st *SyntropyTracker) isSustainedOverload() bool {
 	meanRecentEntropy := sum / float64(len(recent))
 	return highCount > int(float64(CFG.SyntropyWindow)*0.75) &&
 		(st.SyntropyTrend < -0.02 || meanRecentEntropy > CFG.EntropyHigh*1.3)
+}
+
+// lossOverload: the CONFIDENTLY-WRONG overwhelm — recent training bursts hold the
+// loss high and cannot bring it down. A converged adult reads LOW output entropy
+// (sharp distribution) even while its loss is high under the cross-graze flood, so
+// the entropy path misses it; the faithful "can't assimilate the input" signal is
+// the loss itself. Reads existing BurstHistory; length-guard FIRST (an empty slice
+// would give 0/0 = NaN, and a NaN comparison could misfire).
+func (st *SyntropyTracker) lossOverload() bool {
+	if len(st.BurstHistory) < CFG.OverloadLossWindow {
+		return false
+	}
+	recent := st.BurstHistory[len(st.BurstHistory)-CFG.OverloadLossWindow:]
+	sumAfter := 0.0
+	sumDelta := 0.0
+	for _, br := range recent {
+		sumAfter += br.LossAfter
+		sumDelta += br.LossAfter - br.LossBefore
+	}
+	n := float64(len(recent))
+	meanLossAfter := sumAfter / n
+	meanDelta := sumDelta / n
+	return meanLossAfter > CFG.OverloadLossHigh && meanDelta > -CFG.OverloadLossEps
 }
 
 // OverloadDebug formats the isSustainedOverload inputs for the [overload] log
@@ -5277,8 +5313,25 @@ func (st *SyntropyTracker) OverloadDebug() string {
 		sum += e
 	}
 	mean := sum / float64(len(recent))
-	return fmt.Sprintf("high=%d/%d last=%.3f mean=%.3f trend=%.4f overload=%v",
-		highCount, w, st.EntropyHistory[n-1], mean, st.SyntropyTrend, st.isSustainedOverload())
+	// loss signal (the confidently-wrong path) — mirror lossOverload's window math
+	lmean, ldelta := 0.0, 0.0
+	lw := CFG.OverloadLossWindow
+	if ln := len(st.BurstHistory); ln > 0 {
+		if ln < lw {
+			lw = ln
+		}
+		for _, br := range st.BurstHistory[ln-lw:] {
+			lmean += br.LossAfter
+			ldelta += br.LossAfter - br.LossBefore
+		}
+		lmean /= float64(lw)
+		ldelta /= float64(lw)
+	} else {
+		lw = 0
+	}
+	return fmt.Sprintf("entropy[high=%d/%d mean=%.3f trend=%.4f] loss[mean=%.3f delta=%.4f n=%d] overload=%v (e=%v l=%v)",
+		highCount, w, mean, st.SyntropyTrend, lmean, ldelta, lw,
+		st.isSustainedOverload(), st.entropyOverload(), st.lossOverload())
 }
 
 // shouldHibernate returns true if a peer has syntropy > 0.05 AND this organism's last 8 burst deltas avg < 0.01.
@@ -5524,7 +5577,7 @@ func performMitosis(model *GPT, tok *EvolvingTokenizer, db *sql.DB, swarm *Swarm
 		"parent_id":     swarm.OrganismID,
 		"corpus_path":   CFG.CorpusPath,
 		"db_path":       filepath.Join(childDir, "memory.sqlite3"),
-		"ckpt_path":     filepath.Join(childDir, "molequla_ckpt.json"),
+		"ckpt_path":     parentCkpt, // load the checkpoint we ACTUALLY wrote — was childDir/molequla_ckpt.json (never written → child loaded nothing → random embryo, faking lineage)
 		"burst_history": syntracker.BurstHistory,
 	}
 	birthPath := filepath.Join(childDir, "birth.json")
