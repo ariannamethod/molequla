@@ -192,7 +192,7 @@ The same organism in four languages:
 | Language | File | Size | Lines | Notes |
 |----------|------|------|-------|-------|
 | **Go** | `molequla.go` | 212K | 6,935 | Primary. Full ecology, DNA exchange, mitosis, GPU forward, cross-graze. notorch/AML via CGO for training |
-| **C** | `molequla.c` | 212K | 5,583 | Single-file, BLAS-accelerated, zero deps beyond libc. [Gist](https://gist.github.com/ariannamethod/9be98dbebb85e58e2affab4f39d2e972) |
+| **C** | `molequla.c` | 212K | 5,583 | Single-file, BLAS-accelerated, zero deps beyond libc + system SQLite. [Gist](https://gist.github.com/ariannamethod/9be98dbebb85e58e2affab4f39d2e972) |
 | **Rust** | `molequla.rs` | 148K | 3,500+ | rusqlite, native autograd |
 | **JavaScript** | `molequla.js` | 152K | 3,900+ | Browser tab. One `<script>` tag. [Gist](https://gist.github.com/ariannamethod/bbd11e24740189f2bf78f43db9fea4db) |
 
@@ -624,9 +624,12 @@ The Python orchestrator (`mycelium.py`) that sees the entire ecology — a layer
 
 ### Mesh Coordination
 
-All organisms share state via **mesh.db** (SQLite) — the same database that `SwarmRegistry` writes to. The mycelium reads mesh.db to see the entire ecology and makes decisions that individual organisms cannot: when to spawn, when to hibernate, when to shift seasonal phase.
+All organisms share state via **mesh.db** (SQLite) — the same database that `SwarmRegistry` writes to. The mycelium reads mesh.db to see the entire ecology and makes decisions that individual organisms cannot: when to spawn, when to hibernate. (The seasonal phase machinery lives in the C field engine, not mycelium.py — see below.)
 
 ### Seasonal Controller
+
+*Implemented in the C field engine (`ariannamethod.c`), driven by field state — not by mycelium.py.*
+
 
 ```
 Spring  — tunnel_chance ↑, many embryos, new γ born
@@ -738,7 +741,7 @@ Monitor: `tail -f work_earth/training_aml.log`, `grep "dna\|consumed\|wrote"` fo
 ## Tests
 
 ```bash
-# Go unit tests (2623 lines, 122 tests)
+# Go unit tests (126 tests: molequla_test.go 122 + molequla_rrpram_test.go 4)
 go test -v .
 
 # Go integration tests (262 lines)
@@ -758,6 +761,13 @@ bash tests/test_all.sh
 molequla.go              6935 lines   Go organism — lifecycle, ecology, autograd, generation, coherence-layer + GPU + graze wiring
 cgo_aml.go               114 lines    CGO bridge to ariannamethod.c
 aml_trainer.go           352 lines    AML training wrapper, script generation
+notorch_trainer.go       462 lines    notorch tape trainer — CANONICAL (CFG.Trainer default "notorch"), Chuck optimizer
+cgo_notorch.go           175 lines    CGO bridge to libnotorch
+cgo_notorch_cpu.go       13 lines     notorch CPU/BLAS link (default build)
+cgo_notorch_cuda.go      51 lines     notorch CUDA link (-tags cuda)
+gpu_notorch_stub.go      20 lines     notorch GPU stub (non-CUDA)
+metaweights_overlay.go   439 lines    Q-style additive logit overlay (B+T+H+A+F)
+metaweights_seeding.go   124 lines    gamma->epsilon embedding seeding from co-occurrence
 spa_coherence.go         164 lines    Pure-Go SPA helper (sentence connectedness + weak-sentence gate)
 cross_graze.go           216 lines    Dario-style cross-organism logit injection (sibling DNA → rank-decay boost)
 gpu_bindings_linux.go    196 lines    CGO bindings to ariannamethod_cuda.h (linux only)
@@ -768,11 +778,19 @@ ariannamethod/
   ariannamethod.c        8000 lines   AML/C autograd engine (the language) + SPA ops + NaN guard API
   ariannamethod.h        1051 lines    C header, 80+ field state parameters
   ariannamethod_cuda.h   108 lines    CUDA primitive declarations (gpu_init / gpu_sgemm_nt / ...)
+  notorch_cuda.h         192 lines    notorch CUDA op declarations
+  __init__.py            9 lines      Python package init (exports Method, Sentinel)
+  method.py              527 lines    METHOD engine — ctypes binding to libaml (am_method_*)
+  sentinel.py            356 lines    Sentinel operator — ctypes binding to libaml
   notorch.c              4739 lines   Vendored notorch core (+ backward CPU-sync audit)
   notorch.h              694 lines    Vendored notorch header
   notorch_simd.h         632 lines    Opt-in AVX2+FMA cblas shim (make simd, x86_64)
   notorch_simd_scalar.h  89 lines     Scalar debug fallback for SIMD shim
   notorch_cuda.cu        1344 lines   CUDA kernels; pre-compiled via nvcc, linked through cgo_aml.go
+
+# Mycelium + Python orchestration tier (above the Go/C/Rust/JS cores)
+mycelium.py              1660 lines   Meta-coordinator (numpy-free, pure stdlib) — reads swarm organisms, writes field_steering, wraps C HarmonicNet
+standalone-py/molequla.py 3387 lines  Original Python molequla — deprecated historical reference, wired to nothing
 
 # Engineering log
 PROJECT_LOG.md           ≈2600 lines  Live per-commit log — Phase A (GPU) + Phase B (graze) + Phase C (ecology) with file:line refs
@@ -786,6 +804,7 @@ index.html               Web interface for JS version
 
 # Tests
 molequla_test.go         2623 lines   Go unit tests (122 tests)
+molequla_rrpram_test.go  306 lines    op-33 low-rank RRPRAM parity (4 tests; 126 total)
 tests/molequla_test.go   262 lines    Go integration tests
 tests/test_all.sh        711 lines    Full integration (all 4 langs + mycelium + BLAS)
 
@@ -801,7 +820,7 @@ nonames.txt              51K          General corpus
 
 ## Standalone Gists
 
-C and JavaScript gists linked in [Four Implementations](#four-implementations). Original Python prototype: [molequla.py](https://gist.github.com/ariannamethod/1223250d358da4393dd9acc578790820) (legacy, where it started).
+C and JavaScript gists linked in [Four Implementations](#four-implementations). Original Python prototype: [molequla.py](https://gist.github.com/ariannamethod/1223250d358da4393dd9acc578790820) (legacy, where it started) — also restored in-repo at `standalone-py/molequla.py` (numpy-backed historical reference, deprecated for speed).
 
 ---
 

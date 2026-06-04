@@ -2105,9 +2105,8 @@ files. Branch state verified: `molequla-rrpram-inc2` HEAD `2b4fd03`, Inc2
 (low-rank RRPRAM, 22 commits incl. growth-fix Fix A/B/C + GPU-train Inc1)
 is **local-only — NOT on origin/main** (`git merge-base --is-ancestor
 3b54bf5 origin/main` → false; no remote inc2 branch). origin/main top
-`b0f073e`. The inc2 memory milestone says "landed on main `3b54bf5`" —
-that is **stale/wrong**: the work is unpushed, no remote backup. Flag for
-push decision (Oleg's word).
+`b0f073e`. Inc2 is local-only — not yet pushed, no remote backup (the inc2 memory
+note referencing `3b54bf5` predates the push). Flag for push decision (Oleg's word).
 
 **Directive (Oleg, firm):** README is the prophecy/spec — raise the CODE
 to meet it, do not downgrade README. The README is the spec; the code is
