@@ -605,6 +605,18 @@ that produced random children is not reproduction. The path was
 corrected to load the checkpoint actually written (`molequla.go:5569,
 5580`).
 
+Three on-pod Singularity iterations followed, each a minimal change
+between runs: (1) the GPU dispatch threshold was lowered (`6→5`) and
+`--gpu` enabled so generation as well as training engaged the device;
+(2) `OverloadLossWindow` was tuned from 8 to 3 — at adult-stage burst
+cadence ~17 minutes, 8 sustained bursts would have taken >2 hours,
+while the `[overload]` dual-signal already showed the loss path was
+right (mean ~11, only the window blocked); (3) three sustained
+loss-12 bursts crossed the gate and the divide fired
+(`PROJECT_LOG.md:2580-2582`). The pattern is the Singularity Mode
+contract from §5.0 in practice: reproduce, one hypothesis, minimal
+change, re-run; stop the moment the gate fires.
+
 With both fixes the adult divided. The event, verbatim from Fire's log:
 
 ```
