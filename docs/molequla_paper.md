@@ -86,7 +86,7 @@ strength. An organism is born as a ~10K-parameter embryo and grows
 through six ontogenesis stages to a ~10M-parameter adult. The growth
 is not a training schedule; it is architectural. Embeddings expand via
 Net2Net, layers are appended, delta adapters accumulate. The six stages
-and their corpus-size gates (`molequla.go:238-245`):
+and their corpus-size gates (`molequla.go:259-265`):
 
 | stage | corpus chars ≥ | n_embd | n_layer | n_head | ~params |
 |---|---|---|---|---|---|
@@ -329,12 +329,12 @@ The cause: `growthFreezeRemaining`, the post-growth stabilization
 counter set to 500 after each stage transition, was pinned at 500
 across 150–200 ticks (`work_*/train.log` `[debug-onto]` lines). The
 growth gate `MaybeGrowArchitecture` refuses to grow while the freeze
-counter is above zero (`molequla.go:2128`). The counter never drained,
+counter is above zero (`molequla.go:2201-2202`). The counter never drained,
 so the gate never opened.
 
 The counter is decremented by the training paths. Three training
-entry points exist — `trainSteps` (`molequla.go:5896`), the notorch
-path (`molequla.go:5793`), and the AML burst path
+entry points exist — `trainSteps` (`molequla.go:6108`), the notorch
+path (`molequla.go:5845`), and the AML burst path
 (`amlBurstTrain`/`amlTrainSteps` in `aml_trainer.go`). The first two
 decremented the counter. The AML burst path **read** the counter, to
 scale its learning rate, but never decremented it. Ecology training
@@ -342,7 +342,7 @@ runs through the AML burst path. The counter was therefore structurally
 permanent.
 
 Fixed in commit `ff6ad49`: the decrement was added to both AML paths
-(`aml_trainer.go:236, 324`), matching the `trainSteps` pattern. The
+(`aml_trainer.go:238-243, 333-336`), matching the `trainSteps` pattern. The
 post-fix run confirmed it — all four organisms ended with the freeze
 counter drained to zero.
 
@@ -462,7 +462,7 @@ every tick over the whole corpus, was throttled to a periodic rebuild
 (`molequla.go`, commit `4bab63f`), and the DNA fragment size was raised
 so each emission carries real organism output rather than a few bytes
 (`8c32989`). The ontogenesis clock — a monotonic count of all text ever
-ingested (`corpusIngestedTotal`, `molequla.go:2198`) — then advanced at
+ingested (`corpusIngestedTotal`, `molequla.go:2204`) — then advanced at
 a usable rate.
 
 That exposed the second wall. On the first GPU run the organisms
@@ -540,7 +540,7 @@ told the child to load another, which did not exist — so a spawned
 child loaded nothing and began as a fresh random embryo. A "mitosis"
 that produced random children is not reproduction. The path was
 corrected to load the checkpoint actually written (`molequla.go:5569,
-5583`).
+5580`).
 
 With both fixes the adult divided. The event, verbatim from Fire's log:
 
