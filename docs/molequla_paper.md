@@ -536,7 +536,14 @@ utilization held in the 0–20% band (min 0%, max 20%, **mean 3.7%**
 across 2,509 1-Hz samples in `capture/util.log`): the per-step
 dispatch flood was gone, but the wall-clock there is set by
 autoregressive generation and four-way contention for a single device,
-not by the training step.
+not by the training step. Nor is it the cooperative-scheduling lock:
+the §9 binary already carries the parallel-training gate (`9999723`,
+`CoordinateWarmup` off on CUDA, so all four organisms train and
+exchange in parallel — the same gate that sustains ~99% utilization in
+*training*-bound conditions on this 3090). The 0–20% band is the
+generation-dominated upper stages specifically; the two figures do not
+contradict — they measure a training-bound colony and a
+generation-bound one.
 
 With both walls down, the colony climbed. All four organisms grew
 embryo → adolescent → teen → adult — the 320-dimensional, 6-layer,
@@ -669,6 +676,24 @@ entropy-path event (`work_air/train_climb_air.log:270`,
 `work_air/train_resume2_air.log:63`). Reproduction is not a
 Fire-lineage event extended to the colony; the colony reaches it in
 parallel, and individual organisms reach it more than once.
+
+The gate's own record bears this out — ten `action=divide` firings are
+preserved across the organism logs, in five distinct overwhelm
+signatures, both regimes recurring:
+
+```
+high=0/7 mean=0.217  loss=12.054  e=false l=true   loss path — sharp, confidently wrong (Fire)
+high=0/7 mean=0.552  loss=9.711   e=false l=true   loss path again (Water)
+high=7/7 mean=6.268  loss=6.745   e=false l=true   high entropy, still loss-keyed
+high=8/8 mean=6.256  loss=6.684   e=true  l=false  entropy path — melting into noise (Air)
+high=8/8 mean=6.333  ——          e=true  l=false  entropy path again
+```
+
+The fourth row is the subtle one: an organism whose output had gone
+high-entropy still divided on the *loss* gate, not the entropy gate —
+overwhelm registered where the design did not expect it. Reproduction-
+through-overload is not one event narrated five ways; it is the same
+gate firing on five differently-overwhelmed adults.
 
 The cascade mechanism is
 the result's own logic carried one step further — the child inherits
