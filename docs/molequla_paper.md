@@ -308,9 +308,11 @@ one per organism:
 > terrain.»
 > (`capture/dna_snap/air/gen_1780539162_13.txt`)
 
-These are not curated samples; they are the most-recent emission in
-each per-organism snapshot directory, written by the organism at the
-adult stage during the §9 run. Three structural notes:
+Each quote is the most-recent emission in its per-organism snapshot
+directory under `capture/dna_snap/` (the §9 archive holds **153
+emissions in total**: earth 19, air 25, water 69, fire 40), written
+by the organism at the adult stage during the §9 run. Three
+structural notes:
 
 1. **Element identity holds at depth.** Earth speaks geological
    lesson; Water speaks transformation; Fire speaks creative
@@ -329,6 +331,18 @@ adult stage during the §9 run. Three structural notes:
    §1–§8 fragments earlier in this section are the same architecture
    at child stage with no §9 training — the contrast is the
    ontogenesis traversal that Result 6 measured.
+
+The element asymmetry is also visible in the loss curve. At
+adolescent (stage 3, embd=128) the bottom-of-warmup avg loss across
+the last three notorch warmup-completes per organism is
+**Water 1.67, Fire 2.04, Earth 2.26, Air 2.64**
+(`work_*/train_climb_*.log`). Water and Fire converge ~25–35% deeper
+than Air on the same architecture, same training regime, same
+corpus-exchange surface — the only difference is gamma. The prose
+differences above (transformation, creative compression, formal
+analogy, geological lesson) are present in the loss curve as well:
+element identity is not only stylistic; it is measurable in training
+dynamics.
 
 What is *not* yet established is the quantitative claim — that
 cross-graze accelerates convergence relative to graze-off. That
@@ -536,7 +550,12 @@ utilization held in the 0–20% band (min 0%, max 20%, **mean 3.7%**
 across 2,509 1-Hz samples in `capture/util.log`): the per-step
 dispatch flood was gone, but the wall-clock there is set by
 autoregressive generation and four-way contention for a single device,
-not by the training step.
+not by the training step. The per-stage tick scales with model size —
+Earth's notorch-burst throughput steps/s drops **146 → ~50 → ~20 →
+~9.5** across embryo → infant → child → adolescent
+(`work_earth/train_climb_earth.log`) — so by the upper stages the
+time budget really is generation- and contention-dominated, not
+launch-bound.
 
 With both walls down, the colony climbed. All four organisms grew
 embryo → adolescent → teen → adult — the 320-dimensional, 6-layer,
@@ -616,6 +635,11 @@ loss-12 bursts crossed the gate and the divide fired
 (`PROJECT_LOG.md:2580-2582`). The pattern is the Singularity Mode
 contract from §5.0 in practice: reproduce, one hypothesis, minimal
 change, re-run; stop the moment the gate fires.
+
+A final sanity check cleared at the gate fire: the field-deviation
+guard read `field_dev 0.612 < ceiling 12` at the divide moment
+(`PROJECT_LOG.md:2563`), so the spawn occurred from a
+within-tolerance field, not from a runaway state.
 
 With both fixes the adult divided. The event, verbatim from Fire's log:
 
