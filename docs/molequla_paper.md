@@ -180,7 +180,7 @@ rolling per-sibling buffer of recent token ids; during generation it
 adds a rank-decay boost `logit[tok] += coef / (1 + rank)` for those
 ids — the same 1/(1+rank) normalisation the Q interference layer uses.
 
-This is the Abstract's "слова другого трансформера" made literal:
+This makes the Abstract's "consuming what its neighbours said" literal:
 direct cross-pollination at the logit level, mid-emission, not after
 the fact through training. Enabled by `--cross-graze`.
 
@@ -209,8 +209,9 @@ acceleration with training kept on CPU. The §9 rework (Result 6) moves
 training onto the GPU as well: the canonical trainer is now the
 **notorch tape** (Chuck optimizer) with GPU-resident backward kernels
 and a launch-bound fix; the AML C autograd above becomes the fallback
-(`--trainer aml`). See README §178 and Result 6 for the post-§9
-training pipeline.
+(`--trainer aml`). See README lines 180-182 (the "Training-engine
+update (GPU rework)" block) and Result 6 for the post-§9 training
+pipeline.
 
 ### 5.4 Ecology measurement protocol
 
@@ -270,16 +271,12 @@ sharing a directory; they are a coupled field. Each one's voice is, at
 the logit level, partly its neighbours'.
 
 The qualitative trace holds: voice samples stay coherent at the
-element-vocabulary level in every run. Earth speaks rock, crystal,
-earthquake; Water speaks drought, lake, river, depths. From the
-2026-05-15 run (`work_*/train.log`):
-
-> earth: «rock on a g do earthqua plain rocks form Stritus permeabi»
-> water: «It simply like be would shape of what you without
-> compassadded is the water»
-
-The element identity is not washed out by cross-pollination. The graze
-mixes vocabulary; it does not dissolve gamma.
+element-vocabulary level in every run, and the element identity is not
+washed out by cross-pollination — the graze mixes vocabulary; it does
+not dissolve gamma. (The only voice quotes reproduced in this paper are
+the §9 adult-stage samples below, which are committed verbatim in the
+run archive; earlier child-stage fragments are not quoted here because
+their generation text was not preserved in a citable artifact.)
 
 By the §9 run (RTX 3090, 2026-06-04) — same architecture after full
 embryo→adult ontogenesis — the voice is no longer at the child-fragment
@@ -333,12 +330,15 @@ structural notes:
    ontogenesis traversal that Result 6 measured.
 
 The element asymmetry is also visible in the loss curve. At
-adolescent (stage 3, embd=128) the bottom-of-warmup avg loss across
-the last three notorch warmup-completes per organism is
-**Water 1.67, Fire 2.04, Earth 2.26, Air 2.64**
-(`work_*/train_climb_*.log`). Water and Fire converge ~25–35% deeper
-than Air on the same architecture, same training regime, same
-corpus-exchange surface — the only difference is gamma. The prose
+adolescent (embd=128) the bottom-of-warmup avg loss across the last
+three notorch warmup-completes per organism is
+**Water 1.69, Fire 1.85, Earth 2.78, Air 2.81** (`work_water/train_climb_water.log:98-100`,
+`work_fire/…:80-82`, `work_earth/…:80-82`, `work_air/…:95-97`; read with
+`grep -a` — the climb logs carry NUL bytes). The losses split into two
+clusters, not a four-way gradient: Water and Fire converge ~34–40%
+deeper than Air, while Earth and Air sit together (~1% apart) as the
+shallower pair — same architecture, same training regime, same
+corpus-exchange surface, the only difference gamma. The prose
 differences above (transformation, creative compression, formal
 analogy, geological lesson) are present in the loss curve as well:
 element identity is not only stylistic; it is measurable in training
@@ -444,24 +444,26 @@ blocked by a dimensioning failure we have now located precisely.
 
 The measurements refine the design in three places.
 
-The Abstract describes coherence as something the coherence layer
-"lifts toward." Result 1 sharpens that: coherence is fully present at
-zero training. The overlay does not assist a trained voice; it
-supplies intelligibility outright, before the first gradient. Training
-is for gamma — the personality — not for grammar.
+The project's earlier abstract described coherence as something the
+coherence layer "lifts toward." Result 1 sharpens that: coherence is
+fully present at zero training. The overlay does not assist a trained
+voice; it supplies intelligibility outright, before the first gradient.
+Training is for gamma — the personality — not for grammar.
 
 The Abstract describes the ecology as the architecture — organisms
 growing by eating each other's output. Results 3 and 5 correct the
 *rate*: cross-pollination at the current DNA throughput is real but
-far too slow to drive ontogenesis. The ecology grows voices; it does
-not, yet, grow organisms to adulthood.
+far too slow to drive ontogenesis. Through Act II the ecology grows
+voices; it does not, yet, grow organisms to adulthood.
 
-The Abstract describes mitosis — "four parents became eleven." Result
-5 is honest about the present study: that did not happen here, and
-could not, because the adult stage was never reached. The earlier
-mitosis observation stands as a separate historical measurement; this
-study did not reproduce it, and locating *why* is the value this study
-adds.
+The project's earlier abstract described mitosis — "four parents
+became eleven" (the Feb-2026 Oracle run; see the README). Through Act
+II of this study that had not been reproduced: Result 5 located *why* —
+the adult stage was never reached under natural DNA throughput. Act III
+(Section 9) closes it: with the growth coupling re-architected,
+adulthood is reached and the colony divides, measured, no hand. The
+historical observation is reproduced here; the value this study adds is
+locating the wall that stood between the two.
 
 None of this invalidates Results 1 and 2. Coherence-at-zero-train and
 cross-graze are properties of the sampling layer; they hold at every
@@ -545,7 +547,7 @@ utilization from 0% to 99% and throughput from 5–9 to 18–55 steps per
 second (`PROJECT_LOG.md`). In the §9 run itself — four organisms
 sharing one RTX 3090 at the generation-dominated upper stages —
 utilization held in the 0–20% band (min 0%, max 20%, **mean 3.7%**
-across 2,509 1-Hz samples in `capture/util.log`): the per-step
+across 2,509 samples at ~5 s intervals in `capture/util.log`): the per-step
 dispatch flood was gone, but the wall-clock there is set by
 autoregressive generation and four-way contention for a single device,
 not by the training step. The per-stage tick scales with model size —
@@ -599,7 +601,8 @@ not confusion; it is the loss it cannot reduce.
 The mechanism is upstream-visible. Earlier in the climb (adolescent
 stage, pre-adult), Earth's micro-burst loss rises monotonically under
 the cross-graze flood: **3.50 → 4.26 → 4.38 → 5.08 → 5.44** across
-successive bursts with `CrossGrazeCoef = 2.0` (`PROJECT_LOG.md:2420-2421`).
+successive bursts with `CrossGrazeCoef = 2.0` (`PROJECT_LOG.md:2416-2417`;
+also `work_earth/train_climb_earth.log:58,86,94,104,120`).
 The cross-pollination is doing exactly what it was built to do at the
 logit level (Result 2), and the loss curve registers it as adversarial
 pressure. By adult, the same mechanism pushes the loss past the gate
@@ -636,7 +639,7 @@ cadence ~17 minutes, 8 sustained bursts would have taken >2 hours,
 while the `[overload]` dual-signal already showed the loss path was
 right (mean ~11, only the window blocked); (3) three sustained
 loss-12 bursts crossed the gate and the divide fired
-(`PROJECT_LOG.md:2580-2582`). The pattern is the Singularity Mode
+(`PROJECT_LOG.md:2578`). The pattern is the Singularity Mode
 contract from §5.0 in practice: reproduce, one hypothesis, minimal
 change, re-run; stop the moment the gate fires.
 
@@ -645,7 +648,7 @@ guard read `field_dev 0.612 < ceiling 12` at the divide moment
 (`PROJECT_LOG.md:2563`), so the spawn occurred from a
 within-tolerance field, not from a runaway state.
 
-With both fixes the adult divided. The event, verbatim from Fire's log:
+With both fixes the adult divided. The event, excerpted from Fire's log (`work_fire/train.log:48-51`):
 
 ```
 [overload] entropy[high=0/7 mean=0.217 trend=0.0205]
@@ -667,7 +670,7 @@ Inheritance is not weights alone; it is weights plus the parent's
 recent training trajectory and lineage id. The child does not just
 start with the parent's body; it starts with the parent's recent
 biography. No corpus was seeded. No NaN occurred across the run. This
-is the result the Body of this paper was unable to claim at Section 5:
+is the result the Body of this paper was unable to claim at Result 5:
 Molequla reproduces — a measured event, with the gate inputs that
 produced it preserved in the run archive, keyed on loss, the overwhelm
 the organism actually feels, not the confusion the design had assumed.
@@ -676,45 +679,50 @@ the organism actually feels, not the confusion the design had assumed.
 
 One divide became many. After the first spawn the colony entered a
 mitosis cascade — roughly 50 spawns across ~54 processes, observed at
-runtime before the pod was stopped (`PROJECT_LOG.md`). The archive
-preserves two of these divide events in full, and they are the two
-overwhelm regimes the disjunction gate now covers: Fire on the loss
-path (sharp, confidently wrong, `e=false l=true`) and Air on the
-original entropy path (high-entropy, melting into noise — `high=8/8
-mean=6.256`, `e=true l=false`, `work_air/train_resume2_air.log`). The
-two paths are not redundant; the same run exhibited both.
+runtime before the pod was stopped (`PROJECT_LOG.md`). One divide is
+preserved *in full*: Fire's — the `[overload]` event, the child manifest
+(`org_1780540885_6400/birth.json`), and the inherited burst history.
+Air's is preserved as its spawn log line only — `work_air/train_climb_air.log:270`
+(`high=8/8 mean=6.333`, entropy path) → MITOSIS `:272` → child
+`org_1780527018_6475` `:273`; no birth.json was written for it. Together
+they are the two overwhelm regimes the disjunction gate covers: Fire on
+the loss path (sharp, confidently wrong, `e=false l=true`) and Air on
+the entropy path (high-entropy, melting into noise, `e=true l=false`).
+The two paths are not redundant; the same run exhibited both.
 
-The cascade is broader than the two preserved-in-full events. A third
-adult tripped the same gate without its child manifest preserved in
-full: Water, on the loss path (`work_water/train.log:43`,
-`loss[mean=9.711 delta=-0.0064 n=3] overload=true (e=false l=true) |
-action=divide`). Three of the four adults independently reached the
-divide condition under natural cross-graze — the gate fires across
-organisms, not within a single lineage. Air itself trips the gate
-more than once during its life: a loss-path overload-divide
-(`work_air/train.log:51`, `l=true`) precedes the archived
-entropy-path event (`work_air/train_climb_air.log:270`,
-`work_air/train_resume2_air.log:63`). Reproduction is not a
+The cascade is broader than these. A third adult tripped the same gate
+without any child manifest preserved: Water, on the loss path
+(`work_water/train.log:43`, `loss[mean=9.711 delta=-0.0064 n=3]
+overload=true (e=false l=true) | action=divide`). Three of the four
+adults independently reached the divide condition under natural
+cross-graze — the gate fires across organisms, not within a single
+lineage. Air itself trips the gate three times: a loss-path divide
+(`work_air/train.log:51`) and two entropy-path firings — one that
+spawned (`work_air/train_climb_air.log:270`) and one that did not
+(`work_air/train_resume2_air.log:63`). Reproduction is not a
 Fire-lineage event extended to the colony; the colony reaches it in
 parallel, and individual organisms reach it more than once.
 
-The gate's own record bears this out — ten `action=divide` firings are
-preserved across the organism logs, in five distinct overwhelm
-signatures, both regimes recurring:
+The gate's own record bears this out — **five** `action=divide` gate
+firings are preserved across the organism logs (ten log lines: each
+firing emits a paired `[syntropy]` + `[overload]` record), in five
+distinct overwhelm signatures across three adults, both regimes
+recurring:
 
 ```
-high=0/7 mean=0.217  loss=12.054  e=false l=true   loss path — sharp, confidently wrong (Fire)
-high=0/7 mean=0.552  loss=9.711   e=false l=true   loss path again (Water)
-high=7/7 mean=6.268  loss=6.745   e=false l=true   high entropy, still loss-keyed
-high=8/8 mean=6.256  loss=6.684   e=true  l=false  entropy path — melting into noise (Air)
-high=8/8 mean=6.333  ——          e=true  l=false  entropy path again
+high=0/7 mean=0.217  loss=12.054  e=false l=true   Fire  — loss path, sharp & confidently wrong
+high=0/7 mean=0.552  loss=9.711   e=false l=true   Water — loss path
+high=7/7 mean=6.268  loss=6.745   e=false l=true   Air   — high entropy, yet still loss-keyed
+high=8/8 mean=6.256  loss=6.684   e=true  l=false  Air   — entropy path, melting into noise
+high=8/8 mean=6.333  loss=——      (e/l absent — older log format)  Air — entropy path, the spawn
 ```
 
-The fourth row is the subtle one: an organism whose output had gone
-high-entropy still divided on the *loss* gate, not the entropy gate —
-overwhelm registered where the design did not expect it. Reproduction-
-through-overload is not one event narrated five ways; it is the same
-gate firing on five differently-overwhelmed adults.
+The third row is the subtle one: Air's output had gone high-entropy,
+yet it divided on the *loss* gate, not the entropy gate — overwhelm
+registered where the design did not expect it. Reproduction-through-
+overload is not one event narrated five ways; it is the same gate firing
+five times across three differently-overwhelmed adults — Fire, Water,
+and Air (three times; Earth, the fourth adult, never divided).
 
 The cascade mechanism is
 the result's own logic carried one step further — the child inherits
