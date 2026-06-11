@@ -5577,7 +5577,7 @@ func performMitosis(model *GPT, tok *EvolvingTokenizer, db *sql.DB, swarm *Swarm
 		"parent_id":     swarm.OrganismID,
 		"corpus_path":   CFG.CorpusPath,
 		"db_path":       filepath.Join(childDir, "memory.sqlite3"),
-		"ckpt_path":     parentCkpt, // load the checkpoint we ACTUALLY wrote — was childDir/molequla_ckpt.json (never written → child loaded nothing → random embryo, faking lineage)
+		"ckpt_path":     parentCkpt, // load the parent checkpoint actually written at spawn time (see performMitosis above)
 		"burst_history": syntracker.BurstHistory,
 	}
 	birthPath := filepath.Join(childDir, "birth.json")

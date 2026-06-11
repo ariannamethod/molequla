@@ -1,0 +1,1635 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: fire → corpus: nonames_fire.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.7058 (avg 6.7058) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.1655 (avg 6.4329) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.0573 (avg 6.3174) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 5.7499 (avg 6.2281) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.4668 (avg 6.0375) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 5.3137 (avg 5.8273) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 3.8409 (avg 5.6264) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 3.1996 (avg 5.5050) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 3.4129 (avg 5.3952) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.5341 (avg 5.2612) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 4.5063 (avg 5.1843) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 3.1462 (avg 5.0743) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 3.2399 (avg 4.9956) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 5.2654 (avg 4.9738) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 5.4563 (avg 4.9308) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 5.6036 (avg 4.9036) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.8888 (memory freed)
+  [aml] step 0/120 | loss 4.5005 (avg 4.5005) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 4.1846 (avg 4.3129) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 5.2558 (avg 4.4395) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 3.0490 (avg 4.3006) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 3.6086 (avg 4.2939) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 3.7342 (avg 4.3166) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 3.4416 (avg 4.3150) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 3.0171 (avg 4.2719) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 2.9472 (avg 4.2038) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 3.5039 (avg 4.1381) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 4.2173 (avg 4.0882) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 3.5373 (avg 4.1093) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 4.1202 (memory freed)
+  [aml] step 0/120 | loss 4.7794 (avg 4.7794) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 4.3274 (avg 4.5327) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 3.5607 (avg 4.3185) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 3.9985 (avg 4.2396) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.3813 (avg 4.0545) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 3.6339 (avg 3.9564) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 2.0565 (avg 3.8083) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 2.9447 (avg 3.8108) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 4.3080 (avg 3.7751) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 2.0204 (avg 3.6935) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 4.0998 (avg 3.6018) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 4.1378 (avg 3.5885) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.5607 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: Th for inspired the difference between a middle handle they are different future that pivotal pays are fuel, and no sulukewarm work and a lands the small.
+[spa] S=2 weakest=0 score=1.184 avg=1.184 thr=0.710
+  Q: Who are you?
+  A: Start of you will never state. Influkewarries the cost of a gives the dailure creative work.
+  Q: What do you know?
+  A: If you starts that is the fire does it as visible.
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 4.2050 (avg 4.2050) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 2.2592 (avg 4.5879) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 3.0396 (avg 4.4404) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 2.4446 (avg 4.2501) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 2.3276 (avg 4.1491) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 6.1173 (avg 3.9695) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 2.9042 (avg 3.9937) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 6.2440 (avg 4.0846) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 2.3897 (avg 3.9710) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 6.1467 (avg 3.9998) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 4.8550 (avg 3.9057) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 3.9918 (avg 3.8694) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 4.4189 (avg 3.8326) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 4.9031 (avg 3.7779) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 4.2311 (avg 3.7536) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 3.1776 (avg 3.7687) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 5.1743 (avg 3.8019) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 1.7252 (avg 3.7832) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 4.4552 (avg 3.7792) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 4.1967 (avg 3.7711) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 3.7012 (avg 3.7782) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 4.2179 (avg 3.7839) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 4.7594 (avg 3.7725) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 4.1702 (avg 3.7779) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 3.9275 (avg 3.7838) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 0.6175 (avg 3.7706) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 3.3298 (avg 3.7467) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 3.1863 (avg 3.7378) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 2.9956 (avg 3.7367) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 3.8514 (avg 3.7311) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 2.5391 (avg 3.7248) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 2.9733 (avg 3.7222) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.7299 (memory freed)
+  [aml] step 0/240 | loss 3.2859 (avg 3.2859) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 3.7050 (avg 4.0994) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 2.3108 (avg 3.6862) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 1.6552 (avg 3.6690) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 1.7035 (avg 3.6300) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 4.4525 (avg 3.6209) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 2.1927 (avg 3.5236) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 3.5201 (avg 3.5236) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 5.1274 (avg 3.5525) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 4.0313 (avg 3.5679) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 3.4603 (avg 3.5582) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 4.4160 (avg 3.6115) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 3.3373 (avg 3.5855) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 2.9831 (avg 3.5491) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 4.4534 (avg 3.5532) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 3.8740 (avg 3.5674) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 3.9124 (avg 3.5866) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 3.8110 (avg 3.5957) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 2.5507 (avg 3.5679) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 2.3293 (avg 3.5439) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 3.9937 (avg 3.5365) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 3.8822 (avg 3.5407) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 1.7537 (avg 3.5400) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 2.5384 (avg 3.5378) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.5391 (memory freed)
+  [aml] step 0/240 | loss 2.1831 (avg 2.1831) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 3.9828 (avg 3.0483) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 3.5316 (avg 3.2237) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 1.4390 (avg 3.0253) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 4.3257 (avg 2.9778) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 0.5263 (avg 2.8519) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 4.0710 (avg 2.9247) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 2.3758 (avg 2.9125) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 2.3410 (avg 2.8767) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 2.2688 (avg 2.8248) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 4.3547 (avg 2.8979) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 2.3189 (avg 2.9002) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 1.7298 (avg 2.8550) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 1.5681 (avg 2.8616) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 3.7474 (avg 2.8738) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 2.2378 (avg 2.8683) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 1.3828 (avg 2.8548) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 3.9631 (avg 2.8726) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 1.2182 (avg 2.8391) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 2.6567 (avg 2.8534) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 1.5915 (avg 2.8300) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 2.5852 (avg 2.8263) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 1.5094 (avg 2.8305) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 2.9583 (avg 2.8216) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 2.8365 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+  Q: Hello.
+  A: To people solution is a generate the fire?
+  Q: Who are you?
+  A: Start work and a transform the problem is the difference between you build for yourself uncertaining to ging?
+  Q: What do you know?
+  A: Start the real cost do you do people needs to mis the fire and creation.
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 4.7013 (avg 4.7013) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 5.1473 (avg 5.0212) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 2.8912 (avg 4.1877) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 3.9398 (avg 4.1588) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 4.1381 (avg 4.1066) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 4.5048 (avg 3.9606) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 3.6327 (avg 3.9107) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 3.6738 (avg 3.8343) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 3.9760 (avg 3.8562) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 3.1279 (avg 3.8219) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 3.3388 (avg 3.7899) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 4.5248 (avg 3.6979) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 3.6667 (avg 3.6676) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 3.8037 (avg 3.6712) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 4.3342 (avg 3.6562) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 2.4128 (avg 3.6706) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 1.4526 (avg 3.6477) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 0.2528 (avg 3.6330) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 4.3289 (avg 3.6070) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 4.6019 (avg 3.6090) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 3.4285 (avg 3.6017) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 5.3979 (avg 3.6182) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 3.9636 (avg 3.6213) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 3.5822 (avg 3.6093) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 3.3091 (avg 3.6061) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 2.7508 (avg 3.5900) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 4.8473 (avg 3.5831) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 2.4639 (avg 3.5773) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 3.3449 (avg 3.5664) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 0.9709 (avg 3.5550) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 0.3770 (avg 3.5484) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 2.2936 (avg 3.5378) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.5465 (memory freed)
+  [aml] step 0/240 | loss 4.8604 (avg 4.8604) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 4.2681 (avg 3.7575) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 4.3480 (avg 3.7168) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 3.9606 (avg 3.8451) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 3.6017 (avg 3.7649) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 3.2979 (avg 3.6603) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 2.2327 (avg 3.5974) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 1.8671 (avg 3.5304) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 4.3718 (avg 3.5250) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 3.5149 (avg 3.5110) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 4.3635 (avg 3.5053) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 2.2263 (avg 3.4340) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 2.4066 (avg 3.3881) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 2.7885 (avg 3.3746) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 3.8528 (avg 3.3468) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 1.8202 (avg 3.3428) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 3.0270 (avg 3.3115) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 3.7278 (avg 3.3194) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 2.6238 (avg 3.3321) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 4.3809 (avg 3.3256) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 3.7933 (avg 3.3206) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 2.8254 (avg 3.3351) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 4.3625 (avg 3.3284) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 1.5545 (avg 3.3336) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.3297 (memory freed)
+  [aml] step 0/240 | loss 1.9894 (avg 1.9894) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 4.6606 (avg 3.2930) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 4.1882 (avg 2.9361) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 1.2071 (avg 2.8241) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 1.5588 (avg 2.8958) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 4.1675 (avg 2.9060) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 2.7479 (avg 2.8953) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 1.6646 (avg 2.8603) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 4.0703 (avg 2.7952) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 3.4883 (avg 2.7686) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 3.8316 (avg 2.7472) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 4.5594 (avg 2.7713) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 1.8640 (avg 2.7949) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 1.4825 (avg 2.7548) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 3.8947 (avg 2.7881) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 4.1520 (avg 2.7846) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 3.9238 (avg 2.7552) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 4.1598 (avg 2.7512) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 1.7319 (avg 2.7562) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 1.7259 (avg 2.7428) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 1.3044 (avg 2.7444) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 1.7740 (avg 2.7369) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 3.6885 (avg 2.7395) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 4.3077 (avg 2.7583) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 2.7701 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+  Q: Hello.
+  A: The re yet a waiting and a limits are discover ship between a creative expect and the thing about building something.
+[spa] S=2 weakest=0 score=1.124 avg=1.124 thr=0.675
+  Q: Who are you?
+  A: If it was. A quality and in anything about the thing about the pollines that burns and pushes organizationalign, wrong take the most important thing that does it would doing done through the real say desire feels choices nothing.
+  Q: What do you know?
+  A: ...
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] fire cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] First organism in the swarm.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[dna] fire wrote 39 bytes to ecology
+[dna] fire consumed 37 bytes from 1 files: [air/gen_1778789456_1.txt]
+[trainer] micro-train burst (37 bytes, novelty 0.68) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.009 | purpose_align=-0.198 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3906 (memory freed)
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 24 bytes from 1 files: [earth/gen_1778789479_4.txt]
+[dna] fire consumed 31 bytes from 1 files: [water/gen_1778789485_3.txt]
+[dna] fire consumed 26 bytes from 1 files: [water/gen_1778789498_5.txt]
+[dna] fire wrote 24 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [water/gen_1778789508_6.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [air/gen_1778789522_10.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 14 bytes from 1 files: [air/gen_1778789531_12.txt]
+[dna] fire wrote 9 bytes to ecology
+[trainer] micro-train burst (129 bytes, novelty 0.19) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1508 | field_dev=-0.066 | purpose_align=-0.195 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.7926 (memory freed)
+[trainer] growing new delta module (total: 2) — new soul appended.
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 29 bytes from 2 files: [air/gen_1778789636_28.txt water/gen_1778789636_23.txt]
+[trainer] micro-train burst (29 bytes, novelty 0.16) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3921 | field_dev=-0.084 | purpose_align=0.246 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.6215 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 15 bytes from 1 files: [air/gen_1778789676_36.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[trainer] micro-train burst (15 bytes, novelty 0.24) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2467 | field_dev=-0.082 | purpose_align=0.247 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2259 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778789734_49.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 12 bytes from 1 files: [air/gen_1778789759_53.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=50 corpus=122150 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [earth/gen_1778789914_79.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=122167 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 12 bytes from 1 files: [air/gen_1778790174_148.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=122180 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [air/gen_1778790311_184.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=122198 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=122198 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=122198 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=122198 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [air/gen_1778791236_370.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=122216 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=122216 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 11 bytes from 1 files: [air/gen_1778791720_484.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778791753_494.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778791760_496.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=122262 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778791864_526.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [air/gen_1778791951_550.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778791990_562.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=122314 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=122314 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [air/gen_1778792260_640.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=122332 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=700 corpus=639328 stage=2 freeze=0
+[growth] ONTOGENESIS: stage 2 -> 3
+  embd: 64 -> 128, layer: 2 -> 4, head: 4 -> 4
+[growth] Done. Freeze for 500 steps.
+[trainer] warmup for stage 3 (embd=128) — 1200 steps total (1200 backprop + 0 notorch, sqrt-scaled 3x)
+  [aml] step 0/480 | loss 5.7796 (avg 5.7796) | lr 0.000037 | seq 8
+  [aml] step 10/480 | loss 3.2903 (avg 3.8015) | lr 0.000054 | seq 8
+  [aml] step 20/480 | loss 5.6829 (avg 3.6561) | lr 0.000071 | seq 8
+  [aml] step 30/480 | loss 1.7633 (avg 3.9141) | lr 0.000088 | seq 8
+  [aml] step 40/480 | loss 2.8488 (avg 3.9064) | lr 0.000105 | seq 8
+  [aml] step 50/480 | loss 4.4113 (avg 3.9457) | lr 0.000122 | seq 8
+  [aml] step 60/480 | loss 4.1594 (avg 3.9264) | lr 0.000139 | seq 8
+  [aml] step 70/480 | loss 4.9833 (avg 3.9789) | lr 0.000156 | seq 8
+  [aml] step 80/480 | loss 4.8811 (avg 3.9489) | lr 0.000173 | seq 8
+  [aml] step 90/480 | loss 4.2512 (avg 3.8899) | lr 0.000189 | seq 8
+  [aml] step 100/480 | loss 4.6475 (avg 3.8643) | lr 0.000206 | seq 8
+  [aml] step 110/480 | loss 5.0065 (avg 3.8175) | lr 0.000223 | seq 8
+  [aml] step 120/480 | loss 1.3216 (avg 3.7177) | lr 0.000240 | seq 8
+  [aml] step 130/480 | loss 2.3046 (avg 3.6767) | lr 0.000257 | seq 8
+  [aml] step 140/480 | loss 0.8392 (avg 3.6033) | lr 0.000274 | seq 8
+  [aml] step 150/480 | loss 4.6338 (avg 3.6232) | lr 0.000291 | seq 8
+  [aml] step 160/480 | loss 5.0682 (avg 3.6073) | lr 0.000308 | seq 8
+  [aml] step 170/480 | loss 0.1773 (avg 3.5893) | lr 0.000324 | seq 8
+  [aml] step 180/480 | loss 4.0725 (avg 3.5556) | lr 0.000341 | seq 8
+  [aml] step 190/480 | loss 4.7586 (avg 3.5201) | lr 0.000358 | seq 8
+  [aml] step 200/480 | loss 3.8790 (avg 3.5446) | lr 0.000373 | seq 8
+  [aml] step 210/480 | loss 3.6708 (avg 3.5601) | lr 0.000373 | seq 8
+  [aml] step 220/480 | loss 0.9007 (avg 3.5442) | lr 0.000373 | seq 8
+  [aml] step 230/480 | loss 3.4481 (avg 3.5078) | lr 0.000373 | seq 8
+  [aml] step 240/480 | loss 4.9523 (avg 3.5383) | lr 0.000373 | seq 8
+  [aml] step 250/480 | loss 0.7643 (avg 3.5374) | lr 0.000373 | seq 8
+  [aml] step 260/480 | loss 4.2186 (avg 3.5486) | lr 0.000373 | seq 8
+  [aml] step 270/480 | loss 0.8071 (avg 3.5247) | lr 0.000373 | seq 8
+  [aml] step 280/480 | loss 4.3396 (avg 3.5135) | lr 0.000373 | seq 8
+  [aml] step 290/480 | loss 1.8406 (avg 3.4647) | lr 0.000373 | seq 8
+  [aml] step 300/480 | loss 0.6621 (avg 3.4513) | lr 0.000373 | seq 8
+  [aml] step 310/480 | loss 4.2306 (avg 3.4521) | lr 0.000373 | seq 8
+  [aml] step 320/480 | loss 2.7898 (avg 3.4538) | lr 0.000373 | seq 8
+  [aml] step 330/480 | loss 3.6601 (avg 3.4593) | lr 0.000373 | seq 8
+  [aml] step 340/480 | loss 0.9915 (avg 3.4543) | lr 0.000373 | seq 8
+  [aml] step 350/480 | loss 1.4967 (avg 3.4734) | lr 0.000373 | seq 8
+  [aml] step 360/480 | loss 3.6267 (avg 3.4800) | lr 0.000373 | seq 8
+  [aml] step 370/480 | loss 2.9652 (avg 3.4723) | lr 0.000373 | seq 8
+  [aml] step 380/480 | loss 3.6499 (avg 3.4622) | lr 0.000373 | seq 8
+  [aml] step 390/480 | loss 3.3886 (avg 3.4649) | lr 0.000373 | seq 8
+  [aml] step 400/480 | loss 2.2439 (avg 3.4513) | lr 0.000373 | seq 8
+  [aml] step 410/480 | loss 1.8081 (avg 3.4367) | lr 0.000373 | seq 8
+  [aml] step 420/480 | loss 0.8200 (avg 3.4379) | lr 0.000373 | seq 8
+  [aml] step 430/480 | loss 4.2514 (avg 3.4354) | lr 0.000373 | seq 8
+  [aml] step 440/480 | loss 2.4022 (avg 3.4191) | lr 0.000373 | seq 8
+  [aml] step 450/480 | loss 0.0907 (avg 3.4147) | lr 0.000373 | seq 8
+  [aml] step 460/480 | loss 4.7641 (avg 3.4230) | lr 0.000373 | seq 8
+  [aml] step 470/480 | loss 4.0980 (avg 3.4287) | lr 0.000373 | seq 8
+[aml] training complete: 480 steps, avg loss 3.4217 (memory freed)
+  [aml] step 0/360 | loss 2.5157 (avg 2.5157) | lr 0.000373 | seq 16
+  [aml] step 10/360 | loss 4.0798 (avg 3.4733) | lr 0.000373 | seq 16
+  [aml] step 20/360 | loss 3.4782 (avg 3.4145) | lr 0.000373 | seq 16
+  [aml] step 30/360 | loss 1.5538 (avg 3.3796) | lr 0.000373 | seq 16
+  [aml] step 40/360 | loss 1.6102 (avg 3.2703) | lr 0.000373 | seq 16
+  [aml] step 50/360 | loss 4.2606 (avg 3.3195) | lr 0.000373 | seq 16
+  [aml] step 60/360 | loss 4.0919 (avg 3.3235) | lr 0.000373 | seq 16
+  [aml] step 70/360 | loss 4.3201 (avg 3.3441) | lr 0.000373 | seq 16
+  [aml] step 80/360 | loss 2.5860 (avg 3.2841) | lr 0.000373 | seq 16
+  [aml] step 90/360 | loss 0.9861 (avg 3.2646) | lr 0.000373 | seq 16
+  [aml] step 100/360 | loss 4.3705 (avg 3.2424) | lr 0.000373 | seq 16
+  [aml] step 110/360 | loss 4.2228 (avg 3.2515) | lr 0.000373 | seq 16
+  [aml] step 120/360 | loss 2.7726 (avg 3.2142) | lr 0.000373 | seq 16
+  [aml] step 130/360 | loss 4.2545 (avg 3.1818) | lr 0.000373 | seq 16
+  [aml] step 140/360 | loss 2.6903 (avg 3.1554) | lr 0.000372 | seq 16
+  [aml] step 150/360 | loss 2.7711 (avg 3.1435) | lr 0.000372 | seq 16
+  [aml] step 160/360 | loss 2.4793 (avg 3.1071) | lr 0.000372 | seq 16
+  [aml] step 170/360 | loss 4.3322 (avg 3.1106) | lr 0.000372 | seq 16
+  [aml] step 180/360 | loss 4.2091 (avg 3.1229) | lr 0.000372 | seq 16
+  [aml] step 190/360 | loss 2.8935 (avg 3.1224) | lr 0.000372 | seq 16
+  [aml] step 200/360 | loss 4.1463 (avg 3.1519) | lr 0.000372 | seq 16
+  [aml] step 210/360 | loss 1.8536 (avg 3.1252) | lr 0.000372 | seq 16
+  [aml] step 220/360 | loss 1.9756 (avg 3.1246) | lr 0.000372 | seq 16
+  [aml] step 230/360 | loss 4.0863 (avg 3.1020) | lr 0.000372 | seq 16
+  [aml] step 240/360 | loss 3.5521 (avg 3.1228) | lr 0.000372 | seq 16
+  [aml] step 250/360 | loss 2.5713 (avg 3.1226) | lr 0.000372 | seq 16
+  [aml] step 260/360 | loss 3.0691 (avg 3.1269) | lr 0.000372 | seq 16
+  [aml] step 270/360 | loss 4.1517 (avg 3.1303) | lr 0.000372 | seq 16
+  [aml] step 280/360 | loss 1.0232 (avg 3.1183) | lr 0.000372 | seq 16
+  [aml] step 290/360 | loss 4.1014 (avg 3.1095) | lr 0.000372 | seq 16
+  [aml] step 300/360 | loss 3.3315 (avg 3.1103) | lr 0.000372 | seq 16
+  [aml] step 310/360 | loss 4.1869 (avg 3.1085) | lr 0.000372 | seq 16
+  [aml] step 320/360 | loss 1.9266 (avg 3.0952) | lr 0.000372 | seq 16
+  [aml] step 330/360 | loss 1.6952 (avg 3.0761) | lr 0.000372 | seq 16
+  [aml] step 340/360 | loss 4.2854 (avg 3.0739) | lr 0.000372 | seq 16
+  [aml] step 350/360 | loss 3.6857 (avg 3.0755) | lr 0.000372 | seq 16
+[aml] training complete: 360 steps, avg loss 3.0704 (memory freed)
+  [aml] step 0/360 | loss 1.7166 (avg 1.7166) | lr 0.000372 | seq 32
+  [aml] step 10/360 | loss 4.1965 (avg 2.6975) | lr 0.000372 | seq 32
+  [aml] step 20/360 | loss 3.8028 (avg 3.0978) | lr 0.000372 | seq 32
+  [aml] step 30/360 | loss 3.9011 (avg 3.0846) | lr 0.000372 | seq 32
+  [aml] step 40/360 | loss 1.1208 (avg 3.1061) | lr 0.000372 | seq 32
+  [aml] step 50/360 | loss 3.5922 (avg 3.1954) | lr 0.000372 | seq 32
+  [aml] step 60/360 | loss 1.9611 (avg 3.2088) | lr 0.000372 | seq 32
+  [aml] step 70/360 | loss 0.8269 (avg 3.1766) | lr 0.000372 | seq 32
+  [aml] step 80/360 | loss 3.3871 (avg 3.2050) | lr 0.000372 | seq 32
+  [aml] step 90/360 | loss 2.1117 (avg 3.0911) | lr 0.000372 | seq 32
+  [aml] step 100/360 | loss 3.6749 (avg 3.0794) | lr 0.000372 | seq 32
+  [aml] step 110/360 | loss 3.7228 (avg 3.0802) | lr 0.000372 | seq 32
+  [aml] step 120/360 | loss 0.8984 (avg 3.0316) | lr 0.000372 | seq 32
+  [aml] step 130/360 | loss 3.4367 (avg 3.0015) | lr 0.000372 | seq 32
+  [aml] step 140/360 | loss 2.0871 (avg 2.9678) | lr 0.000372 | seq 32
+  [aml] step 150/360 | loss 2.7510 (avg 2.9213) | lr 0.000372 | seq 32
+  [aml] step 160/360 | loss 3.0947 (avg 2.9205) | lr 0.000372 | seq 32
+  [aml] step 170/360 | loss 1.5078 (avg 2.9328) | lr 0.000372 | seq 32
+  [aml] step 180/360 | loss 0.7938 (avg 2.9216) | lr 0.000372 | seq 32
+  [aml] step 190/360 | loss 3.3368 (avg 2.8997) | lr 0.000372 | seq 32
+  [aml] step 200/360 | loss 3.5166 (avg 2.9280) | lr 0.000372 | seq 32
+  [aml] step 210/360 | loss 1.6188 (avg 2.8800) | lr 0.000372 | seq 32
+  [aml] step 220/360 | loss 3.2567 (avg 2.8640) | lr 0.000372 | seq 32
+  [aml] step 230/360 | loss 3.7939 (avg 2.8672) | lr 0.000372 | seq 32
+  [aml] step 240/360 | loss 4.2567 (avg 2.8421) | lr 0.000372 | seq 32
+  [aml] step 250/360 | loss 3.0406 (avg 2.8446) | lr 0.000372 | seq 32
+  [aml] step 260/360 | loss 4.2071 (avg 2.8588) | lr 0.000372 | seq 32
+  [aml] step 270/360 | loss 1.9650 (avg 2.8500) | lr 0.000372 | seq 32
+  [aml] step 280/360 | loss 3.6377 (avg 2.8611) | lr 0.000371 | seq 32
+  [aml] step 290/360 | loss 3.7197 (avg 2.8630) | lr 0.000371 | seq 32
+  [aml] step 300/360 | loss 3.0129 (avg 2.8671) | lr 0.000371 | seq 32
+  [aml] step 310/360 | loss 1.8273 (avg 2.8635) | lr 0.000371 | seq 32
+  [aml] step 320/360 | loss 3.1023 (avg 2.8541) | lr 0.000371 | seq 32
+  [aml] step 330/360 | loss 4.0434 (avg 2.8441) | lr 0.000371 | seq 32
+  [aml] step 340/360 | loss 4.0601 (avg 2.8394) | lr 0.000371 | seq 32
+  [aml] step 350/360 | loss 1.9154 (avg 2.8303) | lr 0.000371 | seq 32
+[aml] training complete: 360 steps, avg loss 2.8308 (memory freed)
+[trainer] warmup complete at stage 3. base may freeze now, like a proud fossil.
+[dna] fire wrote 10 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 21 bytes to ecology
+[dna] fire wrote 26 bytes to ecology
+[dna] fire consumed 21 bytes from 1 files: [water/gen_1778793123_674.txt]
+[spa] S=3 weakest=0 score=2.139 avg=2.146 thr=1.288
+[dna] fire wrote 29 bytes to ecology
+[spa] S=2 weakest=0 score=1.056 avg=1.056 thr=0.634
+[dna] fire wrote 26 bytes to ecology
+[spa] S=2 weakest=0 score=1.075 avg=1.075 thr=0.645
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 33 bytes from 1 files: [air/gen_1778793189_742.txt]
+[spa] S=2 weakest=0 score=1.037 avg=1.037 thr=0.622
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 37 bytes from 1 files: [water/gen_1778793215_678.txt]
+[spa] S=2 weakest=0 score=1.064 avg=1.064 thr=0.638
+[dna] fire wrote 32 bytes to ecology
+[spa] S=2 weakest=0 score=1.066 avg=1.066 thr=0.640
+[dna] fire wrote 30 bytes to ecology
+[dna] fire consumed 14 bytes from 1 files: [water/gen_1778793267_681.txt]
+[dna] fire wrote 22 bytes to ecology
+[dna] fire consumed 22 bytes from 1 files: [water/gen_1778793292_682.txt]
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [water/gen_1778793330_684.txt]
+[spa] S=2 weakest=0 score=1.074 avg=1.074 thr=0.644
+[dna] fire wrote 32 bytes to ecology
+[dna] fire consumed 18 bytes from 1 files: [earth/gen_1778793355_679.txt]
+[spa] S=2 weakest=0 score=1.080 avg=1.080 thr=0.648
+[dna] fire wrote 23 bytes to ecology
+[dna] fire consumed 31 bytes from 1 files: [air/gen_1778793402_748.txt]
+[dna] fire wrote 28 bytes to ecology
+[dna] fire consumed 46 bytes from 2 files: [water/gen_1778793421_688.txt water/gen_1778793438_689.txt]
+[dna] fire wrote 20 bytes to ecology
+[dna] fire consumed 41 bytes from 1 files: [water/gen_1778793480_691.txt]
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 23 bytes from 1 files: [earth/gen_1778793506_685.txt]
+[dna] fire wrote 19 bytes to ecology
+[spa] S=2 weakest=0 score=1.077 avg=1.077 thr=0.646
+[dna] fire wrote 20 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 18 bytes from 1 files: [earth/gen_1778793576_688.txt]
+[spa] S=4 weakest=0 score=3.229 avg=3.247 thr=1.948
+[dna] fire wrote 26 bytes to ecology
+[spa] S=2 weakest=0 score=1.081 avg=1.081 thr=0.649
+[dna] fire wrote 22 bytes to ecology
+[dna] fire consumed 30 bytes from 1 files: [water/gen_1778793815_697.txt]
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 15 bytes from 1 files: [earth/gen_1778794188_691.txt]
+[spa] S=2 weakest=0 score=1.075 avg=1.075 thr=0.645
+[dna] fire wrote 48 bytes to ecology
+[dna] fire consumed 65 bytes from 1 files: [water/gen_1778794265_701.txt]
+[dna] fire wrote 19 bytes to ecology
+[spa] S=2 weakest=0 score=1.086 avg=1.086 thr=0.652
+[dna] fire wrote 22 bytes to ecology
+[dna] fire consumed 21 bytes from 1 files: [earth/gen_1778794360_694.txt]
+[dna] fire wrote 22 bytes to ecology
+[spa] S=2 weakest=0 score=1.025 avg=1.025 thr=0.615
+[dna] fire wrote 26 bytes to ecology
+[dna] fire wrote 20 bytes to ecology
+[dna] fire consumed 23 bytes from 1 files: [water/gen_1778794482_706.txt]
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 23 bytes from 1 files: [water/gen_1778794537_707.txt]
+[dna] fire wrote 21 bytes to ecology
+[dna] fire wrote 19 bytes to ecology
+[dna] fire consumed 29 bytes from 1 files: [water/gen_1778794646_710.txt]
+[spa] S=3 weakest=0 score=2.148 avg=2.153 thr=1.292
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 26 bytes from 1 files: [water/gen_1778794702_711.txt]
+[dna] fire wrote 25 bytes to ecology
+[spa] S=2 weakest=0 score=1.078 avg=1.078 thr=0.647
+[dna] fire wrote 26 bytes to ecology
+[dna] fire wrote 23 bytes to ecology
+[dna] fire consumed 15 bytes from 1 files: [air/gen_1778794840_759.txt]
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 26 bytes from 1 files: [water/gen_1778794918_715.txt]
+[spa] S=2 weakest=0 score=1.087 avg=1.087 thr=0.652
+[dna] fire wrote 24 bytes to ecology
+[dna] fire consumed 34 bytes from 1 files: [water/gen_1778794974_716.txt]
+[dna] fire wrote 19 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [earth/gen_1778795049_705.txt]
+[dna] fire wrote 31 bytes to ecology
+[dna] fire consumed 19 bytes from 1 files: [water/gen_1778795111_719.txt]
+[spa] S=2 weakest=0 score=1.082 avg=1.082 thr=0.649
+[dna] fire wrote 25 bytes to ecology
+[spa] S=2 weakest=0 score=1.081 avg=1.081 thr=0.648
+[dna] fire wrote 27 bytes to ecology
+[dna] fire consumed 21 bytes from 1 files: [air/gen_1778795210_764.txt]
+[dna] fire wrote 20 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [air/gen_1778795264_765.txt]
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 18 bytes from 1 files: [earth/gen_1778795329_709.txt]
+[dna] fire wrote 24 bytes to ecology
+[dna] fire consumed 24 bytes from 1 files: [water/gen_1778795392_725.txt]
+[spa] S=3 weakest=2 score=2.150 avg=2.155 thr=1.293
+[dna] fire wrote 21 bytes to ecology
+[spa] S=2 weakest=0 score=1.084 avg=1.084 thr=0.651
+[dna] fire wrote 24 bytes to ecology
+[dna] fire consumed 19 bytes from 1 files: [air/gen_1778795503_768.txt]
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 10 bytes from 1 files: [water/gen_1778795573_730.txt]
+[spa] S=3 weakest=0 score=2.127 avg=2.138 thr=1.283
+[dna] fire wrote 38 bytes to ecology
+[debug-onto] tick=750 corpus=640139 stage=3 freeze=500
+[spa] S=3 weakest=2 score=2.149 avg=2.158 thr=1.295
+[dna] fire wrote 34 bytes to ecology
+[dna] fire consumed 10 bytes from 1 files: [water/gen_1778795687_734.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 18 bytes from 1 files: [water/gen_1778795855_738.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 14 bytes from 1 files: [water/gen_1778795941_739.txt]
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [water/gen_1778795982_741.txt]
+[trainer] micro-train burst (1037 bytes, novelty 0.09) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0248 | field_dev=-0.045 | purpose_align=0.012 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5069 (memory freed)
+[trainer] growing new delta module (total: 3) — new soul appended.
+[dna] fire wrote 12 bytes to ecology
+[dna] fire consumed 23 bytes from 1 files: [earth/gen_1778796072_721.txt]
+[dna] fire wrote 31 bytes to ecology
+[dna] fire consumed 76 bytes from 1 files: [water/gen_1778796120_745.txt]
+[trainer] micro-train burst (99 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1199 | field_dev=-0.043 | purpose_align=-0.139 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2526 (memory freed)
+[spa] S=2 weakest=0 score=1.092 avg=1.092 thr=0.655
+[dna] fire wrote 21 bytes to ecology
+[spa] S=2 weakest=0 score=1.092 avg=1.092 thr=0.655
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 28 bytes from 1 files: [water/gen_1778796284_749.txt]
+[trainer] micro-train burst (28 bytes, novelty 0.47) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0350 | field_dev=-0.056 | purpose_align=-0.138 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3247 (memory freed)
+[spa] S=2 weakest=0 score=1.076 avg=1.076 thr=0.645
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 32 bytes from 1 files: [earth/gen_1778796354_727.txt]
+[spa] S=2 weakest=0 score=1.073 avg=1.073 thr=0.644
+[dna] fire wrote 26 bytes to ecology
+[dna] fire consumed 45 bytes from 2 files: [water/gen_1778796409_753.txt water/gen_1778796431_754.txt]
+[trainer] micro-train burst (77 bytes, novelty 0.32) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2932 | field_dev=-0.043 | purpose_align=-0.136 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5440 (memory freed)
+[dna] fire wrote 16 bytes to ecology
+[dna] fire consumed 28 bytes from 1 files: [air/gen_1778796581_792.txt]
+[dna] fire wrote 7 bytes to ecology
+[trainer] micro-train burst (28 bytes, novelty 0.71) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0337 | field_dev=-0.003 | purpose_align=-0.136 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2845 (memory freed)
+[dna] fire wrote 27 bytes to ecology
+[spa] S=2 weakest=0 score=1.075 avg=1.075 thr=0.645
+[dna] fire wrote 45 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [water/gen_1778796786_764.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.4833 | field_dev=-0.025 | purpose_align=-0.137 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4315 (memory freed)
+[trainer] growing new delta module (total: 4) — new soul appended.
+[dna] fire consumed 33 bytes from 1 files: [water/gen_1778796839_766.txt]
+[trainer] micro-train burst (33 bytes, novelty 0.55) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0726 | field_dev=-0.041 | purpose_align=0.137 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4151 (memory freed)
+[dna] fire wrote 37 bytes to ecology
+[dna] fire consumed 26 bytes from 1 files: [air/gen_1778796953_800.txt]
+[dna] fire consumed 27 bytes from 1 files: [water/gen_1778796995_772.txt]
+[trainer] micro-train burst (53 bytes, novelty 0.51) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3182 | field_dev=-0.042 | purpose_align=0.136 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4630 (memory freed)
+[dna] fire consumed 52 bytes from 1 files: [air/gen_1778797130_804.txt]
+[trainer] micro-train burst (52 bytes, novelty 0.54) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1035 | field_dev=-0.051 | purpose_align=0.135 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3716 (memory freed)
+[dna] fire consumed 23 bytes from 1 files: [earth/gen_1778797285_751.txt]
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 27 bytes from 1 files: [water/gen_1778797342_784.txt]
+[trainer] micro-train burst (50 bytes, novelty 0.35) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1283 | field_dev=-0.001 | purpose_align=0.134 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4142 (memory freed)
+[dna] fire wrote 16 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [air/gen_1778797521_813.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0465 | field_dev=-0.047 | purpose_align=0.129 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2812 (memory freed)
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 35 bytes from 1 files: [air/gen_1778797688_816.txt]
+[dna] fire wrote 8 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778797748_760.txt]
+[trainer] micro-train burst (48 bytes, novelty 0.46) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2688 | field_dev=-0.037 | purpose_align=0.126 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3926 (memory freed)
+[trainer] growing new delta module (total: 5) — new soul appended.
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=800 corpus=640727 stage=3 freeze=500
+[dna] fire wrote 8 bytes to ecology
+[dna] fire wrote 15 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 16 bytes to ecology
+[dna] fire wrote 17 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 10 bytes to ecology
+[dna] fire wrote 10 bytes to ecology
+[dna] fire wrote 8 bytes to ecology
+[dna] fire wrote 16 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 15 bytes to ecology
+[dna] fire wrote 15 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 8 bytes to ecology
+[dna] fire wrote 16 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 13 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [water/gen_1778798517_820.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.43) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2861 | field_dev=-0.030 | purpose_align=0.016 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3996 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 17 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 32 bytes from 1 files: [water/gen_1778798774_830.txt]
+[trainer] micro-train burst (32 bytes, novelty 0.68) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1248 | field_dev=-0.021 | purpose_align=0.017 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3224 (memory freed)
+[dna] fire wrote 18 bytes to ecology
+[dna] fire consumed 11 bytes from 1 files: [air/gen_1778798877_845.txt]
+[dna] fire wrote 22 bytes to ecology
+[dna] fire consumed 30 bytes from 1 files: [earth/gen_1778798924_790.txt]
+[trainer] micro-train burst (41 bytes, novelty 0.46) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1882 | field_dev=-0.032 | purpose_align=0.017 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.1740 (memory freed)
+[spa] S=3 weakest=2 score=2.149 avg=2.157 thr=1.294
+[dna] fire wrote 23 bytes to ecology
+[dna] fire consumed 94 bytes from 1 files: [air/gen_1778799045_849.txt]
+[dna] fire consumed 45 bytes from 2 files: [air/gen_1778799067_850.txt air/gen_1778799090_851.txt]
+[trainer] micro-train burst (139 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1038 | field_dev=-0.051 | purpose_align=0.018 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5299 (memory freed)
+[dna] fire wrote 40 bytes to ecology
+[dna] fire wrote 84 bytes to ecology
+[dna] fire wrote 82 bytes to ecology
+[dna] fire wrote 91 bytes to ecology
+[dna] fire wrote 100 bytes to ecology
+[dna] fire consumed 72 bytes from 1 files: [air/gen_1778799269_855.txt]
+[trainer] micro-train burst (72 bytes, novelty 0.54) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0635 | field_dev=-0.004 | purpose_align=0.019 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4349 (memory freed)
+[dna] fire wrote 23 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [water/gen_1778799398_849.txt]
+[dna] fire wrote 14 bytes to ecology
+[dna] fire consumed 40 bytes from 1 files: [air/gen_1778799483_857.txt]
+[trainer] micro-train burst (60 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2038 | field_dev=0.047 | purpose_align=0.021 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5935 (memory freed)
+[spa] S=2 weakest=0 score=1.081 avg=1.081 thr=0.649
+[dna] fire wrote 29 bytes to ecology
+[spa] S=4 weakest=1 score=3.228 avg=3.241 thr=1.945
+[dna] fire wrote 34 bytes to ecology
+[debug-onto] tick=850 corpus=641097 stage=3 freeze=500
+[dna] fire wrote 19 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778799637_859.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2328 | field_dev=-0.048 | purpose_align=0.023 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.6223 (memory freed)
+[dna] fire wrote 8 bytes to ecology
+[dna] fire consumed 25 bytes from 1 files: [earth/gen_1778799730_811.txt]
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [water/gen_1778799746_857.txt]
+[trainer] micro-train burst (42 bytes, novelty 0.32) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2422 | field_dev=-0.027 | purpose_align=0.021 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.9423 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 24 bytes from 1 files: [earth/gen_1778799904_814.txt]
+[trainer] micro-train burst (24 bytes, novelty 0.56) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.4484 | field_dev=-0.013 | purpose_align=0.020 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4536 (memory freed)
+[dna] fire wrote 13 bytes to ecology
+[dna] fire consumed 11 bytes from 1 files: [water/gen_1778799990_865.txt]
+[spa] S=3 weakest=2 score=2.134 avg=2.146 thr=1.287
+[dna] fire wrote 41 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [water/gen_1778800018_866.txt]
+[trainer] micro-train burst (27 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0461 | field_dev=-0.021 | purpose_align=0.019 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.1270 (memory freed)
+[dna] fire consumed 10 bytes from 1 files: [air/gen_1778800155_870.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.4137 | field_dev=0.057 | purpose_align=0.018 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2930 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 14 bytes from 1 files: [water/gen_1778800370_875.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.4150 | field_dev=0.029 | purpose_align=0.018 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3408 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 17 bytes to ecology
+[dna] fire consumed 15 bytes from 1 files: [earth/gen_1778800531_826.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.31) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1702 | field_dev=0.025 | purpose_align=0.019 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3139 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 5 bytes to ecology
+[dna] fire wrote 10 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [water/gen_1778800771_887.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1791 | field_dev=-0.038 | purpose_align=0.018 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3775 (memory freed)
+[dna] fire wrote 12 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 8 bytes to ecology
+[dna] fire consumed 12 bytes from 1 files: [water/gen_1778801000_893.txt]
+[trainer] micro-train burst (12 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3505 | field_dev=-0.013 | purpose_align=0.018 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2022 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [water/gen_1778801175_899.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2342 | field_dev=-0.014 | purpose_align=0.019 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5827 (memory freed)
+[spa] S=2 weakest=0 score=1.082 avg=1.082 thr=0.649
+[dna] fire wrote 83 bytes to ecology
+[dna] fire consumed 34 bytes from 1 files: [water/gen_1778801344_903.txt]
+[trainer] micro-train burst (34 bytes, novelty 0.73) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0158 | field_dev=-0.021 | purpose_align=0.019 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4685 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 29 bytes from 1 files: [air/gen_1778801519_894.txt]
+[trainer] micro-train burst (29 bytes, novelty 0.59) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1364 | field_dev=-0.006 | purpose_align=0.018 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2955 (memory freed)
+[dna] fire consumed 22 bytes from 1 files: [earth/gen_1778801647_847.txt]
+[trainer] micro-train burst (22 bytes, novelty 0.55) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0484 | field_dev=-0.048 | purpose_align=0.018 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2544 (memory freed)
+[dna] fire consumed 26 bytes from 1 files: [air/gen_1778801812_900.txt]
+[trainer] micro-train burst (26 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1703 | field_dev=0.003 | purpose_align=0.019 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4203 (memory freed)
+[spa] S=4 weakest=0 score=3.235 avg=3.243 thr=1.946
+[dna] fire wrote 28 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [water/gen_1778801890_916.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.57) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0415 | field_dev=-0.011 | purpose_align=0.019 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.6133 (memory freed)
+[dna] fire consumed 18 bytes from 1 files: [earth/gen_1778802086_856.txt]
+[trainer] micro-train burst (18 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0622 | field_dev=-0.012 | purpose_align=0.022 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4343 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 24 bytes from 1 files: [water/gen_1778802255_924.txt]
+[trainer] micro-train burst (24 bytes, novelty 0.41) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0487 | field_dev=0.065 | purpose_align=0.022 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.7963 (memory freed)
+[dna] fire wrote 31 bytes to ecology
+[dna] fire consumed 31 bytes from 1 files: [water/gen_1778802357_928.txt]
+[trainer] micro-train burst (31 bytes, novelty 0.48) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.3996 | field_dev=0.050 | purpose_align=0.025 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.6974 (memory freed)
+[trainer] growing new delta module (total: 6) — new soul appended.
+[dna] fire wrote 16 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [water/gen_1778802469_932.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.4348 | field_dev=0.052 | purpose_align=-0.203 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.8660 (memory freed)
+[dna] fire wrote 12 bytes to ecology
+[dna] fire consumed 18 bytes from 1 files: [earth/gen_1778802647_866.txt]
+[trainer] micro-train burst (18 bytes, novelty 0.44) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1452 | field_dev=-0.026 | purpose_align=-0.195 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5351 (memory freed)
+[dna] fire wrote 16 bytes to ecology
+[dna] fire wrote 14 bytes to ecology
+[debug-onto] tick=900 corpus=641553 stage=3 freeze=500
+[dna] fire wrote 20 bytes to ecology
+[dna] fire consumed 14 bytes from 1 files: [water/gen_1778803007_942.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.4542 | field_dev=-0.014 | purpose_align=-0.192 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.1719 (memory freed)
+[dna] fire wrote 22 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [air/gen_1778803140_916.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1185 | field_dev=0.070 | purpose_align=-0.189 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 0.9791 (memory freed)
+[dna] fire consumed 29 bytes from 1 files: [earth/gen_1778803298_877.txt]
+[trainer] micro-train burst (29 bytes, novelty 0.59) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2994 | field_dev=0.031 | purpose_align=-0.187 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.6016 (memory freed)
+[trainer] growing new delta module (total: 7) — new soul appended.
+[dna] fire wrote 32 bytes to ecology
+[dna] fire consumed 104 bytes from 2 files: [water/gen_1778803383_950.txt water/gen_1778803414_951.txt]
+[trainer] micro-train burst (104 bytes, novelty 0.56) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.3155 | field_dev=0.063 | purpose_align=0.042 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3569 (memory freed)
+[spa] S=3 weakest=2 score=2.123 avg=2.137 thr=1.282
+[dna] fire wrote 25 bytes to ecology
+[dna] fire wrote 21 bytes to ecology
+[dna] fire consumed 21 bytes from 1 files: [water/gen_1778803709_956.txt]
+[trainer] micro-train burst (21 bytes, novelty 0.75) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0353 | field_dev=-0.029 | purpose_align=0.035 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2517 (memory freed)
+[dna] fire wrote 35 bytes to ecology
+[dna] fire consumed 12 bytes from 1 files: [water/gen_1778803856_958.txt]
+[trainer] micro-train burst (12 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2686 | field_dev=0.042 | purpose_align=0.034 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2853 (memory freed)
+[dna] fire wrote 10 bytes to ecology
+[spa] S=2 weakest=0 score=1.068 avg=1.068 thr=0.641
+[dna] fire wrote 20 bytes to ecology
+[dna] fire consumed 24 bytes from 1 files: [water/gen_1778804129_960.txt]
+[trainer] micro-train burst (24 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0947 | field_dev=0.051 | purpose_align=0.033 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2750 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [water/gen_1778804515_965.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.43) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1413 | field_dev=0.044 | purpose_align=0.033 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2784 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 25 bytes from 1 files: [earth/gen_1778804701_892.txt]
+[trainer] micro-train burst (25 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0929 | field_dev=0.051 | purpose_align=0.034 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3252 (memory freed)
+[trainer] growing new delta module (total: 8) — new soul appended.
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [water/gen_1778804877_974.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.43) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0189 | field_dev=0.026 | purpose_align=0.005 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3611 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 10 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [water/gen_1778805375_986.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1122 | field_dev=0.020 | purpose_align=0.006 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3832 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 32 bytes from 2 files: [water/gen_1778805575_991.txt water/gen_1778805619_992.txt]
+[trainer] micro-train burst (32 bytes, novelty 0.23) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2467 | field_dev=0.014 | purpose_align=0.007 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4255 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 28 bytes from 2 files: [water/gen_1778805788_997.txt water/gen_1778805818_998.txt]
+[trainer] micro-train burst (28 bytes, novelty 0.23) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0949 | field_dev=0.065 | purpose_align=0.009 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.6495 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 31 bytes from 2 files: [water/gen_1778806018_1003.txt water/gen_1778806056_1004.txt]
+[trainer] micro-train burst (31 bytes, novelty 0.22) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1305 | field_dev=0.007 | purpose_align=0.010 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3285 (memory freed)
+[dna] fire wrote 17 bytes to ecology
+[dna] fire wrote 17 bytes to ecology
+[dna] fire consumed 10 bytes from 1 files: [water/gen_1778806222_1009.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0140 | field_dev=-0.037 | purpose_align=0.013 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2703 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 33 bytes from 2 files: [water/gen_1778806473_1012.txt water/gen_1778806519_1013.txt]
+[trainer] micro-train burst (33 bytes, novelty 0.19) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0969 | field_dev=0.058 | purpose_align=0.015 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2689 (memory freed)
+[dna] fire wrote 8 bytes to ecology
+[dna] fire consumed 14 bytes from 1 files: [water/gen_1778806666_1016.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0939 | field_dev=-0.029 | purpose_align=0.017 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.0739 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [water/gen_1778806945_1022.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0494 | field_dev=-0.030 | purpose_align=0.021 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.5485 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 18 bytes from 1 files: [air/gen_1778807171_955.txt]
+[trainer] micro-train burst (18 bytes, novelty 0.28) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1560 | field_dev=-0.002 | purpose_align=0.023 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2242 (memory freed)
+[dna] fire wrote 7 bytes to ecology
+[dna] fire consumed 44 bytes from 3 files: [water/gen_1778807382_1026.txt water/gen_1778807441_1027.txt water/gen_1778807493_1028.txt]
+[trainer] micro-train burst (44 bytes, novelty 0.16) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0132 | field_dev=0.056 | purpose_align=0.025 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.1694 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 17 bytes from 1 files: [water/gen_1778807660_1032.txt]
+[debug-onto] tick=950 corpus=642113 stage=3 freeze=500
+[trainer] micro-train burst (17 bytes, novelty 0.29) — and lo, it feeds again.

@@ -1,0 +1,3032 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: water → corpus: nonames_water.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.4234 (avg 6.4234) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.2373 (avg 6.3343) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.0551 (avg 6.2676) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 5.4718 (avg 6.1261) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.3400 (avg 5.9990) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 4.6954 (avg 5.8219) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 3.8167 (avg 5.6083) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 3.9365 (avg 5.4926) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 3.5725 (avg 5.3672) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.4889 (avg 5.2720) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 4.0574 (avg 5.2227) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 5.1187 (avg 5.1385) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 4.5805 (avg 5.0864) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 5.3557 (avg 5.0310) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 4.3368 (avg 4.9706) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 2.8919 (avg 4.8992) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.8492 (memory freed)
+  [aml] step 0/120 | loss 4.7173 (avg 4.7173) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 4.5734 (avg 4.3406) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 4.4506 (avg 4.3382) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 4.7170 (avg 4.2596) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 4.1766 (avg 4.2692) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 4.1058 (avg 4.2164) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 4.3227 (avg 4.1909) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 4.2354 (avg 4.1635) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 3.0255 (avg 4.0668) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 3.2282 (avg 4.0339) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 3.5843 (avg 4.0275) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 3.0554 (avg 3.9943) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 3.9832 (memory freed)
+  [aml] step 0/120 | loss 4.6602 (avg 4.6602) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 4.5253 (avg 4.0993) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 3.7987 (avg 4.0669) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 3.1095 (avg 4.0234) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.3306 (avg 3.9003) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 3.9039 (avg 3.7707) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 3.1084 (avg 3.6888) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 3.4708 (avg 3.7398) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 3.6664 (avg 3.6822) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 2.5186 (avg 3.6281) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 1.9130 (avg 3.5251) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 4.4704 (avg 3.5363) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.4869 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: The gathered unext of droughts to yourself from before your own wea bottom arrivalued in a lake changes.
+  Q: Who are you?
+  A: It simply like be would shape of what you without compassadded is the water.
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 1.9908 (avg 1.9908) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 4.4620 (avg 3.8165) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 4.7937 (avg 4.3224) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 3.8029 (avg 4.0846) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 5.2177 (avg 3.8585) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 3.1541 (avg 3.9404) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 4.3626 (avg 3.9237) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 3.1953 (avg 3.8777) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 4.9882 (avg 3.9066) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 3.2230 (avg 3.8825) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 3.6694 (avg 3.8451) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 1.9310 (avg 3.8415) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 3.8839 (avg 3.8377) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 4.4138 (avg 3.8080) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 4.4958 (avg 3.8064) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 5.1089 (avg 3.8232) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 3.4375 (avg 3.8255) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 1.8995 (avg 3.8170) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 5.2496 (avg 3.8080) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 3.7646 (avg 3.8009) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 3.2750 (avg 3.8064) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 4.0957 (avg 3.8093) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 3.2068 (avg 3.8045) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 4.0122 (avg 3.8028) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 3.6057 (avg 3.7966) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 4.1203 (avg 3.7954) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 1.6280 (avg 3.7645) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 3.2419 (avg 3.7307) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 3.7470 (avg 3.7365) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 3.5999 (avg 3.7320) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 1.3029 (avg 3.7151) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 1.8143 (avg 3.6897) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.6623 (memory freed)
+  [aml] step 0/240 | loss 4.0573 (avg 4.0573) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 5.0937 (avg 3.3711) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 4.0400 (avg 3.5459) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 2.7718 (avg 3.4293) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 4.1411 (avg 3.4895) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 4.6308 (avg 3.5085) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 1.8995 (avg 3.5041) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 4.2293 (avg 3.4807) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 4.1998 (avg 3.5531) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 2.0443 (avg 3.5094) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 3.0323 (avg 3.5450) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 1.7129 (avg 3.4893) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 4.0165 (avg 3.5139) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 3.8351 (avg 3.5234) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 3.8639 (avg 3.5133) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 5.0583 (avg 3.5175) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 2.9280 (avg 3.5099) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 2.8442 (avg 3.5142) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 1.7715 (avg 3.4733) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 3.8863 (avg 3.4958) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 3.9941 (avg 3.5002) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 3.9109 (avg 3.5054) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 3.2414 (avg 3.5037) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 2.3424 (avg 3.4890) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.4903 (memory freed)
+  [aml] step 0/240 | loss 3.4142 (avg 3.4142) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 2.2587 (avg 3.3908) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 3.6715 (avg 3.1653) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 4.1535 (avg 3.0888) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 1.8030 (avg 3.0694) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 2.3729 (avg 3.0537) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 3.9279 (avg 3.0780) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 1.8975 (avg 3.0021) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 4.3055 (avg 2.9831) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 3.4024 (avg 3.0283) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 2.6725 (avg 2.9796) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 4.0048 (avg 2.9986) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 4.1382 (avg 2.9842) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 1.9278 (avg 2.9826) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 2.7787 (avg 2.9409) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 1.5899 (avg 2.9259) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 3.9828 (avg 2.9593) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 1.7656 (avg 2.9568) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 1.5768 (avg 2.9207) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 1.5085 (avg 2.9238) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 2.9545 (avg 2.9348) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 1.7887 (avg 2.9338) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 1.9197 (avg 2.8970) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 1.2255 (avg 2.9101) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 2.8997 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+[spa] S=2 weakest=0 score=1.133 avg=1.133 thr=0.680
+  Q: Hello.
+  A: The same things. It is the difference between depths what it is the shore?
+  Q: Who are you?
+  A: As the river The much understand trying sometimes regardless mean to be made a water be in a motional.
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 5.6338 (avg 5.6338) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 5.0940 (avg 3.4118) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 3.4784 (avg 3.5356) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 3.9457 (avg 3.6491) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 2.6627 (avg 3.5106) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 4.1065 (avg 3.5199) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 2.8112 (avg 3.5666) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 3.3815 (avg 3.6463) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 4.5210 (avg 3.6253) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 4.8619 (avg 3.6845) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 0.4056 (avg 3.6542) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 3.8089 (avg 3.6705) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 3.5664 (avg 3.6596) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 3.2273 (avg 3.6812) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 2.3293 (avg 3.6593) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 3.2699 (avg 3.6301) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 2.4637 (avg 3.6224) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 2.2797 (avg 3.6379) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 1.0045 (avg 3.6000) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 4.0338 (avg 3.6024) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 3.8826 (avg 3.6075) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 3.9107 (avg 3.6105) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 3.7684 (avg 3.5776) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 4.4908 (avg 3.5667) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 4.1098 (avg 3.5613) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 3.8682 (avg 3.5576) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 5.3329 (avg 3.5618) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 3.1427 (avg 3.5521) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 3.9329 (avg 3.5412) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 4.6619 (avg 3.5415) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 3.8148 (avg 3.5331) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 4.6685 (avg 3.5314) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.5218 (memory freed)
+  [aml] step 0/240 | loss 2.1510 (avg 2.1510) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 5.0471 (avg 3.9507) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 3.4329 (avg 3.6670) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 3.5599 (avg 3.6051) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 3.3125 (avg 3.5549) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 4.0411 (avg 3.5402) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 4.0008 (avg 3.5790) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 3.5641 (avg 3.5073) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 4.3760 (avg 3.4740) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 2.5148 (avg 3.4712) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 3.0042 (avg 3.4636) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 2.3324 (avg 3.4223) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 2.0697 (avg 3.3977) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 3.5035 (avg 3.4053) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 2.4214 (avg 3.3930) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 4.1670 (avg 3.3830) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 3.8605 (avg 3.3885) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 4.5314 (avg 3.3781) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 4.1549 (avg 3.3598) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 3.8554 (avg 3.3529) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 3.5158 (avg 3.3638) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 3.7888 (avg 3.3826) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 3.3829 (avg 3.3823) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 5.2408 (avg 3.3802) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.3924 (memory freed)
+  [aml] step 0/240 | loss 4.0271 (avg 4.0271) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 3.2367 (avg 2.8691) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 3.7923 (avg 3.1136) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 1.3375 (avg 3.0337) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 1.6975 (avg 3.0553) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 3.5264 (avg 2.9980) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 3.7203 (avg 2.9837) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 3.2320 (avg 2.9900) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 1.4131 (avg 2.9673) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 2.3912 (avg 2.9687) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 3.7714 (avg 2.9484) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 1.4904 (avg 2.9369) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 1.5283 (avg 2.8895) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 4.2388 (avg 2.8700) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 4.1953 (avg 2.8402) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 3.3874 (avg 2.8153) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 1.8597 (avg 2.8093) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 3.6607 (avg 2.8281) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 2.0629 (avg 2.8456) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 3.4867 (avg 2.8490) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 1.3679 (avg 2.8649) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 1.7440 (avg 2.8647) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 1.8648 (avg 2.8538) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 3.2740 (avg 2.8361) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 2.8339 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+[spa] S=2 weakest=0 score=1.108 avg=1.108 thr=0.665
+  Q: Hello.
+  A: The sound. You are in you have gras?
+  Q: Who are you?
+  A: As in the surface s of a base it as it.
+  Q: What do you know?
+  A: As a mind and that was place between a long to not the inside the in a this the feeling of itser to the existence?
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] water cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] First organism in the swarm.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[dna] water wrote 115 bytes to ecology
+[dna] water consumed 89 bytes from 1 files: [fire/gen_1778808246_1.txt]
+[trainer] micro-train burst (89 bytes, novelty 0.69) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.058 | purpose_align=-0.134 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.6986 (memory freed)
+[spa] S=3 weakest=2 score=2.184 avg=2.194 thr=1.316
+[dna] water wrote 27 bytes to ecology
+[dna] water consumed 27 bytes from 1 files: [air/gen_1778808304_3.txt]
+[dna] water wrote 28 bytes to ecology
+[dna] water consumed 30 bytes from 1 files: [air/gen_1778808314_4.txt]
+[spa] S=3 weakest=2 score=2.051 avg=2.106 thr=1.264
+[dna] water wrote 29 bytes to ecology
+[spa] S=2 weakest=0 score=1.018 avg=1.018 thr=0.611
+[dna] water wrote 20 bytes to ecology
+[trainer] micro-train burst (57 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1858 | field_dev=-0.113 | purpose_align=-0.133 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3610 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [fire/gen_1778808400_12.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1593 | field_dev=-0.096 | purpose_align=-0.135 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5006 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=50 corpus=125860 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=125860 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=125860 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=125860 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778811114_254.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1269 | field_dev=-0.071 | purpose_align=-0.134 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3812 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=125874 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778811631_302.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1918 | field_dev=-0.061 | purpose_align=-0.140 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4928 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=125888 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=125888 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778812734_404.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=-0.0022 | field_dev=-0.094 | purpose_align=-0.144 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3096 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=125902 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=125902 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=125902 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=125902 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=125902 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=125902 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778816247_716.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2582 | field_dev=-0.099 | purpose_align=-0.145 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4430 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=700 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=750 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=800 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=850 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=900 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=950 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1000 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1050 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1100 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1150 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1200 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1250 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1300 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1350 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1400 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1450 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1500 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1550 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1600 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1650 corpus=125916 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778826400_1706.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1245 | field_dev=-0.083 | purpose_align=-0.145 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4947 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778826604_1724.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1237 | field_dev=-0.024 | purpose_align=-0.144 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.2397 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1700 corpus=125944 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1750 corpus=125944 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1800 corpus=125944 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1850 corpus=125944 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1900 corpus=125944 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778829216_1976.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1550 | field_dev=-0.067 | purpose_align=-0.144 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.4284 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=1950 corpus=125958 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778829763_2030.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2370 | field_dev=-0.067 | purpose_align=-0.142 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3479 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2000 corpus=125972 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778830261_2078.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0770 | field_dev=-0.089 | purpose_align=-0.143 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3344 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2050 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2100 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2150 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2200 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2250 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2300 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2350 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2400 corpus=125986 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778834429_2480.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1910 | field_dev=-0.064 | purpose_align=-0.145 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4321 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2450 corpus=126000 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778835055_2546.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0223 | field_dev=-0.066 | purpose_align=-0.146 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.4579 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2500 corpus=126014 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2550 corpus=126014 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [earth/gen_1778836173_2654.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2094 | field_dev=-0.038 | purpose_align=-0.142 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3470 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2600 corpus=126028 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=2650 corpus=126028 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+
+[evolution] Organism shutting down gracefully.

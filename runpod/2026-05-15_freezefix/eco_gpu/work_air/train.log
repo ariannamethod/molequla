@@ -1,0 +1,3263 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: air → corpus: nonames_air.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.6661 (avg 6.6661) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.3011 (avg 6.4858) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.4924 (avg 6.4232) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 6.1666 (avg 6.3184) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.3134 (avg 6.1548) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 4.7153 (avg 6.0115) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 4.2447 (avg 5.8174) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 4.4244 (avg 5.6759) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 4.5757 (avg 5.5181) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.6750 (avg 5.3976) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 3.2667 (avg 5.3123) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 4.5353 (avg 5.2361) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 4.3829 (avg 5.1501) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 4.8643 (avg 5.1052) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 3.1914 (avg 5.0447) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 5.1403 (avg 5.0078) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.9570 (memory freed)
+  [aml] step 0/120 | loss 4.5154 (avg 4.5154) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 5.9506 (avg 4.7579) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 4.5743 (avg 4.4913) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 4.0580 (avg 4.4368) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 4.3300 (avg 4.4956) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 3.7034 (avg 4.4048) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 3.6438 (avg 4.3252) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 3.2907 (avg 4.2830) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 2.8304 (avg 4.2184) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 4.5780 (avg 4.1866) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 2.6706 (avg 4.1608) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 4.0355 (avg 4.1150) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 4.1359 (memory freed)
+  [aml] step 0/120 | loss 4.8228 (avg 4.8228) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 3.7374 (avg 4.2401) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 3.3116 (avg 4.0853) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 4.0675 (avg 4.0437) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.6101 (avg 3.9776) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 3.9731 (avg 3.9149) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 3.9353 (avg 3.8305) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 4.7932 (avg 3.8333) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 3.3365 (avg 3.8404) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 2.0763 (avg 3.7691) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 3.5773 (avg 3.7063) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 2.3762 (avg 3.6936) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.6772 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: The flow consistency is a nature.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 4.1702 (avg 4.1702) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 4.5853 (avg 4.0484) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 4.9096 (avg 4.2348) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 4.1955 (avg 4.3386) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 1.9951 (avg 4.0589) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 4.4092 (avg 4.0094) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 4.2006 (avg 3.9503) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 2.5630 (avg 3.9340) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 3.9984 (avg 3.8063) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 5.8299 (avg 3.8258) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 4.6670 (avg 3.8584) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 4.2336 (avg 3.8501) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 3.2360 (avg 3.8940) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 4.2566 (avg 3.8825) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 3.0190 (avg 3.8899) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 3.6673 (avg 3.8774) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 4.1735 (avg 3.8750) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 5.1305 (avg 3.8778) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 3.1845 (avg 3.8777) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 3.0335 (avg 3.8523) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 4.6795 (avg 3.8344) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 2.7982 (avg 3.8162) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 1.6923 (avg 3.8011) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 3.7109 (avg 3.7966) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 3.7802 (avg 3.8116) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 2.6261 (avg 3.8165) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 5.0340 (avg 3.8322) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 2.6161 (avg 3.8207) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 3.4725 (avg 3.8178) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 5.2736 (avg 3.8285) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 3.8879 (avg 3.8244) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 3.0961 (avg 3.8065) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.7977 (memory freed)
+  [aml] step 0/240 | loss 3.6102 (avg 3.6102) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 3.4138 (avg 4.0922) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 4.2163 (avg 4.0586) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 2.6927 (avg 3.9562) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 3.1647 (avg 3.9397) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 3.5200 (avg 3.9091) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 3.7135 (avg 3.8315) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 3.3279 (avg 3.8319) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 6.1365 (avg 3.8272) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 3.5868 (avg 3.7787) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 1.8177 (avg 3.7387) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 2.3721 (avg 3.7389) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 4.4134 (avg 3.7178) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 2.2103 (avg 3.7216) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 3.1384 (avg 3.6933) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 3.6736 (avg 3.6959) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 3.7717 (avg 3.6678) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 3.5453 (avg 3.6668) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 4.2934 (avg 3.6701) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 3.6995 (avg 3.6515) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 3.9392 (avg 3.6452) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 4.1842 (avg 3.6296) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 3.5450 (avg 3.6390) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 3.5763 (avg 3.6357) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.6285 (memory freed)
+  [aml] step 0/240 | loss 4.2887 (avg 4.2887) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 3.2421 (avg 4.0917) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 4.2074 (avg 3.9345) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 2.9374 (avg 3.7360) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 4.1639 (avg 3.6936) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 3.7043 (avg 3.6439) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 3.9242 (avg 3.6272) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 3.9352 (avg 3.5551) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 3.7904 (avg 3.5082) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 1.3839 (avg 3.4471) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 4.2199 (avg 3.4231) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 3.9857 (avg 3.3707) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 2.6106 (avg 3.3441) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 3.4360 (avg 3.3361) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 3.6111 (avg 3.3490) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 3.7666 (avg 3.3290) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 3.0731 (avg 3.3050) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 3.8846 (avg 3.3186) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 3.6230 (avg 3.3089) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 3.1617 (avg 3.2927) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 3.2284 (avg 3.2657) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 3.5676 (avg 3.2663) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 3.3765 (avg 3.2595) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 3.6991 (avg 3.2531) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 3.2545 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+  Q: Hello.
+  A: The edge does a sentence of a nothing at care the cal and the removes precise information technique of the same the sum type a system pred.
+  Q: Who are you?
+  A: W Both carry structure decis what creic.
+  Q: What do you know?
+  A: W and the w and the relationship between a thing can problem and the moving network that decreation itself and what is the events compress share with hands of is the inside and the closes stream.
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 1.3729 (avg 1.3729) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 2.0563 (avg 3.5928) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 2.9832 (avg 2.9416) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 3.8547 (avg 3.0310) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 4.1951 (avg 3.1894) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 5.6752 (avg 3.3652) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 4.4507 (avg 3.4141) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 3.3430 (avg 3.4314) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 3.5619 (avg 3.4805) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 4.2090 (avg 3.5840) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 4.4071 (avg 3.5389) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 3.7628 (avg 3.5907) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 3.5771 (avg 3.6087) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 3.5280 (avg 3.5869) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 5.2212 (avg 3.5425) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 3.6617 (avg 3.5548) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 3.7200 (avg 3.5456) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 3.6069 (avg 3.5493) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 4.0226 (avg 3.5789) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 1.7546 (avg 3.5729) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 2.5483 (avg 3.5599) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 2.8397 (avg 3.5573) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 1.0174 (avg 3.5124) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 2.9290 (avg 3.4936) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 4.5389 (avg 3.4933) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 3.3796 (avg 3.5003) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 3.5311 (avg 3.4978) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 4.4630 (avg 3.5316) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 2.8829 (avg 3.5160) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 3.4479 (avg 3.5090) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 3.8964 (avg 3.5221) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 4.0295 (avg 3.5344) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.5410 (memory freed)
+  [aml] step 0/240 | loss 3.5324 (avg 3.5324) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 3.6602 (avg 3.8507) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 2.3982 (avg 3.7231) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 3.8682 (avg 3.7200) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 2.6951 (avg 3.6257) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 3.4289 (avg 3.5470) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 3.2168 (avg 3.5104) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 3.1870 (avg 3.5566) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 3.2383 (avg 3.5234) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 4.2773 (avg 3.5211) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 3.0421 (avg 3.5192) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 3.0666 (avg 3.5396) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 4.5050 (avg 3.5222) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 3.4055 (avg 3.5278) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 3.1191 (avg 3.5232) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 4.9362 (avg 3.5415) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 1.9131 (avg 3.5508) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 3.6333 (avg 3.5449) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 3.7147 (avg 3.5521) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 3.3035 (avg 3.5522) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 4.5948 (avg 3.5626) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 3.2117 (avg 3.5574) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 2.6056 (avg 3.5385) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 3.6395 (avg 3.5413) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.5391 (memory freed)
+  [aml] step 0/240 | loss 4.2614 (avg 4.2614) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 3.3751 (avg 3.5908) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 1.9383 (avg 3.3844) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 4.0745 (avg 3.3381) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 1.2429 (avg 3.1566) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 4.7023 (avg 3.1254) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 1.6298 (avg 3.0822) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 3.8276 (avg 3.1522) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 1.5229 (avg 3.1143) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 4.0449 (avg 3.0847) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 1.7203 (avg 3.0763) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 2.0883 (avg 3.0495) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 1.6292 (avg 3.0327) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 2.3677 (avg 3.0233) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 4.4915 (avg 3.0619) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 1.3873 (avg 3.0506) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 3.4892 (avg 3.0371) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 1.0258 (avg 3.0280) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 3.9661 (avg 3.0587) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 3.6573 (avg 3.0739) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 3.8647 (avg 3.0746) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 1.7183 (avg 3.0659) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 3.4625 (avg 3.0678) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 3.3350 (avg 3.0716) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 3.0685 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+  Q: Hello.
+  A: The w of the first-class you must carry for the rules any words for this cannot have the river is the relationship between a mutual one side early but border.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] air cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] Joined swarm. 2 peer(s) detected.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[dna] air wrote 47 bytes to ecology
+[dna] air consumed 115 bytes from 1 files: [water/gen_1778808246_1.txt]
+[trainer] micro-train burst (115 bytes, novelty 0.60) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.078 | purpose_align=0.023 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.1439 (memory freed)
+[spa] S=2 weakest=0 score=1.119 avg=1.119 thr=0.671
+[dna] air wrote 27 bytes to ecology
+[spa] S=4 weakest=0 score=3.196 avg=3.257 thr=1.954
+[dna] air wrote 30 bytes to ecology
+[dna] air consumed 27 bytes from 1 files: [water/gen_1778808309_4.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 17 bytes from 1 files: [earth/gen_1778808333_5.txt]
+[trainer] micro-train burst (44 bytes, novelty 0.26) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2576 | field_dev=-0.032 | purpose_align=0.017 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.3299 (memory freed)
+[dna] air consumed 10 bytes from 1 files: [earth/gen_1778808376_7.txt]
+[dna] air wrote 16 bytes to ecology
+[dna] air consumed 16 bytes from 1 files: [fire/gen_1778808389_11.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=50 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 6 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 8 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 7 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=700 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=750 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=800 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=850 corpus=122506 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778817050_794.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=900 corpus=122520 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778817775_878.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=950 corpus=122534 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778818120_920.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1000 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1050 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1100 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1150 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1200 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1250 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1300 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1350 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1400 corpus=122548 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778822289_1310.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778822413_1322.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1450 corpus=122576 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 7 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1500 corpus=122576 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778823484_1436.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1550 corpus=122590 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1600 corpus=122590 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778824492_1532.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778824556_1538.txt]
+[debug-onto] tick=1650 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1700 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1750 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1800 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1850 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1900 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=1950 corpus=122618 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778827745_1826.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2000 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2050 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2100 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2150 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2200 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2250 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2300 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2350 corpus=122632 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778831435_2192.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2400 corpus=122646 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778832051_2258.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2450 corpus=122660 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2500 corpus=122660 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778833070_2354.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2550 corpus=122674 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778833753_2414.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2600 corpus=122688 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2650 corpus=122688 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2700 corpus=122688 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2750 corpus=122688 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2800 corpus=122688 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air consumed 13 bytes from 1 files: [earth/gen_1778835919_2630.txt]
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2850 corpus=122702 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[debug-onto] tick=2900 corpus=122702 stage=2 freeze=0
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+[dna] air wrote 9 bytes to ecology
+
+[evolution] Organism shutting down gracefully.

@@ -647,7 +647,7 @@ guard read `field_dev 0.612 < ceiling 12` at the divide moment
 (`PROJECT_LOG.md:2563`), so the spawn occurred from a
 within-tolerance field, not from a runaway state.
 
-With both fixes the adult divided. The event, excerpted from Fire's log (`work_fire/train.log:48-51`):
+With both fixes the adult divided. The event, excerpted from Fire's log (`work_fire/train.log:48,50-51`):
 
 ```
 [overload] entropy[high=0/7 mean=0.217 trend=0.0205]

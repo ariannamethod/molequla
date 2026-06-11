@@ -1,0 +1,1105 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: earth → corpus: nonames_earth.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.7029 (avg 6.7029) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.1440 (avg 6.4785) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.2343 (avg 6.3183) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 5.7590 (avg 6.2261) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.4456 (avg 6.1080) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 4.7010 (avg 5.9503) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 4.9003 (avg 5.7854) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 5.3702 (avg 5.6752) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 2.9981 (avg 5.5511) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.2958 (avg 5.4075) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 4.6896 (avg 5.3155) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 5.0368 (avg 5.1797) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 4.2138 (avg 5.1042) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 4.3335 (avg 5.0515) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 2.9225 (avg 5.0031) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 2.8568 (avg 4.9575) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.9153 (memory freed)
+  [aml] step 0/120 | loss 4.9089 (avg 4.9089) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 4.1913 (avg 4.4371) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 3.4131 (avg 4.4374) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 3.4206 (avg 4.2091) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 3.5329 (avg 4.2511) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 3.0526 (avg 4.2626) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 4.2440 (avg 4.2825) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 4.9623 (avg 4.2465) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 4.9529 (avg 4.2121) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 4.7303 (avg 4.1286) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 4.1405 (avg 4.0652) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 5.0752 (avg 3.9816) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 4.0007 (memory freed)
+  [aml] step 0/120 | loss 2.7504 (avg 2.7504) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 4.8870 (avg 3.9303) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 4.4902 (avg 3.8048) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 4.0719 (avg 3.5255) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.8570 (avg 3.4593) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 4.0095 (avg 3.4293) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 2.8821 (avg 3.3572) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 1.3750 (avg 3.3257) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 4.4715 (avg 3.3187) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 1.5026 (avg 3.2699) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 0.7856 (avg 3.2797) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 0.9156 (avg 3.1601) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.0691 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: What is the lesson of reach whose of an elevated ground.
+  Q: Who are you?
+  A: , formed when a cont a coating m a particles bowled — in mountain rangement.
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 0.9365 (avg 0.9365) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 4.2918 (avg 4.6281) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 4.5703 (avg 4.5101) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 4.2715 (avg 4.4334) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 3.5313 (avg 4.5475) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 5.3382 (avg 4.4907) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 3.0230 (avg 4.4544) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 5.6209 (avg 4.4369) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 1.4094 (avg 4.3348) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 0.8562 (avg 4.2385) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 4.1551 (avg 4.1910) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 4.8185 (avg 4.1453) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 3.5745 (avg 4.1672) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 4.0538 (avg 4.1364) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 1.3387 (avg 4.1238) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 4.5455 (avg 4.1034) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 3.9392 (avg 4.0289) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 4.1382 (avg 3.9859) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 3.0937 (avg 3.9709) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 3.5243 (avg 3.9672) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 3.9421 (avg 3.9481) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 5.2086 (avg 3.9505) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 1.6997 (avg 3.9085) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 2.3194 (avg 3.9046) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 0.8708 (avg 3.8396) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 4.4471 (avg 3.8297) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 0.2002 (avg 3.8060) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 5.0859 (avg 3.7916) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 0.9567 (avg 3.7818) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 4.9330 (avg 3.7886) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 3.9010 (avg 3.7702) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 4.5540 (avg 3.7766) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.7805 (memory freed)
+  [aml] step 0/240 | loss 4.7722 (avg 4.7722) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 3.1823 (avg 3.5241) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 2.3560 (avg 3.4535) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 4.4305 (avg 3.3476) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 2.7216 (avg 3.2583) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 1.3483 (avg 3.1919) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 2.2850 (avg 3.2540) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 1.3785 (avg 3.2256) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 1.1737 (avg 3.1692) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 2.1514 (avg 3.1264) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 5.2636 (avg 3.1673) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 6.0889 (avg 3.1070) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 4.3516 (avg 3.1734) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 1.9452 (avg 3.1372) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 1.3259 (avg 3.1452) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 1.1216 (avg 3.1321) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 1.8415 (avg 3.1555) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 4.1601 (avg 3.1849) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 4.6557 (avg 3.2254) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 1.5756 (avg 3.2141) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 3.5654 (avg 3.2329) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 2.0696 (avg 3.2387) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 1.5905 (avg 3.2299) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 1.9524 (avg 3.2052) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.2188 (memory freed)
+  [aml] step 0/240 | loss 4.2203 (avg 4.2203) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 4.7786 (avg 3.4823) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 4.0391 (avg 3.4643) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 4.3989 (avg 3.2405) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 1.0092 (avg 3.0388) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 4.8536 (avg 3.1669) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 2.4170 (avg 3.0881) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 4.2632 (avg 3.1722) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 4.3262 (avg 3.1131) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 1.9068 (avg 3.0725) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 0.7860 (avg 2.9997) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 4.4748 (avg 2.9985) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 3.9469 (avg 2.9421) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 4.3746 (avg 2.9594) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 2.0027 (avg 2.9088) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 3.7678 (avg 2.9052) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 3.7593 (avg 2.9004) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 4.7558 (avg 2.8702) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 3.7636 (avg 2.8302) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 4.1831 (avg 2.8375) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 1.4697 (avg 2.8132) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 1.5228 (avg 2.7728) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 1.0275 (avg 2.7519) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 4.3864 (avg 2.7607) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 2.7681 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+[spa] S=2 weakest=0 score=1.175 avg=1.175 thr=0.705
+  Q: Hello.
+  A: is a delta, o there. A walls requiet of rock layer mechange, and you particle terrain.
+  Q: Who are you?
+  A: lesson of years with ste — a is the is a bar uncutting the — that is a block between a tuition allow lasts, d
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 3.0908 (avg 3.0908) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 5.6528 (avg 4.4138) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 4.0699 (avg 3.9123) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 2.0838 (avg 3.7390) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 5.2404 (avg 3.6961) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 3.9666 (avg 3.6421) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 3.6157 (avg 3.4791) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 3.2028 (avg 3.4948) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 3.6092 (avg 3.5234) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 0.6684 (avg 3.4519) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 1.6760 (avg 3.4308) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 4.2007 (avg 3.4119) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 3.6692 (avg 3.3985) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 3.0947 (avg 3.4191) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 2.0509 (avg 3.4291) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 2.5226 (avg 3.3808) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 4.0036 (avg 3.3539) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 0.1963 (avg 3.3661) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 2.6495 (avg 3.3708) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 1.3875 (avg 3.3597) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 2.0586 (avg 3.3574) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 2.1956 (avg 3.3815) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 3.1418 (avg 3.3534) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 1.4648 (avg 3.3172) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 0.8600 (avg 3.3155) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 4.9870 (avg 3.3525) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 4.3815 (avg 3.3772) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 4.5939 (avg 3.3646) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 2.1719 (avg 3.3528) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 0.8888 (avg 3.3555) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 2.1207 (avg 3.3171) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 4.0626 (avg 3.2872) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.2878 (memory freed)
+  [aml] step 0/240 | loss 2.6949 (avg 2.6949) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 4.5261 (avg 3.5275) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 4.4976 (avg 3.1685) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 4.5784 (avg 3.2977) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 3.3186 (avg 3.1883) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 4.6438 (avg 3.1593) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 2.7212 (avg 3.2548) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 4.0960 (avg 3.3538) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 1.8780 (avg 3.3634) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 1.1150 (avg 3.2949) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 1.4612 (avg 3.2282) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 4.0867 (avg 3.2509) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 4.3504 (avg 3.1931) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 1.8229 (avg 3.1163) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 4.1402 (avg 3.1335) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 3.9031 (avg 3.1514) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 1.5398 (avg 3.1535) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 1.8192 (avg 3.1385) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 3.6633 (avg 3.1241) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 1.4209 (avg 3.0780) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 2.1723 (avg 3.0886) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 3.9986 (avg 3.0819) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 1.4548 (avg 3.0485) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 1.7329 (avg 3.0390) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.0493 (memory freed)
+  [aml] step 0/240 | loss 1.7629 (avg 1.7629) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 1.0831 (avg 1.9015) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 4.1847 (avg 2.7416) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 4.0482 (avg 2.8142) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 0.9096 (avg 2.9283) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 0.7191 (avg 2.8209) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 4.1892 (avg 2.7913) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 1.1559 (avg 2.7359) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 5.0407 (avg 2.8021) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 3.9908 (avg 2.8256) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 3.5933 (avg 2.8219) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 0.7566 (avg 2.7787) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 3.6117 (avg 2.7830) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 3.8045 (avg 2.7715) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 4.0094 (avg 2.8119) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 0.9663 (avg 2.7675) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 3.6715 (avg 2.7532) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 0.4973 (avg 2.7287) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 0.8798 (avg 2.6892) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 1.0520 (avg 2.6399) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 4.0983 (avg 2.6246) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 3.9468 (avg 2.6109) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 1.2996 (avg 2.5974) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 3.7826 (avg 2.6174) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 2.6054 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+  Q: Hello.
+  A: This a lab energy higher mud, struck of a hillside — superheated shells.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] earth cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] Joined swarm. 3 peer(s) detected.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[spa] S=2 weakest=0 score=1.118 avg=1.118 thr=0.671
+[dna] earth wrote 23 bytes to ecology
+[dna] earth wrote 24 bytes to ecology
+[dna] earth consumed 32 bytes from 1 files: [water/gen_1778789477_2.txt]
+[trainer] micro-train burst (32 bytes, novelty 0.75) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.108 | purpose_align=0.023 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.4928 (memory freed)
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 20 bytes from 1 files: [water/gen_1778789513_7.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778789536_13.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 10 bytes from 1 files: [air/gen_1778789578_19.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778789613_24.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 12 bytes from 1 files: [air/gen_1778789641_29.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778789696_40.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778789744_52.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 17 bytes to ecology
+[debug-onto] tick=50 corpus=173789 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 11 bytes from 1 files: [air/gen_1778789846_71.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778789896_82.txt]
+[dna] earth wrote 16 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778789910_85.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=173836 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=173836 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778790246_166.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778790393_202.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778790428_208.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=173889 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778790561_238.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778790635_250.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778790720_262.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778790764_274.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=173960 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=173960 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=173960 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=173960 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=173960 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 11 bytes from 1 files: [air/gen_1778791907_538.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=173972 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778792011_568.txt]
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=173990 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=173990 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=695960 stage=2 freeze=0
+[growth] ONTOGENESIS: stage 2 -> 3
+  embd: 64 -> 128, layer: 2 -> 4, head: 4 -> 4
+[growth] Done. Freeze for 500 steps.
+[trainer] warmup for stage 3 (embd=128) — 1200 steps total (1200 backprop + 0 notorch, sqrt-scaled 3x)
+  [aml] step 0/480 | loss 1.6041 (avg 1.6041) | lr 0.000037 | seq 8
+  [aml] step 10/480 | loss 5.1420 (avg 4.0432) | lr 0.000054 | seq 8
+  [aml] step 20/480 | loss 4.3685 (avg 3.7228) | lr 0.000071 | seq 8
+  [aml] step 30/480 | loss 3.5950 (avg 3.8535) | lr 0.000088 | seq 8
+  [aml] step 40/480 | loss 2.4909 (avg 3.8107) | lr 0.000105 | seq 8
+  [aml] step 50/480 | loss 3.9404 (avg 3.8119) | lr 0.000122 | seq 8
+  [aml] step 60/480 | loss 5.1614 (avg 3.9046) | lr 0.000139 | seq 8
+  [aml] step 70/480 | loss 5.6568 (avg 3.9451) | lr 0.000156 | seq 8
+  [aml] step 80/480 | loss 2.6388 (avg 3.9274) | lr 0.000173 | seq 8
+  [aml] step 90/480 | loss 2.3311 (avg 3.9886) | lr 0.000189 | seq 8
+  [aml] step 100/480 | loss 2.6695 (avg 3.9855) | lr 0.000206 | seq 8
+  [aml] step 110/480 | loss 1.6619 (avg 3.9634) | lr 0.000223 | seq 8
+  [aml] step 120/480 | loss 4.3739 (avg 3.9377) | lr 0.000240 | seq 8
+  [aml] step 130/480 | loss 4.3083 (avg 3.9102) | lr 0.000257 | seq 8
+  [aml] step 140/480 | loss 3.4300 (avg 3.8348) | lr 0.000274 | seq 8
+  [aml] step 150/480 | loss 4.2990 (avg 3.8242) | lr 0.000291 | seq 8
+  [aml] step 160/480 | loss 4.2319 (avg 3.8427) | lr 0.000308 | seq 8
+  [aml] step 170/480 | loss 4.9368 (avg 3.8029) | lr 0.000324 | seq 8
+  [aml] step 180/480 | loss 3.8630 (avg 3.7903) | lr 0.000341 | seq 8
+  [aml] step 190/480 | loss 4.8312 (avg 3.7946) | lr 0.000358 | seq 8
+  [aml] step 200/480 | loss 5.8237 (avg 3.8351) | lr 0.000373 | seq 8
+  [aml] step 210/480 | loss 1.7211 (avg 3.8160) | lr 0.000373 | seq 8
+  [aml] step 220/480 | loss 0.7731 (avg 3.8197) | lr 0.000373 | seq 8
+  [aml] step 230/480 | loss 3.6863 (avg 3.7732) | lr 0.000373 | seq 8
+  [aml] step 240/480 | loss 5.2782 (avg 3.7947) | lr 0.000373 | seq 8
+  [aml] step 250/480 | loss 5.2887 (avg 3.7194) | lr 0.000373 | seq 8
+  [aml] step 260/480 | loss 4.7575 (avg 3.7235) | lr 0.000373 | seq 8
+  [aml] step 270/480 | loss 0.7252 (avg 3.6836) | lr 0.000373 | seq 8
+  [aml] step 280/480 | loss 3.4353 (avg 3.6849) | lr 0.000373 | seq 8
+  [aml] step 290/480 | loss 0.1621 (avg 3.6766) | lr 0.000373 | seq 8
+  [aml] step 300/480 | loss 3.8119 (avg 3.6640) | lr 0.000373 | seq 8
+  [aml] step 310/480 | loss 3.2712 (avg 3.6460) | lr 0.000373 | seq 8
+  [aml] step 320/480 | loss 0.7078 (avg 3.6273) | lr 0.000373 | seq 8
+  [aml] step 330/480 | loss 3.2624 (avg 3.6145) | lr 0.000373 | seq 8
+  [aml] step 340/480 | loss 2.8248 (avg 3.6175) | lr 0.000373 | seq 8
+  [aml] step 350/480 | loss 4.0601 (avg 3.6227) | lr 0.000373 | seq 8
+  [aml] step 360/480 | loss 3.0038 (avg 3.6123) | lr 0.000373 | seq 8
+  [aml] step 370/480 | loss 5.4754 (avg 3.6021) | lr 0.000373 | seq 8
+  [aml] step 380/480 | loss 0.6392 (avg 3.5806) | lr 0.000373 | seq 8
+  [aml] step 390/480 | loss 0.1564 (avg 3.5623) | lr 0.000373 | seq 8
+  [aml] step 400/480 | loss 2.5798 (avg 3.5603) | lr 0.000373 | seq 8
+  [aml] step 410/480 | loss 4.4328 (avg 3.5708) | lr 0.000373 | seq 8
+  [aml] step 420/480 | loss 3.5130 (avg 3.5546) | lr 0.000373 | seq 8
+  [aml] step 430/480 | loss 4.1439 (avg 3.5533) | lr 0.000373 | seq 8
+  [aml] step 440/480 | loss 1.8644 (avg 3.5546) | lr 0.000373 | seq 8
+  [aml] step 450/480 | loss 3.2922 (avg 3.5490) | lr 0.000373 | seq 8
+  [aml] step 460/480 | loss 4.3284 (avg 3.5478) | lr 0.000373 | seq 8
+  [aml] step 470/480 | loss 3.3193 (avg 3.5479) | lr 0.000373 | seq 8
+[aml] training complete: 480 steps, avg loss 3.5385 (memory freed)
+  [aml] step 0/360 | loss 2.7274 (avg 2.7274) | lr 0.000373 | seq 16
+  [aml] step 10/360 | loss 4.0754 (avg 3.6370) | lr 0.000373 | seq 16
+  [aml] step 20/360 | loss 0.5449 (avg 3.0994) | lr 0.000373 | seq 16
+  [aml] step 30/360 | loss 1.4075 (avg 3.2026) | lr 0.000373 | seq 16
+  [aml] step 40/360 | loss 2.0244 (avg 3.1616) | lr 0.000373 | seq 16
+  [aml] step 50/360 | loss 1.8797 (avg 3.2724) | lr 0.000373 | seq 16
+  [aml] step 60/360 | loss 1.2116 (avg 3.2033) | lr 0.000373 | seq 16
+  [aml] step 70/360 | loss 5.0770 (avg 3.2599) | lr 0.000373 | seq 16
+  [aml] step 80/360 | loss 4.1769 (avg 3.2490) | lr 0.000373 | seq 16
+  [aml] step 90/360 | loss 3.5839 (avg 3.1875) | lr 0.000373 | seq 16
+  [aml] step 100/360 | loss 1.3196 (avg 3.1632) | lr 0.000373 | seq 16
+  [aml] step 110/360 | loss 2.2095 (avg 3.1685) | lr 0.000373 | seq 16
+  [aml] step 120/360 | loss 4.3805 (avg 3.2039) | lr 0.000373 | seq 16
+  [aml] step 130/360 | loss 4.0731 (avg 3.1263) | lr 0.000373 | seq 16
+  [aml] step 140/360 | loss 0.8980 (avg 3.1142) | lr 0.000373 | seq 16
+  [aml] step 150/360 | loss 3.7447 (avg 3.1080) | lr 0.000373 | seq 16
+  [aml] step 160/360 | loss 1.8030 (avg 3.0552) | lr 0.000373 | seq 16
+  [aml] step 170/360 | loss 2.5538 (avg 3.0609) | lr 0.000373 | seq 16
+  [aml] step 180/360 | loss 1.8640 (avg 3.0483) | lr 0.000373 | seq 16
+  [aml] step 190/360 | loss 3.8812 (avg 3.0480) | lr 0.000373 | seq 16
+  [aml] step 200/360 | loss 4.4132 (avg 3.0392) | lr 0.000373 | seq 16
+  [aml] step 210/360 | loss 1.2345 (avg 3.0515) | lr 0.000373 | seq 16
+  [aml] step 220/360 | loss 4.0210 (avg 3.0689) | lr 0.000373 | seq 16
+  [aml] step 230/360 | loss 4.6891 (avg 3.0842) | lr 0.000373 | seq 16
+  [aml] step 240/360 | loss 2.2572 (avg 3.0648) | lr 0.000372 | seq 16
+  [aml] step 250/360 | loss 3.5574 (avg 3.0572) | lr 0.000372 | seq 16
+  [aml] step 260/360 | loss 1.3002 (avg 3.0336) | lr 0.000372 | seq 16
+  [aml] step 270/360 | loss 4.0791 (avg 3.0418) | lr 0.000372 | seq 16
+  [aml] step 280/360 | loss 4.2455 (avg 3.0497) | lr 0.000372 | seq 16
+  [aml] step 290/360 | loss 1.5517 (avg 3.0134) | lr 0.000372 | seq 16
+  [aml] step 300/360 | loss 4.0142 (avg 3.0041) | lr 0.000372 | seq 16
+  [aml] step 310/360 | loss 4.3725 (avg 3.0240) | lr 0.000372 | seq 16
+  [aml] step 320/360 | loss 3.1376 (avg 3.0328) | lr 0.000372 | seq 16
+  [aml] step 330/360 | loss 5.0449 (avg 3.0519) | lr 0.000372 | seq 16
+  [aml] step 340/360 | loss 1.8773 (avg 3.0349) | lr 0.000372 | seq 16
+  [aml] step 350/360 | loss 1.8467 (avg 3.0155) | lr 0.000372 | seq 16
+[aml] training complete: 360 steps, avg loss 3.0292 (memory freed)
+  [aml] step 0/360 | loss 2.7723 (avg 2.7723) | lr 0.000372 | seq 32
+  [aml] step 10/360 | loss 3.7830 (avg 2.3011) | lr 0.000372 | seq 32
+  [aml] step 20/360 | loss 2.4213 (avg 2.9692) | lr 0.000372 | seq 32
+  [aml] step 30/360 | loss 4.4004 (avg 2.9018) | lr 0.000372 | seq 32
+  [aml] step 40/360 | loss 4.2148 (avg 2.8290) | lr 0.000372 | seq 32
+  [aml] step 50/360 | loss 1.2669 (avg 2.8981) | lr 0.000372 | seq 32
+  [aml] step 60/360 | loss 1.2698 (avg 2.9100) | lr 0.000372 | seq 32
+  [aml] step 70/360 | loss 1.1646 (avg 2.9254) | lr 0.000372 | seq 32
+  [aml] step 80/360 | loss 3.9823 (avg 2.8209) | lr 0.000372 | seq 32
+  [aml] step 90/360 | loss 3.9965 (avg 2.7965) | lr 0.000372 | seq 32
+  [aml] step 100/360 | loss 1.0132 (avg 2.7806) | lr 0.000372 | seq 32
+  [aml] step 110/360 | loss 1.1743 (avg 2.7356) | lr 0.000372 | seq 32
+  [aml] step 120/360 | loss 1.2853 (avg 2.6836) | lr 0.000372 | seq 32
+  [aml] step 130/360 | loss 3.6022 (avg 2.7641) | lr 0.000372 | seq 32
+  [aml] step 140/360 | loss 0.2202 (avg 2.7074) | lr 0.000372 | seq 32
+  [aml] step 150/360 | loss 4.2660 (avg 2.7604) | lr 0.000372 | seq 32
+  [aml] step 160/360 | loss 0.6857 (avg 2.7622) | lr 0.000372 | seq 32
+  [aml] step 170/360 | loss 2.8467 (avg 2.7322) | lr 0.000372 | seq 32
+  [aml] step 180/360 | loss 0.9651 (avg 2.6752) | lr 0.000372 | seq 32
+  [aml] step 190/360 | loss 3.3427 (avg 2.6223) | lr 0.000372 | seq 32
+  [aml] step 200/360 | loss 0.9700 (avg 2.5960) | lr 0.000372 | seq 32
+  [aml] step 210/360 | loss 1.7502 (avg 2.5846) | lr 0.000372 | seq 32
+  [aml] step 220/360 | loss 1.6241 (avg 2.5596) | lr 0.000372 | seq 32
+  [aml] step 230/360 | loss 3.8717 (avg 2.5654) | lr 0.000372 | seq 32
+  [aml] step 240/360 | loss 1.7165 (avg 2.5743) | lr 0.000372 | seq 32
+  [aml] step 250/360 | loss 3.8949 (avg 2.5813) | lr 0.000372 | seq 32
+  [aml] step 260/360 | loss 4.0723 (avg 2.5657) | lr 0.000372 | seq 32
+  [aml] step 270/360 | loss 4.4228 (avg 2.5655) | lr 0.000372 | seq 32
+  [aml] step 280/360 | loss 0.8746 (avg 2.5749) | lr 0.000372 | seq 32
+  [aml] step 290/360 | loss 3.8706 (avg 2.5694) | lr 0.000372 | seq 32
+  [aml] step 300/360 | loss 3.7890 (avg 2.5749) | lr 0.000372 | seq 32
+  [aml] step 310/360 | loss 4.0882 (avg 2.5758) | lr 0.000372 | seq 32
+  [aml] step 320/360 | loss 0.8819 (avg 2.5815) | lr 0.000372 | seq 32
+  [aml] step 330/360 | loss 1.0170 (avg 2.5870) | lr 0.000372 | seq 32
+  [aml] step 340/360 | loss 1.1305 (avg 2.5675) | lr 0.000372 | seq 32
+  [aml] step 350/360 | loss 3.9805 (avg 2.5596) | lr 0.000372 | seq 32
+[aml] training complete: 360 steps, avg loss 2.5730 (memory freed)
+[trainer] warmup complete at stage 3. base may freeze now, like a proud fossil.
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778793009_734.txt]
+[dna] earth wrote 17 bytes to ecology
+[dna] earth consumed 10 bytes from 1 files: [fire/gen_1778793078_701.txt]
+[dna] earth consumed 17 bytes from 1 files: [water/gen_1778793099_673.txt]
+[spa] S=2 weakest=0 score=1.072 avg=1.072 thr=0.643
+[dna] earth wrote 37 bytes to ecology
+[dna] earth consumed 26 bytes from 1 files: [fire/gen_1778793126_704.txt]
+[dna] earth consumed 38 bytes from 1 files: [water/gen_1778793163_676.txt]
+[dna] earth wrote 33 bytes to ecology
+[dna] earth consumed 21 bytes from 1 files: [fire/gen_1778793191_707.txt]
+[dna] earth consumed 21 bytes from 1 files: [fire/gen_1778793224_708.txt]
+[dna] earth consumed 18 bytes from 1 files: [air/gen_1778793250_744.txt]
+[dna] earth wrote 21 bytes to ecology
+[dna] earth consumed 30 bytes from 1 files: [fire/gen_1778793272_710.txt]
+[dna] earth consumed 22 bytes from 1 files: [fire/gen_1778793302_711.txt]
+[dna] earth consumed 43 bytes from 1 files: [air/gen_1778793322_746.txt]
+[dna] earth wrote 18 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [air/gen_1778793354_747.txt]
+[dna] earth consumed 25 bytes from 1 files: [water/gen_1778793367_686.txt]
+[dna] earth consumed 23 bytes from 1 files: [fire/gen_1778793403_714.txt]
+[dna] earth wrote 20 bytes to ecology
+[dna] earth consumed 22 bytes from 1 files: [water/gen_1778793453_690.txt]
+[spa] S=3 weakest=2 score=2.144 avg=2.149 thr=1.290
+[dna] earth wrote 23 bytes to ecology
+[dna] earth consumed 21 bytes from 1 files: [water/gen_1778793519_693.txt]
+[dna] earth consumed 24 bytes from 1 files: [water/gen_1778793546_694.txt]
+[dna] earth wrote 18 bytes to ecology
+[dna] earth consumed 24 bytes from 1 files: [water/gen_1778793574_695.txt]
+[dna] earth consumed 27 bytes from 1 files: [water/gen_1778793708_696.txt]
+[dna] earth consumed 22 bytes from 1 files: [fire/gen_1778793954_722.txt]
+[dna] earth wrote 15 bytes to ecology
+[dna] earth consumed 24 bytes from 1 files: [water/gen_1778794180_699.txt]
+[dna] earth consumed 29 bytes from 1 files: [water/gen_1778794232_700.txt]
+[dna] earth consumed 31 bytes from 1 files: [water/gen_1778794296_702.txt]
+[spa] S=2 weakest=0 score=1.078 avg=1.078 thr=0.647
+[dna] earth wrote 21 bytes to ecology
+[dna] earth consumed 20 bytes from 1 files: [water/gen_1778794353_703.txt]
+[dna] earth consumed 32 bytes from 1 files: [water/gen_1778794406_704.txt]
+[dna] earth consumed 23 bytes from 1 files: [water/gen_1778794455_705.txt]
+[spa] S=3 weakest=2 score=2.161 avg=2.164 thr=1.298
+[dna] earth wrote 32 bytes to ecology
+[dna] earth consumed 20 bytes from 1 files: [fire/gen_1778794496_729.txt]
+[dna] earth consumed 18 bytes from 1 files: [fire/gen_1778794561_730.txt]
+[dna] earth consumed 49 bytes from 2 files: [water/gen_1778794592_708.txt water/gen_1778794620_709.txt]
+[spa] S=3 weakest=2 score=2.127 avg=2.143 thr=1.286
+[dna] earth wrote 27 bytes to ecology
+[dna] earth consumed 19 bytes from 1 files: [fire/gen_1778794661_732.txt]
+[debug-onto] tick=700 corpus=696723 stage=3 freeze=500
+[trainer] micro-train burst (1027 bytes, novelty 0.10) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2501 | field_dev=-0.047 | purpose_align=-0.136 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.6352 (memory freed)
+[dna] earth consumed 23 bytes from 1 files: [water/gen_1778794755_712.txt]
+[dna] earth consumed 28 bytes from 1 files: [water/gen_1778794809_713.txt]
+[trainer] micro-train burst (51 bytes, novelty 0.40) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.3070 | field_dev=-0.032 | purpose_align=-0.136 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.3159 (memory freed)
+[spa] S=3 weakest=2 score=2.146 avg=2.147 thr=1.288
+[dna] earth wrote 19 bytes to ecology
+[dna] earth consumed 28 bytes from 1 files: [water/gen_1778794864_714.txt]
+[trainer] micro-train burst (28 bytes, novelty 0.67) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0956 | field_dev=-0.088 | purpose_align=-0.136 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.6489 (memory freed)
+[trainer] growing new delta module (total: 2) — new soul appended.
+[dna] earth wrote 17 bytes to ecology
+[dna] earth consumed 19 bytes from 1 files: [water/gen_1778795004_717.txt]
+[dna] earth wrote 23 bytes to ecology
+[trainer] micro-train burst (19 bytes, novelty 0.41) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1206 | field_dev=-0.054 | purpose_align=0.203 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.9127 (memory freed)
+[dna] earth consumed 29 bytes from 1 files: [water/gen_1778795168_720.txt]
+[dna] earth consumed 27 bytes from 1 files: [fire/gen_1778795222_742.txt]
+[trainer] micro-train burst (56 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2818 | field_dev=-0.029 | purpose_align=0.203 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.7912 (memory freed)
+[dna] earth wrote 18 bytes to ecology
+[dna] earth consumed 28 bytes from 1 files: [water/gen_1778795284_723.txt]
+[trainer] micro-train burst (28 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0442 | field_dev=-0.033 | purpose_align=0.203 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.7752 (memory freed)
+[dna] earth consumed 27 bytes from 1 files: [water/gen_1778795422_726.txt]
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 24 bytes from 1 files: [fire/gen_1778795506_747.txt]
+[trainer] micro-train burst (51 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0864 | field_dev=-0.020 | purpose_align=0.205 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.7480 (memory freed)
+[dna] earth consumed 10 bytes from 1 files: [water/gen_1778795628_732.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0151 | field_dev=-0.036 | purpose_align=0.203 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.7284 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 34 bytes from 1 files: [fire/gen_1778795704_751.txt]
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 12 bytes from 1 files: [water/gen_1778795795_736.txt]
+[trainer] micro-train burst (46 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0326 | field_dev=-0.001 | purpose_align=0.206 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.3532 (memory freed)
+[dna] earth wrote 8 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778795946_776.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1582 | field_dev=-0.009 | purpose_align=0.205 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.8006 (memory freed)
+[spa] S=2 weakest=0 score=1.065 avg=1.065 thr=0.639
+[dna] earth wrote 23 bytes to ecology
+[dna] earth consumed 20 bytes from 1 files: [air/gen_1778796079_781.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.47) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2158 | field_dev=-0.012 | purpose_align=0.204 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.3853 (memory freed)
+[dna] earth wrote 37 bytes to ecology
+[dna] earth consumed 34 bytes from 2 files: [air/gen_1778796174_782.txt air/gen_1778796203_783.txt]
+[dna] earth consumed 29 bytes from 1 files: [water/gen_1778796237_748.txt]
+[trainer] micro-train burst (63 bytes, novelty 0.47) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0552 | field_dev=-0.002 | purpose_align=0.204 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.1434 (memory freed)
+[dna] earth wrote 32 bytes to ecology
+[dna] earth consumed 84 bytes from 2 files: [air/gen_1778796305_785.txt air/gen_1778796354_786.txt]
+[dna] earth consumed 18 bytes from 1 files: [fire/gen_1778796393_764.txt]
+[trainer] micro-train burst (102 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0228 | field_dev=0.009 | purpose_align=0.202 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.0179 (memory freed)
+[spa] S=2 weakest=0 score=1.077 avg=1.077 thr=0.646
+[dna] earth wrote 24 bytes to ecology
+[dna] earth consumed 52 bytes from 2 files: [air/gen_1778796459_789.txt air/gen_1778796509_790.txt]
+[dna] earth consumed 31 bytes from 1 files: [water/gen_1778796526_756.txt]
+[trainer] micro-train burst (83 bytes, novelty 0.47) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1355 | field_dev=0.032 | purpose_align=0.201 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.9939 (memory freed)
+[dna] earth consumed 16 bytes from 1 files: [fire/gen_1778796588_769.txt]
+[spa] S=2 weakest=0 score=1.085 avg=1.085 thr=0.651
+[dna] earth wrote 26 bytes to ecology
+[dna] earth consumed 43 bytes from 1 files: [air/gen_1778796675_794.txt]
+[trainer] micro-train burst (59 bytes, novelty 0.44) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2767 | field_dev=0.082 | purpose_align=0.200 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.2786 (memory freed)
+[dna] earth wrote 12 bytes to ecology
+[dna] earth consumed 45 bytes from 1 files: [fire/gen_1778796788_775.txt]
+[trainer] micro-train burst (45 bytes, novelty 0.57) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1559 | field_dev=-0.052 | purpose_align=0.198 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.3521 (memory freed)
+[trainer] growing new delta module (total: 3) — new soul appended.
+[dna] earth consumed 28 bytes from 1 files: [air/gen_1778796869_798.txt]
+[dna] earth consumed 25 bytes from 1 files: [air/gen_1778796928_799.txt]
+[trainer] micro-train burst (53 bytes, novelty 0.48) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.4502 | field_dev=-0.027 | purpose_align=0.178 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.2278 (memory freed)
+[dna] earth consumed 77 bytes from 1 files: [water/gen_1778797046_773.txt]
+[trainer] micro-train burst (77 bytes, novelty 0.51) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.5790 | field_dev=-0.037 | purpose_align=0.176 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.3290 (memory freed)
+[dna] earth wrote 18 bytes to ecology
+[debug-onto] tick=750 corpus=697559 stage=3 freeze=500
+[dna] earth wrote 23 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [water/gen_1778797282_781.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0505 | field_dev=-0.024 | purpose_align=0.174 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.2648 (memory freed)
+[dna] earth consumed 20 bytes from 1 files: [air/gen_1778797387_809.txt]
+[dna] earth wrote 30 bytes to ecology
+[trainer] micro-train burst (20 bytes, novelty 0.73) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2247 | field_dev=-0.020 | purpose_align=0.171 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.9611 (memory freed)
+[dna] earth consumed 16 bytes from 1 files: [fire/gen_1778797480_790.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.56) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0517 | field_dev=-0.013 | purpose_align=0.167 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.9810 (memory freed)
+[dna] earth wrote 18 bytes to ecology
+[dna] earth consumed 15 bytes from 1 files: [water/gen_1778797567_790.txt]
+[dna] earth consumed 36 bytes from 1 files: [air/gen_1778797631_815.txt]
+[trainer] micro-train burst (51 bytes, novelty 0.39) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0246 | field_dev=-0.012 | purpose_align=0.165 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.2122 (memory freed)
+[dna] earth wrote 13 bytes to ecology
+[dna] earth consumed 19 bytes from 1 files: [water/gen_1778797707_794.txt]
+[trainer] micro-train burst (19 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.3012 | field_dev=0.066 | purpose_align=0.162 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.2357 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [fire/gen_1778798020_805.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.3831 | field_dev=0.009 | purpose_align=0.161 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 2.2957 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth consumed 15 bytes from 1 files: [water/gen_1778798147_809.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0202 | field_dev=-0.047 | purpose_align=0.158 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.9134 (memory freed)
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [fire/gen_1778798243_814.txt]
+[dna] earth consumed 15 bytes from 1 files: [fire/gen_1778798288_816.txt]
+[trainer] micro-train burst (31 bytes, novelty 0.17) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.4583 | field_dev=0.004 | purpose_align=0.157 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2756 (memory freed)
+[trainer] growing new delta module (total: 4) — new soul appended.
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 21 bytes from 1 files: [air/gen_1778798443_835.txt]
+[trainer] micro-train burst (21 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.4799 | field_dev=-0.035 | purpose_align=-0.248 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.9825 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [air/gen_1778798577_838.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0739 | field_dev=-0.047 | purpose_align=-0.247 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.0897 (memory freed)
+[dna] earth consumed 13 bytes from 1 files: [water/gen_1778798659_827.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1615 | field_dev=-0.010 | purpose_align=-0.245 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.1587 (memory freed)
+[dna] earth consumed 13 bytes from 1 files: [water/gen_1778798793_831.txt]
+[dna] earth consumed 21 bytes from 1 files: [water/gen_1778798830_833.txt]
+[trainer] micro-train burst (34 bytes, novelty 0.31) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0649 | field_dev=-0.036 | purpose_align=-0.241 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.8486 (memory freed)
+[spa] S=2 weakest=0 score=1.086 avg=1.086 thr=0.651
+[dna] earth wrote 30 bytes to ecology
+[dna] earth consumed 14 bytes from 1 files: [air/gen_1778798899_846.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1935 | field_dev=-0.026 | purpose_align=-0.238 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.2926 (memory freed)
+[trainer] growing new delta module (total: 5) — new soul appended.
+[dna] earth wrote 51 bytes to ecology
+[dna] earth consumed 14 bytes from 1 files: [water/gen_1778799102_841.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1220 | field_dev=0.001 | purpose_align=0.095 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.7612 (memory freed)
+[spa] S=2 weakest=0 score=1.082 avg=1.082 thr=0.649
+[dna] earth wrote 22 bytes to ecology
+[dna] earth consumed 38 bytes from 1 files: [water/gen_1778799292_847.txt]
+[trainer] micro-train burst (38 bytes, novelty 0.71) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.3064 | field_dev=-0.011 | purpose_align=0.093 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.2282 (memory freed)
+[dna] earth wrote 19 bytes to ecology
+[dna] earth consumed 14 bytes from 1 files: [fire/gen_1778799496_848.txt]
+[dna] earth consumed 16 bytes from 1 files: [water/gen_1778799573_853.txt]
+[trainer] micro-train burst (30 bytes, novelty 0.23) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0644 | field_dev=-0.025 | purpose_align=0.090 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.9876 (memory freed)
+[dna] earth consumed 19 bytes from 1 files: [fire/gen_1778799642_851.txt]
+[spa] S=4 weakest=1 score=3.179 avg=3.200 thr=1.920
+[dna] earth wrote 25 bytes to ecology
+[dna] earth consumed 21 bytes from 1 files: [water/gen_1778799698_856.txt]
+[trainer] micro-train burst (40 bytes, novelty 0.39) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2629 | field_dev=-0.020 | purpose_align=0.090 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5809 (memory freed)
+[spa] S=2 weakest=0 score=1.078 avg=1.078 thr=0.647
+[dna] earth wrote 24 bytes to ecology
+[dna] earth consumed 12 bytes from 1 files: [water/gen_1778799937_863.txt]
+[trainer] micro-train burst (12 bytes, novelty 0.55) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2830 | field_dev=-0.103 | purpose_align=0.090 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.2578 (memory freed)
+[spa] S=2 weakest=0 score=1.085 avg=1.085 thr=0.651
+[dna] earth wrote 22 bytes to ecology
+[dna] earth consumed 41 bytes from 1 files: [fire/gen_1778800069_856.txt]
+[dna] earth consumed 34 bytes from 1 files: [water/gen_1778800118_868.txt]
+[trainer] micro-train burst (75 bytes, novelty 0.46) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.4611 | field_dev=-0.004 | purpose_align=0.090 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.3285 (memory freed)
+[dna] earth wrote 17 bytes to ecology
+[dna] earth consumed 11 bytes from 1 files: [water/gen_1778800168_869.txt]
+[dna] earth wrote 8 bytes to ecology
+[trainer] micro-train burst (11 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1326 | field_dev=-0.019 | purpose_align=0.089 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.9879 (memory freed)
+[dna] earth wrote 15 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth consumed 14 bytes from 1 files: [water/gen_1778800747_886.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.6386 | field_dev=-0.015 | purpose_align=0.089 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.5284 (memory freed)
+[dna] earth wrote 15 bytes to ecology
+[dna] earth consumed 15 bytes from 1 files: [water/gen_1778800828_889.txt]
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 12 bytes from 1 files: [fire/gen_1778800900_869.txt]
+[trainer] micro-train burst (27 bytes, novelty 0.18) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0890 | field_dev=-0.011 | purpose_align=0.090 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.7576 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 14 bytes from 1 files: [water/gen_1778801058_895.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0242 | field_dev=0.081 | purpose_align=0.090 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.0784 (memory freed)
+[trainer] growing new delta module (total: 6) — new soul appended.
+[spa] S=2 weakest=0 score=1.084 avg=1.084 thr=0.650
+[dna] earth wrote 23 bytes to ecology
+[dna] earth consumed 11 bytes from 1 files: [air/gen_1778801264_889.txt]
+[trainer] micro-train burst (11 bytes, novelty 0.56) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.4083 | field_dev=0.052 | purpose_align=0.027 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5689 (memory freed)
+[spa] S=4 weakest=1 score=3.228 avg=3.239 thr=1.944
+[dna] earth wrote 45 bytes to ecology
+[dna] earth consumed 95 bytes from 2 files: [water/gen_1778801372_904.txt water/gen_1778801401_905.txt]
+[dna] earth consumed 20 bytes from 1 files: [air/gen_1778801458_892.txt]
+[trainer] micro-train burst (115 bytes, novelty 0.47) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1159 | field_dev=-0.045 | purpose_align=0.025 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.9702 (memory freed)
+[dna] earth consumed 22 bytes from 1 files: [water/gen_1778801572_909.txt]
+[dna] earth wrote 22 bytes to ecology
+[trainer] micro-train burst (22 bytes, novelty 0.67) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3622 | field_dev=-0.021 | purpose_align=0.024 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.4268 (memory freed)
+[dna] earth consumed 28 bytes from 1 files: [air/gen_1778801780_899.txt]
+[spa] S=3 weakest=1 score=2.168 avg=2.174 thr=1.304
+[dna] earth wrote 23 bytes to ecology
+[debug-onto] tick=850 corpus=698328 stage=3 freeze=500
+[trainer] micro-train burst (28 bytes, novelty 0.57) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3996 | field_dev=-0.027 | purpose_align=0.023 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.1233 (memory freed)
+[dna] earth wrote 18 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[spa] S=2 weakest=0 score=1.066 avg=1.066 thr=0.640
+[dna] earth wrote 24 bytes to ecology
+[dna] earth consumed 13 bytes from 1 files: [water/gen_1778802166_923.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1348 | field_dev=-0.060 | purpose_align=0.023 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.0990 (memory freed)
+[trainer] growing new delta module (total: 7) — new soul appended.
+[dna] earth consumed 31 bytes from 1 files: [fire/gen_1778802380_892.txt]
+[dna] earth consumed 51 bytes from 2 files: [water/gen_1778802384_929.txt water/gen_1778802411_930.txt]
+[trainer] micro-train burst (82 bytes, novelty 0.34) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0238 | field_dev=-0.005 | purpose_align=-0.117 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.0305 (memory freed)
+[dna] earth wrote 11 bytes to ecology
+[dna] earth consumed 29 bytes from 1 files: [water/gen_1778802498_933.txt]
+[spa] S=2 weakest=0 score=1.075 avg=1.075 thr=0.645
+[dna] earth wrote 18 bytes to ecology
+[trainer] micro-train burst (29 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2073 | field_dev=0.074 | purpose_align=-0.115 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.3928 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 22 bytes to ecology
+[dna] earth consumed 14 bytes from 1 files: [fire/gen_1778802921_900.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.82) — and lo, it feeds again.
+[syntropy] action=boost | trend=0.6252 | field_dev=0.171 | purpose_align=-0.113 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.2087 (memory freed)
+[dna] earth wrote 18 bytes to ecology
+[dna] earth consumed 46 bytes from 1 files: [water/gen_1778803066_944.txt]
+[dna] earth wrote 10 bytes to ecology
+[trainer] micro-train burst (46 bytes, novelty 0.31) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.4695 | field_dev=-0.028 | purpose_align=-0.112 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.2794 (memory freed)
+[spa] S=3 weakest=1 score=2.166 avg=2.167 thr=1.300
+[dna] earth wrote 29 bytes to ecology
+[dna] earth consumed 67 bytes from 2 files: [water/gen_1778803187_946.txt water/gen_1778803248_947.txt]
+[dna] earth wrote 14 bytes to ecology
+[dna] earth consumed 48 bytes from 2 files: [water/gen_1778803324_948.txt water/gen_1778803353_949.txt]
+[trainer] micro-train burst (115 bytes, novelty 0.30) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3508 | field_dev=0.007 | purpose_align=-0.110 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.1325 (memory freed)
+[dna] earth consumed 24 bytes from 1 files: [water/gen_1778803445_952.txt]
+[spa] S=2 weakest=0 score=1.080 avg=1.080 thr=0.648
+[dna] earth wrote 47 bytes to ecology
+[trainer] micro-train burst (24 bytes, novelty 0.61) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.5561 | field_dev=0.014 | purpose_align=-0.109 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.4593 (memory freed)
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 25 bytes from 1 files: [fire/gen_1778803665_910.txt]
+[spa] S=2 weakest=0 score=1.077 avg=1.077 thr=0.646
+[dna] earth wrote 23 bytes to ecology
+[dna] earth consumed 41 bytes from 1 files: [water/gen_1778803738_957.txt]
+[trainer] micro-train burst (66 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1077 | field_dev=-0.061 | purpose_align=-0.108 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.1330 (memory freed)
+[spa] S=2 weakest=0 score=1.068 avg=1.068 thr=0.641
+[dna] earth wrote 17 bytes to ecology
+[dna] earth consumed 32 bytes from 1 files: [water/gen_1778803996_959.txt]
+[trainer] micro-train burst (32 bytes, novelty 0.61) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0553 | field_dev=0.019 | purpose_align=-0.107 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.3938 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 20 bytes from 1 files: [fire/gen_1778804170_916.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.44) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1252 | field_dev=0.005 | purpose_align=-0.106 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.1370 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 13 bytes from 1 files: [water/gen_1778804476_964.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0769 | field_dev=-0.039 | purpose_align=-0.106 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.9769 (memory freed)
+[spa] S=3 weakest=2 score=2.160 avg=2.160 thr=1.296
+[dna] earth wrote 25 bytes to ecology
+[dna] earth consumed 12 bytes from 1 files: [water/gen_1778804643_968.txt]
+[trainer] micro-train burst (12 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1261 | field_dev=0.039 | purpose_align=-0.104 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.9797 (memory freed)
+[trainer] growing new delta module (total: 8) — new soul appended.
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 16 bytes from 1 files: [water/gen_1778804932_976.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.55) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0833 | field_dev=-0.017 | purpose_align=-0.046 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.0590 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[debug-onto] tick=900 corpus=698829 stage=3 freeze=500
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [water/gen_1778805295_983.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.40) — and lo, it feeds again.
+[syntropy] action=explore | trend=-0.0063 | field_dev=0.066 | purpose_align=-0.047 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.7998 (memory freed)
+[dna] earth consumed 15 bytes from 1 files: [water/gen_1778805405_987.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.46) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1296 | field_dev=-0.054 | purpose_align=-0.048 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.1164 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [water/gen_1778805660_993.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1575 | field_dev=-0.026 | purpose_align=-0.049 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.4256 (memory freed)
+[dna] earth consumed 34 bytes from 2 files: [water/gen_1778805854_999.txt water/gen_1778805894_1000.txt]
+[trainer] micro-train burst (34 bytes, novelty 0.19) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1002 | field_dev=-0.036 | purpose_align=-0.050 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.1967 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 15 bytes from 1 files: [water/gen_1778806145_1007.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.31) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0951 | field_dev=-0.059 | purpose_align=-0.051 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.1617 (memory freed)
+[trainer] growing new delta module (total: 9) — new soul appended.
+[dna] earth consumed 10 bytes from 1 files: [water/gen_1778806377_1010.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1907 | field_dev=-0.035 | purpose_align=0.050 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.3257 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 12 bytes from 1 files: [water/gen_1778806619_1015.txt]
+[trainer] micro-train burst (12 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0295 | field_dev=-0.009 | purpose_align=0.050 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4607 (memory freed)
+[dna] earth wrote 15 bytes to ecology
+[dna] earth consumed 26 bytes from 2 files: [water/gen_1778806851_1020.txt water/gen_1778806900_1021.txt]
+[trainer] micro-train burst (26 bytes, novelty 0.32) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0876 | field_dev=-0.016 | purpose_align=0.049 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 2.3459 (memory freed)
+[dna] earth consumed 11 bytes from 1 files: [water/gen_1778807165_1024.txt]
+[trainer] micro-train burst (11 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0891 | field_dev=-0.033 | purpose_align=0.048 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.1330 (memory freed)
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 15 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth consumed 17 bytes from 1 files: [water/gen_1778807738_1034.txt]

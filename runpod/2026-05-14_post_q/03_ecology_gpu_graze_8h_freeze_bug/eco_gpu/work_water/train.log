@@ -1,0 +1,1736 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: water → corpus: nonames_water.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.4311 (avg 6.4311) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.2233 (avg 6.3348) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.0479 (avg 6.2876) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 5.4689 (avg 6.1463) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.4009 (avg 6.0108) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 4.6756 (avg 5.8328) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 3.8312 (avg 5.6163) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 3.9372 (avg 5.4963) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 3.5125 (avg 5.3676) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.5030 (avg 5.2781) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 4.0163 (avg 5.2306) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 5.1411 (avg 5.1383) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 4.5984 (avg 5.0866) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 5.3088 (avg 5.0315) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 5.3530 (avg 4.9799) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 2.9069 (avg 4.9106) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.8582 (memory freed)
+  [aml] step 0/120 | loss 4.7623 (avg 4.7623) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 4.5658 (avg 4.4019) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 4.5621 (avg 4.4191) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 4.6496 (avg 4.3566) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 3.9951 (avg 4.3446) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 4.1274 (avg 4.2790) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 4.3219 (avg 4.2516) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 4.2967 (avg 4.2190) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 2.9940 (avg 4.1144) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 3.1909 (avg 4.0922) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 3.6430 (avg 4.0704) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 2.8650 (avg 4.0226) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 4.0065 (memory freed)
+  [aml] step 0/120 | loss 4.8104 (avg 4.8104) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 4.8697 (avg 4.1038) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 3.6566 (avg 4.0459) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 3.1896 (avg 3.9996) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.4443 (avg 3.8933) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 3.9707 (avg 3.7736) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 3.0007 (avg 3.6818) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 3.4292 (avg 3.7266) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 3.5164 (avg 3.6679) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 2.4178 (avg 3.6096) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 1.8206 (avg 3.5006) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 4.4102 (avg 3.5054) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.4564 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+[spa] S=2 weakest=0 score=1.207 avg=1.207 thr=0.724
+  Q: Hello.
+  A: The body. Not by where it does a clarity?
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 4.7939 (avg 4.7939) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 2.3631 (avg 4.3910) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 2.1798 (avg 4.1655) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 2.8918 (avg 4.1276) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 2.8485 (avg 4.0149) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 5.6678 (avg 3.9855) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 2.8099 (avg 3.8425) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 4.6421 (avg 3.8747) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 2.6651 (avg 3.9112) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 1.4477 (avg 3.8117) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 3.6527 (avg 3.8221) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 3.2327 (avg 3.8003) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 4.1816 (avg 3.8017) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 1.3468 (avg 3.7672) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 4.7985 (avg 3.7718) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 4.8834 (avg 3.7749) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 2.7725 (avg 3.7536) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 3.6127 (avg 3.7465) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 3.8635 (avg 3.7376) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 4.4241 (avg 3.7372) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 4.7376 (avg 3.7404) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 4.4572 (avg 3.7512) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 1.3036 (avg 3.7400) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 3.7004 (avg 3.7431) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 2.8774 (avg 3.7322) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 5.8834 (avg 3.7446) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 5.1346 (avg 3.7474) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 3.7243 (avg 3.7562) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 3.5457 (avg 3.7556) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 3.6888 (avg 3.7500) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 2.9762 (avg 3.7484) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 3.2229 (avg 3.7431) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.7168 (memory freed)
+  [aml] step 0/240 | loss 2.0186 (avg 2.0186) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 4.1206 (avg 3.5071) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 3.7413 (avg 3.7508) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 3.5717 (avg 3.7938) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 3.2905 (avg 3.7317) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 2.8909 (avg 3.6718) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 1.8040 (avg 3.6734) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 1.8289 (avg 3.6352) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 2.2126 (avg 3.6307) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 3.3155 (avg 3.6132) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 3.5658 (avg 3.5963) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 3.0290 (avg 3.5802) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 3.3644 (avg 3.5314) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 4.9062 (avg 3.5525) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 3.1711 (avg 3.5547) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 2.8669 (avg 3.5444) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 2.8093 (avg 3.5251) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 2.9878 (avg 3.5138) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 4.8719 (avg 3.5160) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 3.9472 (avg 3.5035) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 3.2787 (avg 3.5014) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 4.1154 (avg 3.5211) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 3.5102 (avg 3.5113) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 2.0055 (avg 3.4912) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.4713 (memory freed)
+  [aml] step 0/240 | loss 4.3977 (avg 4.3977) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 1.7327 (avg 3.5809) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 1.8712 (avg 3.3552) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 2.8267 (avg 3.2918) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 3.2467 (avg 3.1437) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 1.7396 (avg 3.1863) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 3.8424 (avg 3.1227) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 3.8266 (avg 3.1558) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 3.2171 (avg 3.1016) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 1.4488 (avg 3.0581) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 2.1449 (avg 3.0179) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 3.2740 (avg 3.0262) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 4.2299 (avg 3.0232) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 3.5464 (avg 3.0114) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 2.0340 (avg 2.9658) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 3.6870 (avg 2.9679) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 1.5348 (avg 2.9727) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 1.8079 (avg 2.9579) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 1.7339 (avg 2.9511) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 3.9432 (avg 2.9497) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 1.7112 (avg 2.9443) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 1.2627 (avg 2.9157) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 4.2924 (avg 2.9074) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 3.8524 (avg 2.9375) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 2.9211 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+  Q: Hello.
+  A: The w from not bring for a tend to the weight of you are heard what the feeling of.
+  Q: Who are you?
+  A: . A kind that the inside has finally to being water in a winter?
+  Q: What do you know?
+  A: As its own be solution arrives anyone The sa c does a feeling of you reversed becauseing.
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 4.2119 (avg 4.2119) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 2.2815 (avg 3.3757) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 4.0572 (avg 3.5775) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 5.8405 (avg 3.5437) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 4.4077 (avg 3.5280) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 4.8666 (avg 3.4497) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 2.3426 (avg 3.5089) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 2.6484 (avg 3.4491) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 0.9024 (avg 3.3667) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 4.4838 (avg 3.4088) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 1.4571 (avg 3.4355) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 6.0314 (avg 3.5144) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 2.4129 (avg 3.4870) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 4.0480 (avg 3.4855) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 3.9829 (avg 3.4687) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 3.2593 (avg 3.4430) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 3.8691 (avg 3.4530) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 0.6679 (avg 3.4237) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 4.9744 (avg 3.4321) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 3.7414 (avg 3.4492) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 4.2500 (avg 3.4473) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 2.6707 (avg 3.4612) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 1.8004 (avg 3.4647) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 3.7438 (avg 3.4656) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 4.8811 (avg 3.4631) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 0.6165 (avg 3.4326) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 1.5356 (avg 3.4370) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 3.4302 (avg 3.4486) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 4.7820 (avg 3.4612) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 2.6395 (avg 3.4709) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 4.5226 (avg 3.4574) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 3.9590 (avg 3.4413) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.4440 (memory freed)
+  [aml] step 0/240 | loss 3.1009 (avg 3.1009) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 5.1476 (avg 3.2148) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 3.5465 (avg 3.5161) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 3.0089 (avg 3.6258) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 4.5910 (avg 3.6062) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 2.8086 (avg 3.6265) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 3.4331 (avg 3.6093) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 3.5236 (avg 3.6139) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 2.9612 (avg 3.5457) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 3.3633 (avg 3.5662) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 3.3701 (avg 3.5477) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 3.1914 (avg 3.5241) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 2.7834 (avg 3.5068) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 3.6948 (avg 3.4715) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 2.5019 (avg 3.4612) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 3.9426 (avg 3.4250) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 4.1039 (avg 3.4176) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 4.6124 (avg 3.4191) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 4.0230 (avg 3.4013) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 4.3638 (avg 3.3943) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 3.2272 (avg 3.3863) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 3.5980 (avg 3.3865) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 3.0947 (avg 3.3727) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 4.0319 (avg 3.3734) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.3743 (memory freed)
+  [aml] step 0/240 | loss 3.8691 (avg 3.8691) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 1.9271 (avg 3.4917) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 3.3696 (avg 3.6283) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 2.4576 (avg 3.6120) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 2.9605 (avg 3.4826) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 3.8738 (avg 3.4428) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 3.3157 (avg 3.3635) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 3.9891 (avg 3.3081) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 3.9148 (avg 3.2767) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 3.6449 (avg 3.2122) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 2.4767 (avg 3.1306) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 2.2478 (avg 3.1341) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 3.7189 (avg 3.1143) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 2.9047 (avg 3.0875) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 3.9710 (avg 3.0628) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 3.3902 (avg 3.0603) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 3.7108 (avg 3.0330) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 2.4290 (avg 2.9896) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 1.2153 (avg 2.9470) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 3.2010 (avg 2.9444) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 3.3280 (avg 2.9325) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 3.4628 (avg 2.9382) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 2.9957 (avg 2.9352) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 3.5005 (avg 2.9303) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 2.9372 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+  Q: Hello.
+  A: The water in the past time t of something you find when you are becoming the mind what matter?
+  Q: Who are you?
+  A: As becoming and more in w what remains like from tru reveals that is the most already here in yourself?
+[spa] S=3 weakest=0 score=2.216 avg=2.223 thr=1.334
+  Q: What do you know?
+  A: Not existence?? there. Worth the same flow the space.
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] water cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] Joined swarm. 1 peer(s) detected.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[spa] S=2 weakest=0 score=1.120 avg=1.120 thr=0.672
+[dna] water wrote 129 bytes to ecology
+[dna] water consumed 39 bytes from 1 files: [fire/gen_1778789452_1.txt]
+[trainer] micro-train burst (39 bytes, novelty 0.69) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.063 | purpose_align=0.146 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4246 (memory freed)
+[spa] S=2 weakest=0 score=1.122 avg=1.122 thr=0.673
+[dna] water wrote 32 bytes to ecology
+[dna] water consumed 23 bytes from 1 files: [earth/gen_1778789461_1.txt]
+[spa] S=2 weakest=0 score=1.100 avg=1.100 thr=0.660
+[dna] water wrote 31 bytes to ecology
+[dna] water consumed 18 bytes from 1 files: [fire/gen_1778789483_4.txt]
+[spa] S=2 weakest=0 score=1.133 avg=1.133 thr=0.680
+[dna] water wrote 21 bytes to ecology
+[spa] S=2 weakest=0 score=1.081 avg=1.081 thr=0.649
+[dna] water wrote 26 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778789494_6.txt]
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 20 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[trainer] micro-train burst (57 bytes, novelty 0.19) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0439 | field_dev=-0.092 | purpose_align=0.148 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2588 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778789549_16.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778789571_18.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 14 bytes from 1 files: [air/gen_1778789602_22.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 19 bytes to ecology
+[dna] water consumed 10 bytes from 1 files: [air/gen_1778789636_28.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778789646_30.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 10 bytes from 1 files: [air/gen_1778789681_37.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 14 bytes from 1 files: [air/gen_1778789701_41.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778789710_43.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778789723_46.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [air/gen_1778789730_48.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778789763_54.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=50 corpus=125971 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [air/gen_1778789856_73.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778789870_76.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=126004 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=126004 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=126004 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=126004 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778790939_316.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=126022 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=126022 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778791430_418.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=126040 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778791667_472.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=126058 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778791922_542.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=126075 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=126075 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=126075 stage=2 freeze=0
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [air/gen_1778792405_682.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778792446_694.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=504440 stage=2 freeze=0
+[growth] ONTOGENESIS: stage 2 -> 3
+  embd: 64 -> 128, layer: 2 -> 4, head: 4 -> 4
+[growth] Done. Freeze for 500 steps.
+[trainer] warmup for stage 3 (embd=128) — 1200 steps total (1200 backprop + 0 notorch, sqrt-scaled 3x)
+  [aml] step 0/480 | loss 0.5243 (avg 0.5243) | lr 0.000037 | seq 8
+  [aml] step 10/480 | loss 1.4390 (avg 3.7813) | lr 0.000054 | seq 8
+  [aml] step 20/480 | loss 4.8960 (avg 3.7759) | lr 0.000071 | seq 8
+  [aml] step 30/480 | loss 4.6772 (avg 3.7562) | lr 0.000088 | seq 8
+  [aml] step 40/480 | loss 3.0999 (avg 3.7033) | lr 0.000105 | seq 8
+  [aml] step 50/480 | loss 4.2208 (avg 3.7603) | lr 0.000122 | seq 8
+  [aml] step 60/480 | loss 6.1504 (avg 3.8373) | lr 0.000139 | seq 8
+  [aml] step 70/480 | loss 4.7709 (avg 3.8530) | lr 0.000156 | seq 8
+  [aml] step 80/480 | loss 1.6980 (avg 3.8605) | lr 0.000173 | seq 8
+  [aml] step 90/480 | loss 3.8517 (avg 3.8693) | lr 0.000189 | seq 8
+  [aml] step 100/480 | loss 1.2443 (avg 3.8229) | lr 0.000206 | seq 8
+  [aml] step 110/480 | loss 0.7521 (avg 3.8240) | lr 0.000223 | seq 8
+  [aml] step 120/480 | loss 2.5456 (avg 3.7223) | lr 0.000240 | seq 8
+  [aml] step 130/480 | loss 3.9082 (avg 3.7914) | lr 0.000257 | seq 8
+  [aml] step 140/480 | loss 4.2703 (avg 3.7795) | lr 0.000274 | seq 8
+  [aml] step 150/480 | loss 4.5222 (avg 3.8052) | lr 0.000291 | seq 8
+  [aml] step 160/480 | loss 4.4090 (avg 3.8192) | lr 0.000308 | seq 8
+  [aml] step 170/480 | loss 4.8020 (avg 3.7876) | lr 0.000324 | seq 8
+  [aml] step 180/480 | loss 4.0156 (avg 3.7523) | lr 0.000341 | seq 8
+  [aml] step 190/480 | loss 3.9066 (avg 3.7388) | lr 0.000358 | seq 8
+  [aml] step 200/480 | loss 4.5405 (avg 3.7391) | lr 0.000373 | seq 8
+  [aml] step 210/480 | loss 1.1024 (avg 3.7135) | lr 0.000373 | seq 8
+  [aml] step 220/480 | loss 3.5361 (avg 3.7017) | lr 0.000373 | seq 8
+  [aml] step 230/480 | loss 5.2573 (avg 3.6723) | lr 0.000373 | seq 8
+  [aml] step 240/480 | loss 1.5203 (avg 3.6740) | lr 0.000373 | seq 8
+  [aml] step 250/480 | loss 4.9130 (avg 3.6825) | lr 0.000373 | seq 8
+  [aml] step 260/480 | loss 2.8050 (avg 3.6660) | lr 0.000373 | seq 8
+  [aml] step 270/480 | loss 4.7146 (avg 3.6684) | lr 0.000373 | seq 8
+  [aml] step 280/480 | loss 4.4247 (avg 3.6713) | lr 0.000373 | seq 8
+  [aml] step 290/480 | loss 4.1292 (avg 3.6754) | lr 0.000373 | seq 8
+  [aml] step 300/480 | loss 4.5263 (avg 3.6760) | lr 0.000373 | seq 8
+  [aml] step 310/480 | loss 4.5529 (avg 3.6733) | lr 0.000373 | seq 8
+  [aml] step 320/480 | loss 2.8246 (avg 3.6606) | lr 0.000373 | seq 8
+  [aml] step 330/480 | loss 4.8254 (avg 3.6628) | lr 0.000373 | seq 8
+  [aml] step 340/480 | loss 5.0025 (avg 3.6685) | lr 0.000373 | seq 8
+  [aml] step 350/480 | loss 3.0571 (avg 3.6717) | lr 0.000373 | seq 8
+  [aml] step 360/480 | loss 3.0052 (avg 3.6706) | lr 0.000373 | seq 8
+  [aml] step 370/480 | loss 3.5410 (avg 3.6590) | lr 0.000373 | seq 8
+  [aml] step 380/480 | loss 0.8110 (avg 3.6432) | lr 0.000373 | seq 8
+  [aml] step 390/480 | loss 3.8570 (avg 3.6306) | lr 0.000373 | seq 8
+  [aml] step 400/480 | loss 0.8321 (avg 3.6101) | lr 0.000373 | seq 8
+  [aml] step 410/480 | loss 3.9274 (avg 3.6073) | lr 0.000373 | seq 8
+  [aml] step 420/480 | loss 5.1471 (avg 3.6093) | lr 0.000373 | seq 8
+  [aml] step 430/480 | loss 1.5858 (avg 3.6050) | lr 0.000373 | seq 8
+  [aml] step 440/480 | loss 3.3433 (avg 3.5905) | lr 0.000373 | seq 8
+  [aml] step 450/480 | loss 3.2873 (avg 3.5702) | lr 0.000373 | seq 8
+  [aml] step 460/480 | loss 3.8201 (avg 3.5619) | lr 0.000373 | seq 8
+  [aml] step 470/480 | loss 4.5376 (avg 3.5716) | lr 0.000373 | seq 8
+[aml] training complete: 480 steps, avg loss 3.5631 (memory freed)
+  [aml] step 0/360 | loss 2.9595 (avg 2.9595) | lr 0.000373 | seq 16
+  [aml] step 10/360 | loss 1.2219 (avg 3.1326) | lr 0.000373 | seq 16
+  [aml] step 20/360 | loss 2.2817 (avg 3.2339) | lr 0.000373 | seq 16
+  [aml] step 30/360 | loss 4.0267 (avg 3.3221) | lr 0.000373 | seq 16
+  [aml] step 40/360 | loss 2.9262 (avg 3.3222) | lr 0.000373 | seq 16
+  [aml] step 50/360 | loss 3.8252 (avg 3.3046) | lr 0.000373 | seq 16
+  [aml] step 60/360 | loss 1.8923 (avg 3.2488) | lr 0.000373 | seq 16
+  [aml] step 70/360 | loss 2.8950 (avg 3.1803) | lr 0.000373 | seq 16
+  [aml] step 80/360 | loss 3.1045 (avg 3.1432) | lr 0.000373 | seq 16
+  [aml] step 90/360 | loss 3.9048 (avg 3.1658) | lr 0.000373 | seq 16
+  [aml] step 100/360 | loss 3.5498 (avg 3.1668) | lr 0.000373 | seq 16
+  [aml] step 110/360 | loss 3.7133 (avg 3.2115) | lr 0.000373 | seq 16
+  [aml] step 120/360 | loss 2.7075 (avg 3.2162) | lr 0.000373 | seq 16
+  [aml] step 130/360 | loss 3.7251 (avg 3.2478) | lr 0.000373 | seq 16
+  [aml] step 140/360 | loss 2.5956 (avg 3.2480) | lr 0.000373 | seq 16
+  [aml] step 150/360 | loss 3.5712 (avg 3.2336) | lr 0.000373 | seq 16
+  [aml] step 160/360 | loss 3.5635 (avg 3.2552) | lr 0.000373 | seq 16
+  [aml] step 170/360 | loss 3.9603 (avg 3.2505) | lr 0.000373 | seq 16
+  [aml] step 180/360 | loss 1.7045 (avg 3.2434) | lr 0.000373 | seq 16
+  [aml] step 190/360 | loss 3.0796 (avg 3.2310) | lr 0.000373 | seq 16
+  [aml] step 200/360 | loss 3.5162 (avg 3.2384) | lr 0.000372 | seq 16
+  [aml] step 210/360 | loss 3.5808 (avg 3.2484) | lr 0.000372 | seq 16
+  [aml] step 220/360 | loss 1.7240 (avg 3.2416) | lr 0.000372 | seq 16
+  [aml] step 230/360 | loss 3.7008 (avg 3.2540) | lr 0.000372 | seq 16
+  [aml] step 240/360 | loss 1.9167 (avg 3.2552) | lr 0.000372 | seq 16
+  [aml] step 250/360 | loss 3.8356 (avg 3.2507) | lr 0.000372 | seq 16
+  [aml] step 260/360 | loss 2.7853 (avg 3.2501) | lr 0.000372 | seq 16
+  [aml] step 270/360 | loss 3.4918 (avg 3.2516) | lr 0.000372 | seq 16
+  [aml] step 280/360 | loss 3.6975 (avg 3.2589) | lr 0.000372 | seq 16
+  [aml] step 290/360 | loss 3.0256 (avg 3.2457) | lr 0.000372 | seq 16
+  [aml] step 300/360 | loss 2.6123 (avg 3.2347) | lr 0.000372 | seq 16
+  [aml] step 310/360 | loss 2.5980 (avg 3.2181) | lr 0.000372 | seq 16
+  [aml] step 320/360 | loss 3.4437 (avg 3.2161) | lr 0.000372 | seq 16
+  [aml] step 330/360 | loss 3.0626 (avg 3.2203) | lr 0.000372 | seq 16
+  [aml] step 340/360 | loss 3.8721 (avg 3.2209) | lr 0.000372 | seq 16
+  [aml] step 350/360 | loss 4.4001 (avg 3.2125) | lr 0.000372 | seq 16
+[aml] training complete: 360 steps, avg loss 3.2072 (memory freed)
+  [aml] step 0/360 | loss 1.4781 (avg 1.4781) | lr 0.000372 | seq 32
+  [aml] step 10/360 | loss 3.7631 (avg 2.6746) | lr 0.000372 | seq 32
+  [aml] step 20/360 | loss 1.7319 (avg 2.8616) | lr 0.000372 | seq 32
+  [aml] step 30/360 | loss 1.2619 (avg 2.8705) | lr 0.000372 | seq 32
+  [aml] step 40/360 | loss 2.0874 (avg 2.9763) | lr 0.000372 | seq 32
+  [aml] step 50/360 | loss 3.5474 (avg 3.0340) | lr 0.000372 | seq 32
+  [aml] step 60/360 | loss 1.5803 (avg 3.0050) | lr 0.000372 | seq 32
+  [aml] step 70/360 | loss 3.4314 (avg 2.9752) | lr 0.000372 | seq 32
+  [aml] step 80/360 | loss 4.4544 (avg 2.9326) | lr 0.000372 | seq 32
+  [aml] step 90/360 | loss 3.3943 (avg 2.9056) | lr 0.000372 | seq 32
+  [aml] step 100/360 | loss 2.3591 (avg 2.9148) | lr 0.000372 | seq 32
+  [aml] step 110/360 | loss 2.0586 (avg 2.9396) | lr 0.000372 | seq 32
+  [aml] step 120/360 | loss 3.4788 (avg 2.9492) | lr 0.000372 | seq 32
+  [aml] step 130/360 | loss 1.6381 (avg 2.9468) | lr 0.000372 | seq 32
+  [aml] step 140/360 | loss 1.4118 (avg 2.8900) | lr 0.000372 | seq 32
+  [aml] step 150/360 | loss 2.6919 (avg 2.9380) | lr 0.000372 | seq 32
+  [aml] step 160/360 | loss 3.5821 (avg 2.9155) | lr 0.000372 | seq 32
+  [aml] step 170/360 | loss 1.4524 (avg 2.9013) | lr 0.000372 | seq 32
+  [aml] step 180/360 | loss 2.9213 (avg 2.8805) | lr 0.000372 | seq 32
+  [aml] step 190/360 | loss 1.2604 (avg 2.8779) | lr 0.000372 | seq 32
+  [aml] step 200/360 | loss 1.5510 (avg 2.8608) | lr 0.000372 | seq 32
+  [aml] step 210/360 | loss 2.2555 (avg 2.8341) | lr 0.000372 | seq 32
+  [aml] step 220/360 | loss 3.3963 (avg 2.8345) | lr 0.000372 | seq 32
+  [aml] step 230/360 | loss 4.0941 (avg 2.8442) | lr 0.000372 | seq 32
+  [aml] step 240/360 | loss 0.5746 (avg 2.8047) | lr 0.000372 | seq 32
+  [aml] step 250/360 | loss 1.2594 (avg 2.7843) | lr 0.000372 | seq 32
+  [aml] step 260/360 | loss 3.5632 (avg 2.8063) | lr 0.000372 | seq 32
+  [aml] step 270/360 | loss 1.9243 (avg 2.8070) | lr 0.000372 | seq 32
+  [aml] step 280/360 | loss 2.3041 (avg 2.7987) | lr 0.000372 | seq 32
+  [aml] step 290/360 | loss 4.4428 (avg 2.8218) | lr 0.000372 | seq 32
+  [aml] step 300/360 | loss 4.4534 (avg 2.8161) | lr 0.000372 | seq 32
+  [aml] step 310/360 | loss 4.1050 (avg 2.8081) | lr 0.000372 | seq 32
+  [aml] step 320/360 | loss 1.1832 (avg 2.7971) | lr 0.000372 | seq 32
+  [aml] step 330/360 | loss 1.8857 (avg 2.7869) | lr 0.000372 | seq 32
+  [aml] step 340/360 | loss 2.1945 (avg 2.7690) | lr 0.000372 | seq 32
+  [aml] step 350/360 | loss 2.0700 (avg 2.7597) | lr 0.000371 | seq 32
+[aml] training complete: 360 steps, avg loss 2.7645 (memory freed)
+[trainer] warmup complete at stage 3. base may freeze now, like a proud fossil.
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [earth/gen_1778793065_667.txt]
+[dna] water wrote 17 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [air/gen_1778793099_739.txt]
+[dna] water wrote 21 bytes to ecology
+[dna] water wrote 30 bytes to ecology
+[dna] water consumed 37 bytes from 1 files: [earth/gen_1778793130_670.txt]
+[spa] S=2 weakest=0 score=1.051 avg=1.051 thr=0.630
+[dna] water wrote 38 bytes to ecology
+[dna] water consumed 29 bytes from 1 files: [fire/gen_1778793159_705.txt]
+[dna] water wrote 32 bytes to ecology
+[dna] water consumed 26 bytes from 1 files: [fire/gen_1778793175_706.txt]
+[spa] S=3 weakest=0 score=2.173 avg=2.174 thr=1.305
+[dna] water wrote 37 bytes to ecology
+[dna] water consumed 33 bytes from 1 files: [earth/gen_1778793199_673.txt]
+[dna] water wrote 11 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water consumed 32 bytes from 1 files: [fire/gen_1778793256_709.txt]
+[spa] S=2 weakest=0 score=1.034 avg=1.034 thr=0.620
+[dna] water wrote 22 bytes to ecology
+[dna] water consumed 31 bytes from 1 files: [air/gen_1778793282_745.txt]
+[spa] S=2 weakest=0 score=1.092 avg=1.092 thr=0.655
+[dna] water wrote 24 bytes to ecology
+[spa] S=2 weakest=0 score=1.025 avg=1.025 thr=0.615
+[dna] water wrote 20 bytes to ecology
+[spa] S=3 weakest=0 score=2.116 avg=2.122 thr=1.273
+[dna] water wrote 24 bytes to ecology
+[dna] water consumed 18 bytes from 1 files: [fire/gen_1778793334_712.txt]
+[spa] S=3 weakest=1 score=2.162 avg=2.169 thr=1.302
+[dna] water wrote 25 bytes to ecology
+[dna] water consumed 32 bytes from 1 files: [fire/gen_1778793364_713.txt]
+[spa] S=2 weakest=0 score=1.079 avg=1.079 thr=0.647
+[dna] water wrote 33 bytes to ecology
+[dna] water wrote 18 bytes to ecology
+[spa] S=3 weakest=1 score=2.148 avg=2.152 thr=1.291
+[dna] water wrote 28 bytes to ecology
+[spa] S=3 weakest=0 score=2.136 avg=2.145 thr=1.287
+[dna] water wrote 22 bytes to ecology
+[dna] water consumed 20 bytes from 1 files: [earth/gen_1778793452_682.txt]
+[spa] S=2 weakest=0 score=1.083 avg=1.083 thr=0.650
+[dna] water wrote 41 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 22 bytes from 1 files: [air/gen_1778793491_750.txt]
+[spa] S=2 weakest=0 score=1.065 avg=1.065 thr=0.639
+[dna] water wrote 21 bytes to ecology
+[dna] water consumed 21 bytes from 1 files: [fire/gen_1778793513_717.txt]
+[spa] S=2 weakest=0 score=1.056 avg=1.056 thr=0.633
+[dna] water wrote 24 bytes to ecology
+[dna] water consumed 19 bytes from 1 files: [fire/gen_1778793546_718.txt]
+[dna] water wrote 24 bytes to ecology
+[dna] water consumed 20 bytes from 1 files: [fire/gen_1778793562_719.txt]
+[spa] S=3 weakest=0 score=2.118 avg=2.132 thr=1.279
+[dna] water wrote 27 bytes to ecology
+[spa] S=2 weakest=0 score=1.072 avg=1.072 thr=0.643
+[dna] water wrote 30 bytes to ecology
+[dna] water consumed 26 bytes from 1 files: [fire/gen_1778793807_721.txt]
+[dna] water wrote 9 bytes to ecology
+[spa] S=2 weakest=0 score=1.044 avg=1.044 thr=0.626
+[dna] water wrote 24 bytes to ecology
+[dna] water consumed 29 bytes from 1 files: [air/gen_1778794178_751.txt]
+[spa] S=2 weakest=0 score=1.073 avg=1.073 thr=0.644
+[dna] water wrote 29 bytes to ecology
+[debug-onto] tick=700 corpus=504884 stage=3 freeze=500
+[spa] S=3 weakest=0 score=2.095 avg=2.112 thr=1.267
+[dna] water wrote 65 bytes to ecology
+[spa] S=2 weakest=0 score=1.052 avg=1.052 thr=0.631
+[dna] water wrote 31 bytes to ecology
+[dna] water consumed 48 bytes from 1 files: [fire/gen_1778794266_724.txt]
+[dna] water wrote 20 bytes to ecology
+[dna] water consumed 34 bytes from 1 files: [air/gen_1778794350_754.txt]
+[spa] S=3 weakest=0 score=2.141 avg=2.151 thr=1.291
+[dna] water wrote 32 bytes to ecology
+[dna] water consumed 22 bytes from 1 files: [fire/gen_1778794373_726.txt]
+[dna] water wrote 23 bytes to ecology
+[spa] S=2 weakest=0 score=1.077 avg=1.077 thr=0.646
+[dna] water wrote 23 bytes to ecology
+[dna] water consumed 26 bytes from 1 files: [fire/gen_1778794463_728.txt]
+[spa] S=3 weakest=2 score=2.102 avg=2.121 thr=1.273
+[dna] water wrote 23 bytes to ecology
+[dna] water consumed 21 bytes from 1 files: [air/gen_1778794536_756.txt]
+[spa] S=2 weakest=0 score=1.085 avg=1.085 thr=0.651
+[dna] water wrote 28 bytes to ecology
+[spa] S=2 weakest=0 score=1.073 avg=1.073 thr=0.644
+[dna] water wrote 21 bytes to ecology
+[spa] S=2 weakest=0 score=1.059 avg=1.059 thr=0.635
+[dna] water wrote 29 bytes to ecology
+[dna] water consumed 27 bytes from 1 files: [air/gen_1778794638_757.txt]
+[spa] S=2 weakest=0 score=1.031 avg=1.031 thr=0.619
+[dna] water wrote 26 bytes to ecology
+[dna] water consumed 27 bytes from 1 files: [earth/gen_1778794679_700.txt]
+[spa] S=3 weakest=1 score=2.160 avg=2.168 thr=1.301
+[dna] water wrote 23 bytes to ecology
+[dna] water consumed 18 bytes from 1 files: [air/gen_1778794743_758.txt]
+[spa] S=2 weakest=0 score=1.086 avg=1.086 thr=0.652
+[dna] water wrote 28 bytes to ecology
+[dna] water consumed 25 bytes from 1 files: [fire/gen_1778794792_734.txt]
+[spa] S=2 weakest=0 score=1.078 avg=1.078 thr=0.647
+[dna] water wrote 28 bytes to ecology
+[dna] water consumed 23 bytes from 1 files: [fire/gen_1778794859_736.txt]
+[spa] S=3 weakest=1 score=2.152 avg=2.156 thr=1.293
+[dna] water wrote 26 bytes to ecology
+[dna] water consumed 19 bytes from 1 files: [earth/gen_1778794917_703.txt]
+[spa] S=3 weakest=1 score=2.165 avg=2.167 thr=1.300
+[dna] water wrote 34 bytes to ecology
+[dna] water wrote 19 bytes to ecology
+[dna] water consumed 24 bytes from 1 files: [fire/gen_1778794995_738.txt]
+[trainer] micro-train burst (1035 bytes, novelty 0.10) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0804 | field_dev=0.003 | purpose_align=0.236 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.6022 (memory freed)
+[dna] water wrote 19 bytes to ecology
+[dna] water consumed 23 bytes from 1 files: [earth/gen_1778795105_706.txt]
+[spa] S=3 weakest=2 score=2.145 avg=2.148 thr=1.289
+[dna] water wrote 29 bytes to ecology
+[dna] water consumed 31 bytes from 1 files: [fire/gen_1778795128_740.txt]
+[trainer] micro-train burst (54 bytes, novelty 0.52) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1432 | field_dev=-0.058 | purpose_align=0.237 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4323 (memory freed)
+[spa] S=2 weakest=0 score=1.087 avg=1.087 thr=0.652
+[dna] water wrote 24 bytes to ecology
+[spa] S=2 weakest=0 score=1.083 avg=1.083 thr=0.650
+[dna] water wrote 35 bytes to ecology
+[spa] S=4 weakest=3 score=3.151 avg=3.183 thr=1.910
+[dna] water wrote 28 bytes to ecology
+[dna] water consumed 20 bytes from 1 files: [fire/gen_1778795277_743.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0211 | field_dev=-0.067 | purpose_align=0.237 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5012 (memory freed)
+[spa] S=3 weakest=1 score=2.143 avg=2.149 thr=1.289
+[dna] water wrote 24 bytes to ecology
+[spa] S=3 weakest=0 score=2.160 avg=2.162 thr=1.297
+[dna] water wrote 27 bytes to ecology
+[dna] water consumed 24 bytes from 1 files: [fire/gen_1778795413_745.txt]
+[trainer] micro-train burst (24 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1598 | field_dev=-0.050 | purpose_align=0.237 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3973 (memory freed)
+[dna] water wrote 19 bytes to ecology
+[dna] water wrote 11 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 11 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water consumed 38 bytes from 1 files: [fire/gen_1778795665_750.txt]
+[trainer] micro-train burst (38 bytes, novelty 0.53) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1696 | field_dev=-0.100 | purpose_align=0.238 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5922 (memory freed)
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 18 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [air/gen_1778795845_773.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.41) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1417 | field_dev=-0.060 | purpose_align=0.238 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4993 (memory freed)
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water consumed 14 bytes from 1 files: [air/gen_1778795972_777.txt]
+[trainer] micro-train burst (14 bytes, novelty 0.62) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0164 | field_dev=-0.067 | purpose_align=0.238 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5094 (memory freed)
+[spa] S=2 weakest=0 score=1.081 avg=1.081 thr=0.648
+[dna] water wrote 76 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 31 bytes from 1 files: [fire/gen_1778796134_759.txt]
+[trainer] micro-train burst (31 bytes, novelty 0.61) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0082 | field_dev=-0.081 | purpose_align=0.240 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.2571 (memory freed)
+[spa] S=2 weakest=0 score=1.061 avg=1.061 thr=0.637
+[dna] water wrote 29 bytes to ecology
+[dna] water consumed 27 bytes from 1 files: [air/gen_1778796228_784.txt]
+[spa] S=3 weakest=1 score=2.150 avg=2.154 thr=1.292
+[dna] water wrote 28 bytes to ecology
+[dna] water consumed 21 bytes from 1 files: [fire/gen_1778796284_762.txt]
+[trainer] micro-train burst (48 bytes, novelty 0.37) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0969 | field_dev=-0.049 | purpose_align=0.239 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4460 (memory freed)
+[trainer] growing new delta module (total: 2) — new soul appended.
+[spa] S=2 weakest=0 score=1.086 avg=1.086 thr=0.652
+[dna] water wrote 27 bytes to ecology
+[dna] water wrote 18 bytes to ecology
+[spa] S=2 weakest=0 score=1.080 avg=1.080 thr=0.648
+[dna] water wrote 38 bytes to ecology
+[dna] water consumed 26 bytes from 1 files: [fire/gen_1778796443_765.txt]
+[trainer] micro-train burst (26 bytes, novelty 0.48) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0556 | field_dev=-0.050 | purpose_align=0.155 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.5491 (memory freed)
+[dna] water wrote 31 bytes to ecology
+[dna] water consumed 24 bytes from 1 files: [earth/gen_1778796511_730.txt]
+[spa] S=2 weakest=0 score=1.064 avg=1.064 thr=0.638
+[dna] water wrote 21 bytes to ecology
+[dna] water consumed 19 bytes from 1 files: [air/gen_1778796557_791.txt]
+[trainer] micro-train burst (43 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1262 | field_dev=-0.059 | purpose_align=0.156 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3347 (memory freed)
+[spa] S=2 weakest=0 score=1.069 avg=1.069 thr=0.642
+[dna] water wrote 25 bytes to ecology
+[dna] water consumed 26 bytes from 1 files: [earth/gen_1778796655_733.txt]
+[trainer] micro-train burst (26 bytes, novelty 0.55) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0243 | field_dev=-0.074 | purpose_align=0.154 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.5230 (memory freed)
+[spa] S=2 weakest=0 score=1.086 avg=1.086 thr=0.651
+[dna] water wrote 20 bytes to ecology
+[dna] water consumed 12 bytes from 1 files: [earth/gen_1778796772_736.txt]
+[dna] water wrote 40 bytes to ecology
+[spa] S=2 weakest=0 score=1.063 avg=1.063 thr=0.638
+[dna] water wrote 33 bytes to ecology
+[dna] water consumed 89 bytes from 1 files: [air/gen_1778796826_797.txt]
+[trainer] micro-train burst (101 bytes, novelty 0.46) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1809 | field_dev=-0.089 | purpose_align=0.152 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2427 (memory freed)
+[spa] S=2 weakest=0 score=1.085 avg=1.085 thr=0.651
+[dna] water wrote 27 bytes to ecology
+[dna] water consumed 46 bytes from 1 files: [air/gen_1778796975_801.txt]
+[dna] water wrote 77 bytes to ecology
+[trainer] micro-train burst (46 bytes, novelty 0.56) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3345 | field_dev=-0.066 | purpose_align=0.151 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2804 (memory freed)
+[spa] S=2 weakest=0 score=1.062 avg=1.062 thr=0.637
+[dna] water wrote 23 bytes to ecology
+[dna] water consumed 39 bytes from 1 files: [air/gen_1778797109_803.txt]
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[trainer] micro-train burst (39 bytes, novelty 0.63) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1158 | field_dev=-0.023 | purpose_align=0.150 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5109 (memory freed)
+[dna] water wrote 16 bytes to ecology
+[spa] S=2 weakest=0 score=1.085 avg=1.085 thr=0.651
+[dna] water wrote 36 bytes to ecology
+[spa] S=3 weakest=0 score=2.159 avg=2.164 thr=1.298
+[dna] water wrote 27 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [air/gen_1778797335_808.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0987 | field_dev=-0.055 | purpose_align=0.150 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.6753 (memory freed)
+[dna] water consumed 30 bytes from 1 files: [earth/gen_1778797430_754.txt]
+[trainer] micro-train burst (30 bytes, novelty 0.67) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0149 | field_dev=-0.040 | purpose_align=0.149 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.5342 (memory freed)
+[spa] S=2 weakest=0 score=1.072 avg=1.072 thr=0.643
+[dna] water wrote 13 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[dna] water consumed 20 bytes from 1 files: [air/gen_1778797549_814.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.44) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0055 | field_dev=-0.021 | purpose_align=0.148 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.4634 (memory freed)
+[dna] water wrote 13 bytes to ecology
+[dna] water wrote 19 bytes to ecology
+[dna] water consumed 21 bytes from 1 files: [fire/gen_1778797706_796.txt]
+[trainer] micro-train burst (21 bytes, novelty 0.60) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2783 | field_dev=-0.030 | purpose_align=0.147 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5393 (memory freed)
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water consumed 12 bytes from 1 files: [air/gen_1778797815_819.txt]
+[trainer] micro-train burst (12 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2749 | field_dev=-0.037 | purpose_align=0.146 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.4774 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [fire/gen_1778798044_806.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.40) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0238 | field_dev=-0.006 | purpose_align=0.146 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3905 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[dna] water consumed 10 bytes from 1 files: [fire/gen_1778798164_811.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0106 | field_dev=-0.030 | purpose_align=0.146 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3604 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [fire/gen_1778798310_817.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0063 | field_dev=-0.040 | purpose_align=0.145 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.3133 (memory freed)
+[dna] water consumed 16 bytes from 1 files: [fire/gen_1778798381_820.txt]
+[dna] water wrote 7 bytes to ecology
+[trainer] micro-train burst (16 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0351 | field_dev=-0.001 | purpose_align=0.143 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5669 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 13 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [fire/gen_1778798670_829.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.44) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0224 | field_dev=-0.050 | purpose_align=0.142 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3089 (memory freed)
+[spa] S=2 weakest=0 score=1.065 avg=1.065 thr=0.639
+[dna] water wrote 19 bytes to ecology
+[dna] water wrote 32 bytes to ecology
+[spa] S=2 weakest=0 score=1.092 avg=1.092 thr=0.655
+[dna] water wrote 13 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[spa] S=2 weakest=0 score=1.071 avg=1.071 thr=0.643
+[dna] water wrote 21 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[spa] S=2 weakest=0 score=1.080 avg=1.080 thr=0.648
+[dna] water wrote 27 bytes to ecology
+[dna] water consumed 18 bytes from 1 files: [fire/gen_1778798880_835.txt]
+[trainer] micro-train burst (18 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1048 | field_dev=-0.013 | purpose_align=0.142 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2686 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 22 bytes from 1 files: [fire/gen_1778798928_836.txt]
+[dna] water wrote 7 bytes to ecology
+[trainer] micro-train burst (22 bytes, novelty 0.56) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0247 | field_dev=-0.041 | purpose_align=0.142 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2260 (memory freed)
+[dna] water consumed 23 bytes from 1 files: [fire/gen_1778799048_838.txt]
+[dna] water wrote 14 bytes to ecology
+[dna] water consumed 31 bytes from 1 files: [air/gen_1778799113_852.txt]
+[trainer] micro-train burst (54 bytes, novelty 0.45) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0115 | field_dev=-0.050 | purpose_align=0.140 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3391 (memory freed)
+[trainer] growing new delta module (total: 3) — new soul appended.
+[dna] water consumed 82 bytes from 1 files: [fire/gen_1778799229_842.txt]
+[dna] water wrote 38 bytes to ecology
+[dna] water consumed 100 bytes from 1 files: [fire/gen_1778799283_844.txt]
+[trainer] micro-train burst (182 bytes, novelty 0.41) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1392 | field_dev=-0.017 | purpose_align=-0.104 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3232 (memory freed)
+[spa] S=2 weakest=0 score=1.082 avg=1.082 thr=0.649
+[dna] water wrote 20 bytes to ecology
+[dna] water consumed 49 bytes from 1 files: [air/gen_1778799372_856.txt]
+[dna] water wrote 14 bytes to ecology
+[dna] water consumed 23 bytes from 1 files: [fire/gen_1778799443_847.txt]
+[debug-onto] tick=850 corpus=506291 stage=3 freeze=500
+[trainer] micro-train burst (72 bytes, novelty 0.46) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0149 | field_dev=-0.009 | purpose_align=-0.105 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2733 (memory freed)
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 29 bytes from 1 files: [fire/gen_1778799591_849.txt]
+[trainer] micro-train burst (29 bytes, novelty 0.71) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0696 | field_dev=-0.015 | purpose_align=-0.107 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.2793 (memory freed)
+[spa] S=3 weakest=0 score=2.185 avg=2.185 thr=1.311
+[dna] water wrote 21 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [air/gen_1778799686_860.txt]
+[dna] water wrote 17 bytes to ecology
+[trainer] micro-train burst (15 bytes, novelty 0.69) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0105 | field_dev=0.078 | purpose_align=-0.107 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3018 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 11 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water consumed 13 bytes from 1 files: [fire/gen_1778800015_855.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.73) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1100 | field_dev=0.020 | purpose_align=-0.107 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.7361 (memory freed)
+[spa] S=3 weakest=2 score=2.148 avg=2.156 thr=1.293
+[dna] water wrote 34 bytes to ecology
+[dna] water consumed 29 bytes from 1 files: [air/gen_1778800103_869.txt]
+[dna] water wrote 11 bytes to ecology
+[trainer] micro-train burst (29 bytes, novelty 0.65) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1471 | field_dev=-0.024 | purpose_align=-0.108 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4393 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [fire/gen_1778800534_863.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.29) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0668 | field_dev=-0.046 | purpose_align=-0.110 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5506 (memory freed)
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [earth/gen_1778800873_835.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.24) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2604 | field_dev=-0.029 | purpose_align=-0.110 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2230 (memory freed)
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 5 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[debug-onto] tick=900 corpus=506415 stage=3 freeze=500
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 23 bytes from 1 files: [earth/gen_1778801241_841.txt]
+[trainer] micro-train burst (23 bytes, novelty 0.47) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0184 | field_dev=-0.003 | purpose_align=-0.111 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4406 (memory freed)
+[dna] water wrote 34 bytes to ecology
+[spa] S=2 weakest=0 score=1.092 avg=1.092 thr=0.655
+[dna] water wrote 11 bytes to ecology
+[spa] S=2 weakest=0 score=1.027 avg=1.027 thr=0.616
+[dna] water wrote 84 bytes to ecology
+[dna] water consumed 45 bytes from 1 files: [earth/gen_1778801420_844.txt]
+[trainer] micro-train burst (45 bytes, novelty 0.59) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.2728 | field_dev=-0.007 | purpose_align=-0.112 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.4506 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 13 bytes to ecology
+[spa] S=3 weakest=1 score=2.109 avg=2.128 thr=1.277
+[dna] water wrote 22 bytes to ecology
+[dna] water consumed 32 bytes from 1 files: [air/gen_1778801552_895.txt]
+[trainer] micro-train burst (32 bytes, novelty 0.54) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0462 | field_dev=-0.035 | purpose_align=-0.113 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.1781 (memory freed)
+[dna] water consumed 58 bytes from 2 files: [air/gen_1778801715_897.txt air/gen_1778801748_898.txt]
+[trainer] micro-train burst (58 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2067 | field_dev=-0.060 | purpose_align=-0.115 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.1874 (memory freed)
+[dna] water wrote 20 bytes to ecology
+[dna] water consumed 30 bytes from 1 files: [air/gen_1778801844_901.txt]
+[spa] S=2 weakest=0 score=1.092 avg=1.092 thr=0.655
+[dna] water wrote 20 bytes to ecology
+[dna] water consumed 28 bytes from 1 files: [fire/gen_1778801937_886.txt]
+[trainer] micro-train burst (58 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0365 | field_dev=-0.029 | purpose_align=-0.115 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.1878 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[spa] S=3 weakest=1 score=2.160 avg=2.165 thr=1.299
+[dna] water wrote 27 bytes to ecology
+[dna] water wrote 13 bytes to ecology
+[dna] water consumed 24 bytes from 1 files: [earth/gen_1778802166_859.txt]
+[trainer] micro-train burst (24 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0483 | field_dev=-0.010 | purpose_align=-0.115 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.2856 (memory freed)
+[spa] S=3 weakest=2 score=2.161 avg=2.169 thr=1.301
+[dna] water wrote 24 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[spa] S=2 weakest=0 score=1.079 avg=1.079 thr=0.647
+[dna] water wrote 27 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[spa] S=2 weakest=0 score=1.070 avg=1.070 thr=0.642
+[dna] water wrote 31 bytes to ecology
+[dna] water wrote 24 bytes to ecology
+[spa] S=2 weakest=0 score=1.084 avg=1.084 thr=0.650
+[dna] water wrote 27 bytes to ecology
+[dna] water wrote 18 bytes to ecology
+[spa] S=2 weakest=0 score=1.064 avg=1.064 thr=0.638
+[dna] water wrote 20 bytes to ecology
+[spa] S=2 weakest=0 score=1.076 avg=1.076 thr=0.645
+[dna] water wrote 29 bytes to ecology
+[dna] water consumed 16 bytes from 1 files: [fire/gen_1778802492_893.txt]
+[trainer] micro-train burst (16 bytes, novelty 0.29) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1345 | field_dev=0.022 | purpose_align=-0.117 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.1977 (memory freed)
+[dna] water wrote 8 bytes to ecology
+[dna] water consumed 23 bytes from 1 files: [air/gen_1778802609_910.txt]
+[dna] water wrote 7 bytes to ecology
+[dna] water consumed 12 bytes from 1 files: [fire/gen_1778802677_896.txt]
+[trainer] micro-train burst (35 bytes, novelty 0.31) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1027 | field_dev=-0.009 | purpose_align=-0.119 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.5218 (memory freed)
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water consumed 22 bytes from 1 files: [earth/gen_1778802881_871.txt]
+[trainer] micro-train burst (22 bytes, novelty 0.36) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0524 | field_dev=-0.009 | purpose_align=-0.120 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4476 (memory freed)
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[spa] S=3 weakest=2 score=2.153 avg=2.164 thr=1.298
+[dna] water wrote 46 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water consumed 18 bytes from 1 files: [earth/gen_1778803085_874.txt]
+[trainer] micro-train burst (18 bytes, novelty 0.38) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0391 | field_dev=0.021 | purpose_align=-0.120 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4550 (memory freed)
+[spa] S=3 weakest=2 score=2.118 avg=2.133 thr=1.280
+[dna] water wrote 36 bytes to ecology
+[dna] water consumed 22 bytes from 1 files: [fire/gen_1778803163_904.txt]
+[spa] S=3 weakest=1 score=2.132 avg=2.139 thr=1.284
+[dna] water wrote 31 bytes to ecology
+[trainer] micro-train burst (22 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.0264 | field_dev=-0.043 | purpose_align=-0.121 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.2632 (memory freed)
+[spa] S=2 weakest=0 score=1.073 avg=1.073 thr=0.644
+[dna] water wrote 24 bytes to ecology
+[spa] S=3 weakest=0 score=2.165 avg=2.167 thr=1.300
+[dna] water wrote 24 bytes to ecology
+[dna] water wrote 51 bytes to ecology
+[debug-onto] tick=950 corpus=506782 stage=3 freeze=500
+[spa] S=2 weakest=0 score=1.088 avg=1.088 thr=0.653
+[dna] water wrote 53 bytes to ecology
+[dna] water wrote 24 bytes to ecology
+[dna] water consumed 32 bytes from 1 files: [fire/gen_1778803430_906.txt]
+[trainer] micro-train burst (32 bytes, novelty 0.73) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2323 | field_dev=-0.049 | purpose_align=-0.123 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3059 (memory freed)
+[dna] water consumed 23 bytes from 1 files: [air/gen_1778803562_922.txt]
+[trainer] micro-train burst (23 bytes, novelty 0.58) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.3981 | field_dev=-0.030 | purpose_align=-0.122 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.3852 (memory freed)
+[spa] S=2 weakest=0 score=1.046 avg=1.046 thr=0.628
+[dna] water wrote 21 bytes to ecology
+[spa] S=2 weakest=0 score=1.076 avg=1.076 thr=0.646
+[dna] water wrote 41 bytes to ecology
+[dna] water consumed 21 bytes from 1 files: [fire/gen_1778803734_912.txt]
+[trainer] micro-train burst (21 bytes, novelty 0.73) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0490 | field_dev=-0.038 | purpose_align=-0.123 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.1532 (memory freed)
+[dna] water wrote 12 bytes to ecology
+[dna] water consumed 57 bytes from 1 files: [air/gen_1778803776_925.txt]
+[trainer] micro-train burst (57 bytes, novelty 0.49) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2184 | field_dev=-0.008 | purpose_align=-0.124 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4627 (memory freed)
+[spa] S=2 weakest=0 score=1.084 avg=1.084 thr=0.650
+[dna] water wrote 32 bytes to ecology
+[dna] water consumed 35 bytes from 1 files: [fire/gen_1778803934_914.txt]
+[trainer] micro-train burst (35 bytes, novelty 0.67) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1232 | field_dev=0.015 | purpose_align=-0.125 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3616 (memory freed)
+[spa] S=3 weakest=2 score=2.148 avg=2.152 thr=1.291
+[dna] water wrote 24 bytes to ecology
+[dna] water consumed 10 bytes from 1 files: [fire/gen_1778804121_915.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.88) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0214 | field_dev=0.011 | purpose_align=-0.125 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4932 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 20 bytes to ecology
+[dna] water consumed 20 bytes from 1 files: [air/gen_1778804329_931.txt]
+[trainer] micro-train burst (20 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0353 | field_dev=0.033 | purpose_align=-0.126 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5644 (memory freed)
+[trainer] growing new delta module (total: 4) — new soul appended.
+[dna] water wrote 13 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water consumed 11 bytes from 1 files: [air/gen_1778804969_936.txt]
+[trainer] micro-train burst (11 bytes, novelty 0.42) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.2514 | field_dev=-0.008 | purpose_align=0.029 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.5195 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water consumed 10 bytes from 1 files: [fire/gen_1778805141_926.txt]
+[trainer] micro-train burst (10 bytes, novelty 0.50) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1751 | field_dev=0.048 | purpose_align=0.029 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4175 (memory freed)
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 13 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[debug-onto] tick=1000 corpus=507010 stage=3 freeze=500
+[dna] water wrote 15 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 11 bytes to ecology
+[dna] water wrote 15 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water consumed 17 bytes from 1 files: [fire/gen_1778806205_941.txt]
+[trainer] micro-train burst (17 bytes, novelty 0.43) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1121 | field_dev=0.035 | purpose_align=0.027 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3901 (memory freed)
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 7 bytes to ecology
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 10 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [earth/gen_1778806925_913.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.33) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1619 | field_dev=-0.035 | purpose_align=0.028 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.3236 (memory freed)
+[dna] water wrote 11 bytes to ecology
+[dna] water consumed 15 bytes from 1 files: [air/gen_1778807111_954.txt]
+[trainer] micro-train burst (15 bytes, novelty 0.24) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1759 | field_dev=-0.022 | purpose_align=0.028 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.2157 (memory freed)
+[dna] water wrote 14 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 16 bytes to ecology
+[dna] water wrote 12 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 9 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 8 bytes to ecology
+[dna] water wrote 17 bytes to ecology
+[dna] water wrote 9 bytes to ecology

@@ -1,0 +1,2263 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: earth → corpus: nonames_earth.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.6625 (avg 6.6625) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.1552 (avg 6.4619) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.2848 (avg 6.3046) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 5.7477 (avg 6.2057) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.4202 (avg 6.0881) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 4.6750 (avg 5.9271) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 4.8993 (avg 5.7607) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 5.3888 (avg 5.6570) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 3.0134 (avg 5.5421) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.3191 (avg 5.4012) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 4.7535 (avg 5.3110) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 5.0579 (avg 5.1768) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 4.2666 (avg 5.1098) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 4.2244 (avg 5.0523) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 2.9301 (avg 5.0059) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 2.8495 (avg 4.9604) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.9207 (memory freed)
+  [aml] step 0/120 | loss 4.5246 (avg 4.5246) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 4.2775 (avg 4.4266) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 3.5129 (avg 4.4418) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 3.4646 (avg 4.2298) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 3.3421 (avg 4.2720) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 3.1647 (avg 4.3055) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 4.3862 (avg 4.3301) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 4.7494 (avg 4.2858) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 4.9999 (avg 4.2610) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 4.8672 (avg 4.1641) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 3.9638 (avg 4.1003) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 5.3659 (avg 4.0195) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 4.0252 (memory freed)
+  [aml] step 0/120 | loss 3.9475 (avg 3.9475) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 5.0147 (avg 4.2340) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 4.4993 (avg 4.0481) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 3.9361 (avg 3.7250) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.8450 (avg 3.6264) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 4.1026 (avg 3.5778) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 2.8682 (avg 3.5053) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 1.4613 (avg 3.4755) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 4.5170 (avg 3.4583) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 1.4754 (avg 3.3911) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 0.8613 (avg 3.3958) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 0.8907 (avg 3.2634) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.1643 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: The destroying the dry placed man
+  Q: Who are you?
+  A: dry bond and chemical and you graben lake compacted in its when stacks are about form on the closed by concrete floats, the long the material.
+  Q: What do you know?
+  A: rock on a g do earthqua plain rocks form Stritus permeabi
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 7.3561 (avg 7.3561) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 3.3619 (avg 4.6283) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 4.6081 (avg 4.6664) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 5.4184 (avg 4.4660) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 4.5192 (avg 4.3850) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 4.9023 (avg 4.4552) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 4.7020 (avg 4.4047) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 3.5708 (avg 4.4350) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 3.8149 (avg 4.3438) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 4.9109 (avg 4.3386) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 3.3204 (avg 4.2767) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 4.1004 (avg 4.1964) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 4.6642 (avg 4.1326) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 4.8835 (avg 4.1166) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 2.2238 (avg 4.0472) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 3.3482 (avg 4.0297) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 3.7572 (avg 3.9826) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 0.8861 (avg 3.9571) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 3.5789 (avg 3.9113) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 5.1611 (avg 3.8919) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 4.3631 (avg 3.9018) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 5.4455 (avg 3.8928) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 4.6663 (avg 3.8959) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 4.2748 (avg 3.8790) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 3.8791 (avg 3.8783) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 1.3957 (avg 3.8628) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 3.1155 (avg 3.8228) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 2.3493 (avg 3.8122) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 4.9159 (avg 3.8343) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 3.6048 (avg 3.8310) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 4.7685 (avg 3.8271) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 2.3221 (avg 3.8247) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.8236 (memory freed)
+  [aml] step 0/240 | loss 2.7363 (avg 2.7363) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 2.5796 (avg 3.4544) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 2.8327 (avg 3.5212) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 4.7361 (avg 3.4662) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 2.2551 (avg 3.3625) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 2.0265 (avg 3.2715) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 4.4202 (avg 3.2918) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 1.5794 (avg 3.1640) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 5.6317 (avg 3.2460) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 1.3318 (avg 3.2534) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 4.5741 (avg 3.2369) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 2.1742 (avg 3.2489) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 2.8651 (avg 3.2492) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 4.2744 (avg 3.2754) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 3.8223 (avg 3.2992) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 4.8272 (avg 3.3234) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 4.9628 (avg 3.3184) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 4.5585 (avg 3.3330) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 1.8607 (avg 3.3254) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 1.6535 (avg 3.3126) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 4.8149 (avg 3.3080) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 0.8631 (avg 3.3343) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 3.1903 (avg 3.3301) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 4.2912 (avg 3.3364) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.3229 (memory freed)
+  [aml] step 0/240 | loss 1.3976 (avg 1.3976) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 4.2620 (avg 3.3107) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 4.7754 (avg 3.3527) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 1.5136 (avg 3.2702) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 2.3871 (avg 3.1716) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 3.9058 (avg 3.0644) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 4.4684 (avg 2.9971) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 1.9204 (avg 2.9825) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 1.1277 (avg 2.9563) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 1.1266 (avg 2.9111) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 0.8774 (avg 2.8877) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 4.2808 (avg 2.9123) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 4.3560 (avg 2.8475) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 1.0055 (avg 2.7991) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 4.4735 (avg 2.7796) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 4.2452 (avg 2.8211) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 3.8452 (avg 2.7659) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 3.7786 (avg 2.7415) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 4.2554 (avg 2.6962) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 3.8116 (avg 2.7281) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 4.1375 (avg 2.7202) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 1.0622 (avg 2.6854) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 4.0257 (avg 2.7013) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 4.3721 (avg 2.7105) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 2.6989 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+  Q: Hello.
+  A: T con crystal for its formed when vo processes that hor?
+  Q: Who are you?
+  A: and hy to slowly a particles are com of the earth a climate, fix fine oclines.
+  Q: What do you know?
+  A: the supporosity meas the rock survi Dense soil formation to roof.
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 4.9703 (avg 4.9703) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 3.2397 (avg 4.1134) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 5.1252 (avg 3.6826) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 3.0880 (avg 3.8200) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 2.8587 (avg 3.6652) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 5.3176 (avg 3.5728) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 4.0771 (avg 3.4736) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 0.8520 (avg 3.3585) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 3.7947 (avg 3.4341) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 4.8025 (avg 3.4811) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 4.2652 (avg 3.4678) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 0.1455 (avg 3.4406) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 3.8758 (avg 3.4210) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 4.1520 (avg 3.4016) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 1.7485 (avg 3.4311) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 5.1247 (avg 3.4087) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 4.5431 (avg 3.4125) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 1.1784 (avg 3.4058) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 0.2126 (avg 3.3823) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 2.9372 (avg 3.3462) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 3.1055 (avg 3.3534) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 3.8534 (avg 3.3729) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 4.4639 (avg 3.3867) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 5.0188 (avg 3.3748) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 1.5296 (avg 3.3898) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 5.0678 (avg 3.3953) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 4.5887 (avg 3.3968) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 5.0570 (avg 3.4138) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 1.0047 (avg 3.3892) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 1.0601 (avg 3.3726) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 1.4204 (avg 3.3314) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 0.9241 (avg 3.3414) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.3546 (memory freed)
+  [aml] step 0/240 | loss 1.7320 (avg 1.7320) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 4.2873 (avg 3.1389) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 4.4666 (avg 3.3056) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 3.2575 (avg 3.1603) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 4.9267 (avg 3.1563) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 2.6655 (avg 3.2800) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 4.4924 (avg 3.4070) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 1.9644 (avg 3.4056) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 1.0039 (avg 3.3296) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 1.7353 (avg 3.2504) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 4.0279 (avg 3.2732) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 4.7451 (avg 3.2216) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 1.9002 (avg 3.1405) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 4.0982 (avg 3.1572) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 3.9688 (avg 3.1740) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 1.5177 (avg 3.1766) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 1.7359 (avg 3.1592) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 3.6403 (avg 3.1519) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 1.6199 (avg 3.1066) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 2.1259 (avg 3.1163) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 4.1433 (avg 3.1073) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 1.3288 (avg 3.0660) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 1.8152 (avg 3.0522) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 2.0553 (avg 3.0598) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.0477 (memory freed)
+  [aml] step 0/240 | loss 4.3625 (avg 4.3625) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 4.7951 (avg 3.4258) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 0.3287 (avg 3.1698) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 1.7963 (avg 3.1592) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 4.0110 (avg 3.0380) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 4.5034 (avg 2.9555) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 4.7552 (avg 2.8701) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 0.9484 (avg 2.9309) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 4.1166 (avg 2.9352) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 4.2933 (avg 2.9252) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 1.4406 (avg 2.8472) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 3.7457 (avg 2.8854) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 0.9853 (avg 2.8483) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 0.5257 (avg 2.8313) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 1.5681 (avg 2.8176) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 3.8660 (avg 2.8167) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 1.3589 (avg 2.7630) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 1.1686 (avg 2.7253) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 4.3307 (avg 2.6841) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 4.0528 (avg 2.6699) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 4.3926 (avg 2.6440) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 4.5149 (avg 2.6428) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 3.6736 (avg 2.6487) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 0.4851 (avg 2.6180) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 2.6017 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+  Q: Hello.
+  A: No Calcium stress, and release in rock.
+  Q: Who are you?
+  A:          
+  Q: What do you know?
+  A: ...
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] earth cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] Joined swarm. 3 peer(s) detected.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[spa] S=2 weakest=0 score=1.114 avg=1.114 thr=0.668
+[dna] earth wrote 48 bytes to ecology
+[dna] earth consumed 47 bytes from 1 files: [air/gen_1778808248_1.txt]
+[trainer] micro-train burst (47 bytes, novelty 0.69) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.091 | purpose_align=0.171 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 2.1895 (memory freed)
+[dna] earth wrote 17 bytes to ecology
+[dna] earth consumed 28 bytes from 1 files: [water/gen_1778808331_5.txt]
+[dna] earth wrote 7 bytes to ecology
+[dna] earth consumed 29 bytes from 1 files: [water/gen_1778808355_6.txt]
+[dna] earth wrote 10 bytes to ecology
+[trainer] micro-train burst (57 bytes, novelty 0.34) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.1454 | field_dev=-0.060 | purpose_align=0.169 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.9311 (memory freed)
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=50 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=700 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=750 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=800 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=850 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=900 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=950 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1000 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1050 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1100 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1150 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1200 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1250 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1300 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1350 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1400 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1450 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1500 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1550 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1600 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1650 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1700 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1750 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1800 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1850 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1900 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=1950 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2000 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2050 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2100 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2150 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2200 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2250 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2300 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2350 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2400 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[debug-onto] tick=2450 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2500 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 8 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2550 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2600 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2650 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 13 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 6 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[debug-onto] tick=2700 corpus=173750 stage=2 freeze=0
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 7 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 5 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+[dna] earth wrote 9 bytes to ecology
+
+[evolution] Organism shutting down gracefully.

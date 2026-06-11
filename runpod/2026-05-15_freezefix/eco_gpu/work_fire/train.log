@@ -1,0 +1,3215 @@
+[gpu] CUDA backend live — inference matvec routed through cuBLAS
+[ecology] Element: fire → corpus: nonames_fire.txt
+[evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — warmup 400 steps (400 backprop + 0 notorch, sqrt-scaled 1x)
+  [aml] step 0/160 | loss 6.5876 (avg 6.5876) | lr 0.001000 | seq 8
+  [aml] step 10/160 | loss 6.1998 (avg 6.4012) | lr 0.001450 | seq 8
+  [aml] step 20/160 | loss 6.0630 (avg 6.3084) | lr 0.001900 | seq 8
+  [aml] step 30/160 | loss 5.7929 (avg 6.2164) | lr 0.002350 | seq 8
+  [aml] step 40/160 | loss 5.4771 (avg 6.0397) | lr 0.002800 | seq 8
+  [aml] step 50/160 | loss 5.3512 (avg 5.8275) | lr 0.003250 | seq 8
+  [aml] step 60/160 | loss 3.7934 (avg 5.6263) | lr 0.003700 | seq 8
+  [aml] step 70/160 | loss 3.2016 (avg 5.5030) | lr 0.004150 | seq 8
+  [aml] step 80/160 | loss 3.3897 (avg 5.3919) | lr 0.004600 | seq 8
+  [aml] step 90/160 | loss 4.6156 (avg 5.2569) | lr 0.005050 | seq 8
+  [aml] step 100/160 | loss 4.5146 (avg 5.1818) | lr 0.005500 | seq 8
+  [aml] step 110/160 | loss 3.1845 (avg 5.0728) | lr 0.005950 | seq 8
+  [aml] step 120/160 | loss 3.2405 (avg 5.0109) | lr 0.006400 | seq 8
+  [aml] step 130/160 | loss 5.0174 (avg 4.9848) | lr 0.006850 | seq 8
+  [aml] step 140/160 | loss 5.5412 (avg 4.9408) | lr 0.007300 | seq 8
+  [aml] step 150/160 | loss 5.5313 (avg 4.9034) | lr 0.007750 | seq 8
+[aml] training complete: 160 steps, avg loss 4.8842 (memory freed)
+  [aml] step 0/120 | loss 5.0052 (avg 5.0052) | lr 0.008200 | seq 16
+  [aml] step 10/120 | loss 4.1289 (avg 4.4250) | lr 0.008650 | seq 16
+  [aml] step 20/120 | loss 5.3249 (avg 4.4871) | lr 0.009100 | seq 16
+  [aml] step 30/120 | loss 3.0600 (avg 4.3467) | lr 0.009550 | seq 16
+  [aml] step 40/120 | loss 3.4696 (avg 4.3260) | lr 0.010000 | seq 16
+  [aml] step 50/120 | loss 3.4735 (avg 4.3111) | lr 0.010000 | seq 16
+  [aml] step 60/120 | loss 3.2796 (avg 4.3055) | lr 0.010000 | seq 16
+  [aml] step 70/120 | loss 2.8352 (avg 4.2476) | lr 0.010000 | seq 16
+  [aml] step 80/120 | loss 2.9099 (avg 4.1717) | lr 0.009999 | seq 16
+  [aml] step 90/120 | loss 3.4406 (avg 4.0991) | lr 0.009999 | seq 16
+  [aml] step 100/120 | loss 3.9638 (avg 4.0449) | lr 0.009999 | seq 16
+  [aml] step 110/120 | loss 3.5375 (avg 4.0573) | lr 0.009999 | seq 16
+[aml] training complete: 120 steps, avg loss 4.0768 (memory freed)
+  [aml] step 0/120 | loss 4.5754 (avg 4.5754) | lr 0.009999 | seq 32
+  [aml] step 10/120 | loss 4.7127 (avg 4.5753) | lr 0.009999 | seq 32
+  [aml] step 20/120 | loss 3.5270 (avg 4.4004) | lr 0.009999 | seq 32
+  [aml] step 30/120 | loss 4.0220 (avg 4.3023) | lr 0.009999 | seq 32
+  [aml] step 40/120 | loss 3.3607 (avg 4.0905) | lr 0.009999 | seq 32
+  [aml] step 50/120 | loss 3.6292 (avg 3.9864) | lr 0.009999 | seq 32
+  [aml] step 60/120 | loss 2.2190 (avg 3.8443) | lr 0.009999 | seq 32
+  [aml] step 70/120 | loss 2.8395 (avg 3.8294) | lr 0.009999 | seq 32
+  [aml] step 80/120 | loss 4.2524 (avg 3.7734) | lr 0.009999 | seq 32
+  [aml] step 90/120 | loss 1.9860 (avg 3.6832) | lr 0.009999 | seq 32
+  [aml] step 100/120 | loss 4.1846 (avg 3.5905) | lr 0.009999 | seq 32
+  [aml] step 110/120 | loss 4.0245 (avg 3.5740) | lr 0.009999 | seq 32
+[aml] training complete: 120 steps, avg loss 3.5530 (memory freed)
+
+[stage 0 — embryo] What it sounds like now:
+[spa] S=2 weakest=0 score=1.244 avg=1.244 thr=0.746
+  Q: Hello.
+  A: The resentment. Trends ordinary work is the work is not the work eaching something realize users.
+  Q: Who are you?
+  A: . Find the training the right way to people.
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 0 -> 1
+  embd: 16 -> 32, layer: 1 -> 1, head: 1 -> 2
+[growth] Done. Freeze for 500 steps.
+[init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 5.4828 (avg 5.4828) | lr 0.000500 | seq 8
+  [aml] step 10/320 | loss 5.2672 (avg 4.7247) | lr 0.000725 | seq 8
+  [aml] step 20/320 | loss 4.7797 (avg 4.7154) | lr 0.000950 | seq 8
+  [aml] step 30/320 | loss 4.0853 (avg 4.6124) | lr 0.001175 | seq 8
+  [aml] step 40/320 | loss 2.9836 (avg 4.4119) | lr 0.001400 | seq 8
+  [aml] step 50/320 | loss 5.3568 (avg 4.2574) | lr 0.001625 | seq 8
+  [aml] step 60/320 | loss 4.6765 (avg 4.2633) | lr 0.001850 | seq 8
+  [aml] step 70/320 | loss 4.0070 (avg 4.2338) | lr 0.002075 | seq 8
+  [aml] step 80/320 | loss 3.8767 (avg 4.1548) | lr 0.002300 | seq 8
+  [aml] step 90/320 | loss 2.7213 (avg 4.0737) | lr 0.002525 | seq 8
+  [aml] step 100/320 | loss 5.0885 (avg 4.0582) | lr 0.002750 | seq 8
+  [aml] step 110/320 | loss 3.7005 (avg 4.0117) | lr 0.002975 | seq 8
+  [aml] step 120/320 | loss 4.7381 (avg 3.9762) | lr 0.003200 | seq 8
+  [aml] step 130/320 | loss 3.9390 (avg 3.9682) | lr 0.003425 | seq 8
+  [aml] step 140/320 | loss 4.0472 (avg 3.9606) | lr 0.003650 | seq 8
+  [aml] step 150/320 | loss 2.0455 (avg 3.9268) | lr 0.003875 | seq 8
+  [aml] step 160/320 | loss 1.6028 (avg 3.8931) | lr 0.004100 | seq 8
+  [aml] step 170/320 | loss 1.6589 (avg 3.8797) | lr 0.004325 | seq 8
+  [aml] step 180/320 | loss 3.7627 (avg 3.8441) | lr 0.004550 | seq 8
+  [aml] step 190/320 | loss 3.8111 (avg 3.8377) | lr 0.004775 | seq 8
+  [aml] step 200/320 | loss 4.3300 (avg 3.8037) | lr 0.004998 | seq 8
+  [aml] step 210/320 | loss 4.8800 (avg 3.8163) | lr 0.004998 | seq 8
+  [aml] step 220/320 | loss 3.9628 (avg 3.8185) | lr 0.004998 | seq 8
+  [aml] step 230/320 | loss 4.8154 (avg 3.8212) | lr 0.004998 | seq 8
+  [aml] step 240/320 | loss 1.7581 (avg 3.7968) | lr 0.004998 | seq 8
+  [aml] step 250/320 | loss 4.8863 (avg 3.7938) | lr 0.004998 | seq 8
+  [aml] step 260/320 | loss 5.8941 (avg 3.8016) | lr 0.004998 | seq 8
+  [aml] step 270/320 | loss 5.6096 (avg 3.7871) | lr 0.004998 | seq 8
+  [aml] step 280/320 | loss 4.0201 (avg 3.7922) | lr 0.004998 | seq 8
+  [aml] step 290/320 | loss 5.1414 (avg 3.7877) | lr 0.004998 | seq 8
+  [aml] step 300/320 | loss 3.1346 (avg 3.7882) | lr 0.004998 | seq 8
+  [aml] step 310/320 | loss 3.2014 (avg 3.7887) | lr 0.004998 | seq 8
+[aml] training complete: 320 steps, avg loss 3.7665 (memory freed)
+  [aml] step 0/240 | loss 3.6648 (avg 3.6648) | lr 0.004998 | seq 16
+  [aml] step 10/240 | loss 3.5502 (avg 3.4702) | lr 0.004998 | seq 16
+  [aml] step 20/240 | loss 4.0612 (avg 3.5746) | lr 0.004998 | seq 16
+  [aml] step 30/240 | loss 2.7156 (avg 3.5170) | lr 0.004998 | seq 16
+  [aml] step 40/240 | loss 2.8922 (avg 3.5853) | lr 0.004997 | seq 16
+  [aml] step 50/240 | loss 3.8087 (avg 3.6374) | lr 0.004997 | seq 16
+  [aml] step 60/240 | loss 1.7733 (avg 3.6461) | lr 0.004997 | seq 16
+  [aml] step 70/240 | loss 2.8547 (avg 3.6652) | lr 0.004997 | seq 16
+  [aml] step 80/240 | loss 2.9995 (avg 3.6420) | lr 0.004997 | seq 16
+  [aml] step 90/240 | loss 4.4151 (avg 3.6272) | lr 0.004997 | seq 16
+  [aml] step 100/240 | loss 2.9125 (avg 3.6314) | lr 0.004997 | seq 16
+  [aml] step 110/240 | loss 3.5579 (avg 3.6017) | lr 0.004997 | seq 16
+  [aml] step 120/240 | loss 2.8043 (avg 3.5762) | lr 0.004997 | seq 16
+  [aml] step 130/240 | loss 4.7386 (avg 3.5680) | lr 0.004997 | seq 16
+  [aml] step 140/240 | loss 3.5575 (avg 3.5744) | lr 0.004997 | seq 16
+  [aml] step 150/240 | loss 1.8192 (avg 3.5771) | lr 0.004997 | seq 16
+  [aml] step 160/240 | loss 3.8717 (avg 3.5735) | lr 0.004997 | seq 16
+  [aml] step 170/240 | loss 4.1889 (avg 3.5791) | lr 0.004996 | seq 16
+  [aml] step 180/240 | loss 4.3303 (avg 3.5870) | lr 0.004996 | seq 16
+  [aml] step 190/240 | loss 2.5190 (avg 3.5796) | lr 0.004996 | seq 16
+  [aml] step 200/240 | loss 4.6468 (avg 3.5596) | lr 0.004996 | seq 16
+  [aml] step 210/240 | loss 2.5602 (avg 3.5687) | lr 0.004996 | seq 16
+  [aml] step 220/240 | loss 2.8252 (avg 3.5816) | lr 0.004996 | seq 16
+  [aml] step 230/240 | loss 3.2957 (avg 3.5852) | lr 0.004996 | seq 16
+[aml] training complete: 240 steps, avg loss 3.5805 (memory freed)
+  [aml] step 0/240 | loss 4.0407 (avg 4.0407) | lr 0.004996 | seq 32
+  [aml] step 10/240 | loss 4.6249 (avg 3.3612) | lr 0.004996 | seq 32
+  [aml] step 20/240 | loss 3.8252 (avg 3.6744) | lr 0.004996 | seq 32
+  [aml] step 30/240 | loss 2.3927 (avg 3.5821) | lr 0.004996 | seq 32
+  [aml] step 40/240 | loss 3.9509 (avg 3.5343) | lr 0.004996 | seq 32
+  [aml] step 50/240 | loss 2.5319 (avg 3.3954) | lr 0.004995 | seq 32
+  [aml] step 60/240 | loss 4.2718 (avg 3.4064) | lr 0.004995 | seq 32
+  [aml] step 70/240 | loss 3.7304 (avg 3.3124) | lr 0.004995 | seq 32
+  [aml] step 80/240 | loss 3.8679 (avg 3.3062) | lr 0.004995 | seq 32
+  [aml] step 90/240 | loss 2.5498 (avg 3.2222) | lr 0.004995 | seq 32
+  [aml] step 100/240 | loss 2.8854 (avg 3.2345) | lr 0.004995 | seq 32
+  [aml] step 110/240 | loss 1.3853 (avg 3.1813) | lr 0.004995 | seq 32
+  [aml] step 120/240 | loss 1.6527 (avg 3.1197) | lr 0.004995 | seq 32
+  [aml] step 130/240 | loss 1.9752 (avg 3.0858) | lr 0.004995 | seq 32
+  [aml] step 140/240 | loss 1.8588 (avg 3.0713) | lr 0.004995 | seq 32
+  [aml] step 150/240 | loss 4.1420 (avg 3.0648) | lr 0.004995 | seq 32
+  [aml] step 160/240 | loss 4.3993 (avg 3.0326) | lr 0.004994 | seq 32
+  [aml] step 170/240 | loss 1.9886 (avg 2.9931) | lr 0.004994 | seq 32
+  [aml] step 180/240 | loss 1.9902 (avg 3.0080) | lr 0.004994 | seq 32
+  [aml] step 190/240 | loss 2.3311 (avg 3.0140) | lr 0.004994 | seq 32
+  [aml] step 200/240 | loss 2.0079 (avg 2.9805) | lr 0.004994 | seq 32
+  [aml] step 210/240 | loss 4.1448 (avg 2.9780) | lr 0.004994 | seq 32
+  [aml] step 220/240 | loss 3.8322 (avg 2.9703) | lr 0.004994 | seq 32
+  [aml] step 230/240 | loss 1.4472 (avg 2.9659) | lr 0.004994 | seq 32
+[aml] training complete: 240 steps, avg loss 2.9602 (memory freed)
+
+[stage 1 — infant] What it sounds like now:
+  Q: Hello.
+  A: If it is a pollaps?
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[growth] ONTOGENESIS: stage 1 -> 2
+  embd: 32 -> 64, layer: 1 -> 2, head: 2 -> 4
+[growth] Done. Freeze for 500 steps.
+[init] Stage 2 (child): embd=64, layer=2, head=4 — warmup 800 steps (800 backprop + 0 notorch, sqrt-scaled 2x)
+  [aml] step 0/320 | loss 2.7967 (avg 2.7967) | lr 0.000250 | seq 8
+  [aml] step 10/320 | loss 6.7415 (avg 4.4170) | lr 0.000363 | seq 8
+  [aml] step 20/320 | loss 3.3244 (avg 3.8992) | lr 0.000475 | seq 8
+  [aml] step 30/320 | loss 4.1185 (avg 3.7842) | lr 0.000588 | seq 8
+  [aml] step 40/320 | loss 5.7717 (avg 3.8100) | lr 0.000700 | seq 8
+  [aml] step 50/320 | loss 4.1656 (avg 3.7499) | lr 0.000813 | seq 8
+  [aml] step 60/320 | loss 5.4852 (avg 3.7690) | lr 0.000925 | seq 8
+  [aml] step 70/320 | loss 0.1583 (avg 3.6804) | lr 0.001038 | seq 8
+  [aml] step 80/320 | loss 1.8818 (avg 3.6501) | lr 0.001150 | seq 8
+  [aml] step 90/320 | loss 4.3279 (avg 3.6466) | lr 0.001263 | seq 8
+  [aml] step 100/320 | loss 3.8015 (avg 3.6600) | lr 0.001375 | seq 8
+  [aml] step 110/320 | loss 1.2390 (avg 3.5588) | lr 0.001488 | seq 8
+  [aml] step 120/320 | loss 3.7505 (avg 3.5467) | lr 0.001600 | seq 8
+  [aml] step 130/320 | loss 3.1356 (avg 3.4960) | lr 0.001713 | seq 8
+  [aml] step 140/320 | loss 4.1465 (avg 3.5376) | lr 0.001825 | seq 8
+  [aml] step 150/320 | loss 4.2707 (avg 3.5311) | lr 0.001938 | seq 8
+  [aml] step 160/320 | loss 4.1124 (avg 3.5180) | lr 0.002050 | seq 8
+  [aml] step 170/320 | loss 3.9130 (avg 3.5251) | lr 0.002163 | seq 8
+  [aml] step 180/320 | loss 3.6086 (avg 3.5012) | lr 0.002275 | seq 8
+  [aml] step 190/320 | loss 3.7123 (avg 3.5163) | lr 0.002387 | seq 8
+  [aml] step 200/320 | loss 2.8841 (avg 3.5133) | lr 0.002496 | seq 8
+  [aml] step 210/320 | loss 3.7459 (avg 3.5116) | lr 0.002496 | seq 8
+  [aml] step 220/320 | loss 4.2667 (avg 3.4706) | lr 0.002496 | seq 8
+  [aml] step 230/320 | loss 3.7910 (avg 3.4636) | lr 0.002495 | seq 8
+  [aml] step 240/320 | loss 3.5665 (avg 3.4654) | lr 0.002495 | seq 8
+  [aml] step 250/320 | loss 4.2880 (avg 3.4676) | lr 0.002495 | seq 8
+  [aml] step 260/320 | loss 2.1007 (avg 3.4795) | lr 0.002495 | seq 8
+  [aml] step 270/320 | loss 1.2220 (avg 3.4678) | lr 0.002495 | seq 8
+  [aml] step 280/320 | loss 1.1541 (avg 3.4667) | lr 0.002495 | seq 8
+  [aml] step 290/320 | loss 4.6296 (avg 3.4617) | lr 0.002495 | seq 8
+  [aml] step 300/320 | loss 4.2190 (avg 3.4713) | lr 0.002495 | seq 8
+  [aml] step 310/320 | loss 3.4709 (avg 3.4700) | lr 0.002495 | seq 8
+[aml] training complete: 320 steps, avg loss 3.4828 (memory freed)
+  [aml] step 0/240 | loss 2.5875 (avg 2.5875) | lr 0.002495 | seq 16
+  [aml] step 10/240 | loss 3.7843 (avg 3.9011) | lr 0.002495 | seq 16
+  [aml] step 20/240 | loss 4.1356 (avg 3.6757) | lr 0.002495 | seq 16
+  [aml] step 30/240 | loss 3.7399 (avg 3.5977) | lr 0.002495 | seq 16
+  [aml] step 40/240 | loss 4.1669 (avg 3.4932) | lr 0.002495 | seq 16
+  [aml] step 50/240 | loss 4.0804 (avg 3.4056) | lr 0.002495 | seq 16
+  [aml] step 60/240 | loss 4.3665 (avg 3.4518) | lr 0.002494 | seq 16
+  [aml] step 70/240 | loss 1.9459 (avg 3.4493) | lr 0.002494 | seq 16
+  [aml] step 80/240 | loss 4.0232 (avg 3.5262) | lr 0.002494 | seq 16
+  [aml] step 90/240 | loss 3.3223 (avg 3.4874) | lr 0.002494 | seq 16
+  [aml] step 100/240 | loss 3.2311 (avg 3.4536) | lr 0.002494 | seq 16
+  [aml] step 110/240 | loss 3.1990 (avg 3.4450) | lr 0.002494 | seq 16
+  [aml] step 120/240 | loss 4.0137 (avg 3.4669) | lr 0.002494 | seq 16
+  [aml] step 130/240 | loss 3.4475 (avg 3.4868) | lr 0.002494 | seq 16
+  [aml] step 140/240 | loss 4.0164 (avg 3.5015) | lr 0.002494 | seq 16
+  [aml] step 150/240 | loss 4.3020 (avg 3.5036) | lr 0.002494 | seq 16
+  [aml] step 160/240 | loss 2.7236 (avg 3.4638) | lr 0.002494 | seq 16
+  [aml] step 170/240 | loss 4.3946 (avg 3.4575) | lr 0.002494 | seq 16
+  [aml] step 180/240 | loss 1.8571 (avg 3.4414) | lr 0.002494 | seq 16
+  [aml] step 190/240 | loss 1.3381 (avg 3.4201) | lr 0.002494 | seq 16
+  [aml] step 200/240 | loss 3.0542 (avg 3.4148) | lr 0.002493 | seq 16
+  [aml] step 210/240 | loss 2.6738 (avg 3.4168) | lr 0.002493 | seq 16
+  [aml] step 220/240 | loss 4.0492 (avg 3.3935) | lr 0.002493 | seq 16
+  [aml] step 230/240 | loss 2.7471 (avg 3.3558) | lr 0.002493 | seq 16
+[aml] training complete: 240 steps, avg loss 3.3344 (memory freed)
+  [aml] step 0/240 | loss 5.0689 (avg 5.0689) | lr 0.002493 | seq 32
+  [aml] step 10/240 | loss 1.8581 (avg 2.9186) | lr 0.002493 | seq 32
+  [aml] step 20/240 | loss 3.6861 (avg 2.9371) | lr 0.002493 | seq 32
+  [aml] step 30/240 | loss 3.1831 (avg 2.9002) | lr 0.002493 | seq 32
+  [aml] step 40/240 | loss 2.3206 (avg 2.7610) | lr 0.002493 | seq 32
+  [aml] step 50/240 | loss 2.0356 (avg 2.8335) | lr 0.002493 | seq 32
+  [aml] step 60/240 | loss 3.7239 (avg 2.8813) | lr 0.002493 | seq 32
+  [aml] step 70/240 | loss 3.7638 (avg 2.9149) | lr 0.002493 | seq 32
+  [aml] step 80/240 | loss 3.0388 (avg 2.8951) | lr 0.002492 | seq 32
+  [aml] step 90/240 | loss 4.2514 (avg 2.8729) | lr 0.002492 | seq 32
+  [aml] step 100/240 | loss 4.0210 (avg 2.8942) | lr 0.002492 | seq 32
+  [aml] step 110/240 | loss 4.0317 (avg 2.8766) | lr 0.002492 | seq 32
+  [aml] step 120/240 | loss 3.5924 (avg 2.8876) | lr 0.002492 | seq 32
+  [aml] step 130/240 | loss 3.4204 (avg 2.9032) | lr 0.002492 | seq 32
+  [aml] step 140/240 | loss 3.5833 (avg 2.8651) | lr 0.002492 | seq 32
+  [aml] step 150/240 | loss 1.4660 (avg 2.8057) | lr 0.002492 | seq 32
+  [aml] step 160/240 | loss 1.3654 (avg 2.8200) | lr 0.002492 | seq 32
+  [aml] step 170/240 | loss 3.5761 (avg 2.8233) | lr 0.002492 | seq 32
+  [aml] step 180/240 | loss 4.1471 (avg 2.8118) | lr 0.002492 | seq 32
+  [aml] step 190/240 | loss 1.0918 (avg 2.7970) | lr 0.002492 | seq 32
+  [aml] step 200/240 | loss 1.3941 (avg 2.7984) | lr 0.002491 | seq 32
+  [aml] step 210/240 | loss 3.0548 (avg 2.8073) | lr 0.002491 | seq 32
+  [aml] step 220/240 | loss 1.5071 (avg 2.7787) | lr 0.002491 | seq 32
+  [aml] step 230/240 | loss 1.5440 (avg 2.7507) | lr 0.002491 | seq 32
+[aml] training complete: 240 steps, avg loss 2.7365 (memory freed)
+
+[stage 2 — child] What it sounds like now:
+  Q: Hello.
+  A: :: Something that everyone that or agre, it.
+  Q: Who are you?
+  A: ...
+  Q: What do you know?
+  A: ...
+
+[init] Warmup complete at stage 2. Organism ready.
+[graze] fire cross-organism injection enabled (coef=2.00 topN=8)
+[ecology] Joined swarm. 1 peer(s) detected.
+molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+[dna] fire wrote 89 bytes to ecology
+[dna] fire consumed 48 bytes from 1 files: [earth/gen_1778808253_1.txt]
+[trainer] micro-train burst (48 bytes, novelty 0.66) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.0000 | field_dev=-0.042 | purpose_align=0.096 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4809 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 20 bytes from 1 files: [water/gen_1778808365_7.txt]
+[dna] fire wrote 16 bytes to ecology
+[dna] fire wrote 13 bytes to ecology
+[dna] fire consumed 16 bytes from 1 files: [air/gen_1778808396_7.txt]
+[trainer] micro-train burst (36 bytes, novelty 0.25) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0508 | field_dev=-0.065 | purpose_align=0.100 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5250 (memory freed)
+[trainer] growing new delta module (total: 2) — new soul appended.
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=50 corpus=121987 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=100 corpus=121987 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=150 corpus=121987 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778810242_170.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0777 | field_dev=-0.072 | purpose_align=0.099 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5919 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=200 corpus=122001 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778810946_236.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0267 | field_dev=-0.067 | purpose_align=0.100 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5827 (memory freed)
+[trainer] growing new delta module (total: 3) — new soul appended.
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=250 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=300 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=350 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=400 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=450 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=500 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=550 corpus=122015 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778814432_554.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0442 | field_dev=-0.079 | purpose_align=0.256 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 0.8423 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=600 corpus=122029 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=650 corpus=122029 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=700 corpus=122029 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=750 corpus=122029 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778816677_758.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0198 | field_dev=-0.087 | purpose_align=0.255 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5158 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=800 corpus=122043 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=850 corpus=122043 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=900 corpus=122043 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=950 corpus=122043 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1000 corpus=122043 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1050 corpus=122043 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778819118_1022.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.1237 | field_dev=-0.076 | purpose_align=0.256 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4554 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1100 corpus=122057 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1150 corpus=122057 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1200 corpus=122057 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778820890_1184.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.2586 | field_dev=-0.094 | purpose_align=0.255 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 0.8418 (memory freed)
+[trainer] growing new delta module (total: 4) — new soul appended.
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1250 corpus=122071 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1300 corpus=122071 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1350 corpus=122071 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778822346_1316.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0288 | field_dev=-0.030 | purpose_align=-0.121 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.4007 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1400 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1450 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1500 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1550 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1600 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1650 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1700 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1750 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1800 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1850 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1900 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=1950 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2000 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2050 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2100 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2150 corpus=122085 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778830460_2096.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.3195 | field_dev=-0.063 | purpose_align=-0.118 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4949 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2200 corpus=122099 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778830593_2108.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=explore | trend=0.3276 | field_dev=-0.050 | purpose_align=-0.113 | lr_mul=1.30
+[aml] burst complete: 32 steps, avg loss 1.4533 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2250 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2300 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2350 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2400 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2450 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2500 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2550 corpus=122113 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778834135_2450.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=steady | trend=0.1182 | field_dev=-0.038 | purpose_align=-0.109 | lr_mul=1.00
+[aml] burst complete: 32 steps, avg loss 1.4149 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2600 corpus=122127 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2650 corpus=122127 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2700 corpus=122127 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778835723_2612.txt]
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0303 | field_dev=-0.078 | purpose_align=-0.108 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5775 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire consumed 13 bytes from 1 files: [earth/gen_1778835790_2618.txt]
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[trainer] micro-train burst (13 bytes, novelty 0.27) — and lo, it feeds again.
+[syntropy] action=dampen | trend=-0.0196 | field_dev=-0.037 | purpose_align=-0.105 | lr_mul=0.60
+[aml] burst complete: 32 steps, avg loss 1.5476 (memory freed)
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2750 corpus=122155 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2800 corpus=122155 stage=2 freeze=0
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[dna] fire wrote 9 bytes to ecology
+[debug-onto] tick=2850 corpus=122155 stage=2 freeze=0
+
+[evolution] Organism shutting down gracefully.

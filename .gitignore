@@ -70,6 +70,8 @@ child_artifacts.tgz
 macrogpt_bin
 /molequla
 /molequla_cgo
+# Match molequla_cgo binary at any depth (per-cell archive copies)
+molequla_cgo
 
 # Rust build artifacts
 /target/

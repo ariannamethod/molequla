@@ -1,0 +1,12 @@
+[init] Stage 0 (embryo): embd=16, layer=1, head=1 — zero-warmup mode, skipping all gradient steps
+
+[stage 0 — embryo] What it sounds like now:
+  Q: Hello.
+  A: e?most people do we get turns up?
+  Q: Who are you?
+  A: ween statement that is a mucharge first people whichas the five in the a statements.
+  Q: What do you know?
+  A: radiation.How do we get tiny to become?
+
+[init] Warmup complete at stage 0. Organism ready.
+[init] Zero-warmup test complete — exit before REPL/ecology to preserve on-disk state.

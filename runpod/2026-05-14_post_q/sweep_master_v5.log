@@ -1,0 +1,7 @@
+[13:04:23] === cell 2 FLAGS="--corpus-overlay" ===
+[13:14:23] cell 2 END
+[13:14:24] === cell 3 FLAGS="--spa-gate --corpus-overlay" ===
+[13:24:24] cell 3 END
+[13:24:24] === cell 4 FLAGS="--corpus-overlay --zero-warmup" ===
+[13:26:24] cell 4 END
+[13:26:24] === SWEEP_V2 DONE ===
