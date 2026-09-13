@@ -7,7 +7,13 @@ RUN="${MOLEQULA_RUN:-/data/data/com.termux/files/home/arianna/molequla-run}"
 PIDDIR="$RUN/pids"
 
 shopt -s nullglob
-files=("$PIDDIR"/*.pid)
+# schedule.pid is the scheduler daemon, not a colony process: it lives in the
+# same directory and must survive the stop it calls itself.
+files=()
+for f in "$PIDDIR"/*.pid; do
+    [ "$(basename "$f")" = "schedule.pid" ] && continue
+    files+=("$f")
+done
 if [ ${#files[@]} -eq 0 ]; then
     echo "[stop] no pid files in $PIDDIR"
 else
