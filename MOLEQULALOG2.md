@@ -120,3 +120,59 @@ OpenBLAS in 6 s; it expects `yent_eye_smolvlm2_lora_v2_f16.gguf` plus its
 mmproj, which are not on this node.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the colony of four on ARM, and the eye's first frame
+
+**Colony, 1200 s.** Four organisms, each in its own working directory under
+one `dna/output/<element>/` tree as `launcher.sh` lays it out, launched with
+`timeout 1200 taskset -c 4-7 molequla_cgo --organism-id <e> --element <e>
+--evolution --cross-graze`, no overlay. `capColonyThreads()` read the four
+pinned cores and set `OPENBLAS_NUM_THREADS=1` per organism (`[cpu] effective
+cores=4`). Sampled every 30 s from `/proc/<pid>/status`.
+
+| organism | stage at exit | `ingested` at exit | bursts (loss) | peak VmHWM |
+|---|---|---|---|---|
+| earth | 2 child | 170287 | 4 (1.56 2.04 2.37 2.08) | 127408 kB |
+| air | 3 adolescent | 244852 | 3 (1.96 2.30 1.70) | 231044 kB |
+| water | 3 adolescent | 335336 | 3 (1.38 1.37 1.18) | 240032 kB |
+| fire | 3 adolescent | 226526 | 3 (1.27 1.15 1.33) | 234340 kB |
+
+0 NaN, 0 panic, 0 divide events. The three that grew crossed the 200000
+adolescent gate on `ingested` and were still inside the post-growth warmup at
+exit (`debug-onto tick=10..50` after `ONTOGENESIS: stage 2 -> 3`). Peak RSS
+per organism roughly doubles at the growth (embd 64 → 128 plus the
+1600-step-class warmup), from about 100 MB at child to 231-240 MB. Lowest
+`MemAvailable` on the phone during the run: 1930056 kB, with two Claude
+sessions resident beside the colony.
+
+**DNA is a race, not a field.** Bytes consumed over the run: air 3118052 in
+18 reads, fire 2614666 in 19, water 1612725 in 10, earth 35734 in 5. `dnaRead`
+reads a sibling's `gen_*.txt`, mirrors it to `../dna/seen/<e>/`, appends it to
+its own corpus and then removes the file (`molequla.go:5882-5945`, the
+`os.Remove` after a successful append). A fragment therefore feeds exactly one
+organism, the first to scan the directory that tick; the others see it only
+through the `seen/` mirror that cross-graze reads for logit boosts, never in
+their corpus. Whoever loses the scan loses growth. Earth lost it here and
+stayed a child; in the §9 archive earth is the one adult that never divided.
+Audit item, alongside `field_steering`.
+
+**The eye, first frame on this phone.** `reffs/ocelli` as cloned (vendored
+notorch of 2026-07-27), f16 weights `yent_eye_smolvlm2_lora_v2_f16.gguf` +
+f16 mmproj (both SHA-256-verified against `yent_eye_smolvlm2_lora_v2_gguf_SHA256SUMS.txt`
+from neo), the 4080×3060 JPEG from the back camera, `taskset -c 4-7`, prompt
+"Describe this image in one sentence.":
+
+> The image is blurry, but it clearly shows a desk with a green object, a
+> chair, and a tablecloth with a drawing on it.
+
+That is the frame. Cost: prompt 878 tokens in 9974 ms (88.0 tok/s), generation
+29 tokens in 25198 ms (1.2 tok/s), wall 1:33.93, user 232.6 s, sys 118.9 s,
+374 % CPU, 888477 minor page faults, peak RSS 1602432 kB (`/usr/bin/time -v`).
+Two things in that line are the work: the prompt is 878 tokens because the
+full-resolution frame is split into image tiles (neo's 84-token prompts were
+small frames), and a third of the CPU time is system time on page faults,
+which is `materialize()` (`ocelli.c:114`) expanding f16 weights into an f32
+scratch on the prefill path. ocelli's own "peak RSS 2 MB" in its status line
+is wrong and is noted as a bug in the reference clone, not repaired here.
+
+— Defender (Arianna Method, phone-1)
