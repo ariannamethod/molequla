@@ -5579,9 +5579,10 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		n_params INTEGER, syntropy REAL, entropy REAL,
 		last_heartbeat REAL, parent_id TEXT,
 		status TEXT DEFAULT 'alive',
-		element TEXT)`)
-	// Migration for existing databases
+		element TEXT, global_step INTEGER)`)
+	// Migrations for existing databases
 	db.Exec("ALTER TABLE organisms ADD COLUMN element TEXT")
+	db.Exec("ALTER TABLE organisms ADD COLUMN global_step INTEGER") // repair 7: age in training steps, for the witness and for gates
 	if err != nil {
 		db.Close()
 		return err
@@ -5671,15 +5672,16 @@ func (sr *SwarmRegistry) ReserveChildSlot(childID string, pid int, element strin
 		childID, pid, float64(time.Now().UnixMilli())/1000.0, sr.OrganismID, element)
 }
 
-// Heartbeat performs periodic state update in mesh.db.
-func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64) {
+// Heartbeat performs periodic state update in mesh.db. globalStep is the
+// organism's age in training steps (repair 7), visible to the witness.
+func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int) {
 	if sr.MeshDB == nil {
 		return
 	}
 	sr.MeshDB.Exec(
-		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive' WHERE id=?",
-		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, sr.OrganismID)
-	sr.keeper.Set(stage, nParams, syntropy, entropy) // nil-safe; the keeper repeats this state
+		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=? WHERE id=?",
+		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, sr.OrganismID)
+	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep) // nil-safe; the keeper repeats this state
 }
 
 // DiscoverPeers finds other living organisms.
@@ -6384,6 +6386,18 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 			// CPU/BLAS — autograd graph requires host tensors. See
 			// gpu_bindings_linux.go + gpu_forward.go.
 			CFG.UseGPU = true
+		} else if os.Args[i] == "--witness" {
+			// The mycelium as a witness (witness.go): a fifth process that
+			// reads mesh.db and the DNA field and says what it sees. No
+			// model is loaded, nothing is written back.
+			witnessMode = true
+		} else if os.Args[i] == "--witness-interval" && i+1 < len(os.Args) {
+			if v, err := strconv.ParseFloat(os.Args[i+1], 64); err == nil && v > 0 {
+				witnessInterval = v
+			}
+			i++
+		} else if os.Args[i] == "--once" {
+			witnessOnce = true
 		} else if os.Args[i] == "--cross-graze" {
 			// Dario-style cross-organism logit injection — read sibling DNA
 			// emissions mirrored to ../dna/seen/<sibling>/ and boost their
@@ -6786,12 +6800,13 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			for _, m := range model.Base {
 				nP += m.Nout * m.Nin
 			}
+			gs := model.globalStep
 			model.mu.Unlock()
 			lastEntropy := 0.0
 			if len(syntracker.EntropyHistory) > 0 {
 				lastEntropy = syntracker.EntropyHistory[len(syntracker.EntropyHistory)-1]
 			}
-			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy)
+			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs)
 			// Update swarm info for hibernate decisions
 			peers := swarm.DiscoverPeers(60)
 			syntracker.SwarmInfo = &SwarmPeerInfo{Peers: peers}
@@ -6909,6 +6924,11 @@ func main() {
 
 	// Parse CLI args for child organisms
 	organismID, configPath, element, evolution := parseCLIArgs()
+
+	// Witness mode: no model, no training, no GPU — read and say (repair 7).
+	if witnessMode {
+		os.Exit(runWitness(witnessInterval, witnessOnce))
+	}
 
 	// GPU init: attempted only when --gpu (CFG.UseGPU) requested. Silent
 	// fallback if init fails — gpuReady() stays false and the Matvec
@@ -7216,12 +7236,12 @@ func main() {
 	// when the new organism drops out of the live count.
 	swarm.StartKeeper(stop, 20*time.Second)
 	model.mu.Lock()
-	seedStage, seedParams := model.CurrentGrowthStage(), 0
+	seedStage, seedParams, seedStep := model.CurrentGrowthStage(), 0, model.globalStep
 	for _, m := range model.Base {
 		seedParams += m.Nout * m.Nin
 	}
 	model.mu.Unlock()
-	swarm.Heartbeat(seedStage, seedParams, 0, 0)
+	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep)
 
 	if evolution {
 		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")
