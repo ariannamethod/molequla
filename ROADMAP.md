@@ -56,20 +56,6 @@ is long — an organism lives for months of sessions, not for one uptime.
 4. **Other VLMs for the same organ.** Alternative eyes measured on the phone
    with the same table (tok/s, wall, peak RSS, one global frame) and stored in
    sibling folders of the weights repo.
-7. **Ears — whisper on notorch, parity with ggerganov** (Oleg, 2026-09-13: "if
-   there is sight there must be hearing"). whisper.cpp is not on the phone yet;
-   it comes in as the reference, and an `ears` organ in C on notorch is written
-   the way `ocelli` was for SmolVLM, with one gate: the same wav gives the same
-   transcript as whisper.cpp on tiny/base weights. Input from the microphone
-   (`termux-microphone-record`) into `dna/output/sound/` as a sixth source.
-   Not only speech: a plain sound-event detector in C ahead of the model turns
-   a bang, a door, a voice into one line even when no words are said; a model
-   that names sounds, not just words, is the ideal and comes later.
-8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
-   but the mycelium speaking. First step costs nothing — the witness's line
-   through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
-   and re-enabled with `pm enable com.google.android.tts`); the real step is a
-   TTS on notorch, its own port.
 5. **loragrad as immune filter.** The gradient verdict (PASS / WEAKEN / FREEZE /
    SCAR / DARK / SILENCE) applied to an eaten DNA fragment inside the organism,
    between `dnaRead` and the burst; not in the witness. Own repair after the
@@ -77,6 +63,49 @@ is long — an organism lives for months of sessions, not for one uptime.
 6. **Replacement instead of growth under a full machine.** When the byte budget
    refuses growth for long, an organism yields to a sibling rather than waiting
    forever; needs a channel between organisms that does not exist yet.
+7. **Ears — whisper on notorch, parity with ggerganov** (Oleg, 2026-09-13: "if
+   there is sight there must be hearing"). The reference exists since
+   2026-09-13: whisper.cpp `1da4dc8` built with OpenBLAS at
+   `~/arianna/whisper.cpp`, tiny and base multilingual ggml weights, three wavs
+   (`jfk`, the same sentence played through the phone speaker and re-recorded
+   by the microphone, eight seconds of room), transcripts, token JSON, timings
+   and the full tensor layout of both models under `~/arianna/ears-reference/`.
+   On cores 4-7 with four threads: jfk tiny 10.5 s / 178 MB peak, base 19.9 s /
+   287 MB; the re-recorded sentence comes back on both models. Room noise on
+   base ran 185 s through temperature fallbacks before settling on `[Motor]`,
+   so a no-speech gate goes in early. The port: an `ears` organ in C on the
+   canon notorch, loading the ggml `.bin` directly (whisper is not GGUF), with
+   the log-mel front end written from scratch (notorch has no FFT) and
+   everything after it on existing primitives; gate: byte-equal transcript and
+   token ids against whisper.cpp on the three wavs. Input from the microphone
+   into `dna/output/sound/` as a sixth source. Not only speech: a plain
+   sound-event detector in C ahead of the model turns a bang, a door, a voice
+   into one line even when no words are said; a model that names sounds, not
+   just words, comes later.
+8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
+   but the mycelium speaking. First step costs nothing — the witness's line
+   through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
+   and re-enabled with `pm enable com.google.android.tts`); the real step is a
+   TTS on notorch, its own port.
+9. **Place — the world that does not depend on you** (Oleg, 2026-09-13). The
+   phone has GPS (`termux-location`: 13 m by network, 23 m by satellite once
+   `ACCESS_FINE_LOCATION` is granted to termux-api). A seventh source,
+   `dna/output/place/`, written by `phone1/place.sh` in bash with `curl` and
+   `jq` and no library: position, weather and sun from open-meteo, the name of
+   the place from Nominatim, and later headlines for the region. One line of
+   facts per tick. Not a dashboard, not a Palantir: the point is subjectivity —
+   here is the outside, and it moves without the organism.
+10. **A ledger of change, not a stream of facts.** What makes the senses one
+    field: a bitemporal table `world_facts(source, subject, predicate, object,
+    valid_from, valid_to, recorded_at, provenance)` in mesh.db, written by
+    place, eye and ears; the witness closes a fact when a newer one contradicts
+    it and emits the change as a line into `dna/output/world/` — the fog
+    lifted, the phone moved 300 m, a person entered the frame, English speech
+    for eleven seconds. Organisms eat the changes of the world, not its state.
+    The shape is borrowed from Utopia (deeplethe/utopia: facts carry when they
+    held and when they were learned, corrections close rather than erase, an
+    append-only decision ledger); the product itself stays outside — later, a
+    mirror on polygon fed from the same table, never an organ.
 
 ## Later
 
