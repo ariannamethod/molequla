@@ -136,11 +136,11 @@ func TestWaitEvolutionEndsWhenTrainerExits(t *testing.T) {
 	trainAbort.Store(false)
 	defer trainAbort.Store(false)
 
-	sigCh := make(chan os.Signal, 1)
+	shutdown := make(chan struct{})
 	done := make(chan struct{})
 	stop := make(chan struct{})
 	res := make(chan string, 1)
-	go func() { res <- waitEvolution(sigCh, done, stop) }()
+	go func() { res <- waitEvolution(shutdown, done, stop) }()
 	close(done)
 	select {
 	case r := <-res:
@@ -159,10 +159,12 @@ func TestWaitEvolutionEndsWhenTrainerExits(t *testing.T) {
 		t.Fatal("a trainer that exited on its own must not raise the shutdown abort")
 	}
 
-	sigCh2 := make(chan os.Signal, 1)
+	// A signal that arrived earlier — during the bootstrap climb, before this
+	// loop was reached — is a closed shutdown channel, and must still be seen.
+	shutdown2 := make(chan struct{})
 	stop2 := make(chan struct{})
-	sigCh2 <- os.Interrupt
-	if r := waitEvolution(sigCh2, make(chan struct{}), stop2); r != "signal" {
+	close(shutdown2)
+	if r := waitEvolution(shutdown2, make(chan struct{}), stop2); r != "signal" {
 		t.Fatalf("got %q, want signal", r)
 	}
 	select {

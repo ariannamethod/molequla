@@ -506,7 +506,7 @@ func TestSaveOnShutdownBeatsTheDebouncer(t *testing.T) {
 	}
 
 	// The shutdown save must go through anyway.
-	saveOnShutdown(model, tok, "signal")
+	saveOnShutdown("evolution", model, tok, "signal")
 	after, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading the checkpoint after shutdown: %v", err)
@@ -715,4 +715,127 @@ func TestStage4SavePeak(t *testing.T) {
 		hwmSaved, hwmOld, hwmOld-hwmSaved, float64(len(blob))/(1<<20))
 	blob = nil
 	runtime.GC()
+}
+
+// ── 7. the load path, repair 10 ───────────────────────────────────────────────
+
+// Save → load → save. The streamed loader builds *MatrixParam rows straight out
+// of the token stream instead of materialising a CheckpointData first, so the
+// gate that it still reads the format the streamed writer emits is that the
+// second file is the first file. Change the field order in either direction, or
+// lose a null row, or drop the grad allocation, and this goes red.
+func TestCheckpointRoundTripIsByteIdentical(t *testing.T) {
+	model, tok := smallOrganism(t)
+	CFG.CheckpointMinInterval = 0
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.json")
+	if err := SaveCheckpoint(model, tok, first); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	back, backTok, err := LoadCheckpoint([]string{"the organism speaks"}, first)
+	if err != nil {
+		t.Fatalf("LoadCheckpoint: %v", err)
+	}
+	second := filepath.Join(dir, "second.json")
+	if err := SaveCheckpoint(back, backTok, second); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+	a, err := os.ReadFile(first)
+	if err != nil {
+		t.Fatalf("reading the first file: %v", err)
+	}
+	b, err := os.ReadFile(second)
+	if err != nil {
+		t.Fatalf("reading the second file: %v", err)
+	}
+	if len(a) < 1000 {
+		t.Fatalf("the fixture is too small to prove anything: %d bytes", len(a))
+	}
+	if !bytes.Equal(a, b) {
+		t.Fatalf("the round trip changed the checkpoint (%d vs %d bytes)\nfirst  tail: %s\nsecond tail: %s",
+			len(a), len(b), tailOf(a), tailOf(b))
+	}
+
+	// Byte equality is about the format; these are about the organism.
+	if back.globalStep != model.globalStep || back.growthStepOffset != model.growthStepOffset ||
+		back.lastWarmupStage != model.lastWarmupStage {
+		t.Fatalf("growth state did not survive: step %d/%d offset %d/%d warmup %d/%d",
+			back.globalStep, model.globalStep, back.growthStepOffset, model.growthStepOffset,
+			back.lastWarmupStage, model.lastWarmupStage)
+	}
+	wtIn, wtOut := model.Base["wte"], back.Base["wte"]
+	if wtOut.Nout != wtIn.Nout || wtOut.Nin != wtIn.Nin {
+		t.Fatalf("wte came back %dx%d, was %dx%d", wtOut.Nout, wtOut.Nin, wtIn.Nout, wtIn.Nin)
+	}
+	for i := range wtIn.Rows {
+		for j := range wtIn.Rows[i].Data {
+			if wtOut.Rows[i].Data[j] != wtIn.Rows[i].Data[j] {
+				t.Fatalf("wte[%d][%d]: %v came back as %v", i, j, wtIn.Rows[i].Data[j], wtOut.Rows[i].Data[j])
+			}
+		}
+		// A loaded parameter is a trainable one: without grad the next warmup
+		// writes into a nil slice.
+		if len(wtOut.Rows[i].Grad) != len(wtOut.Rows[i].Data) {
+			t.Fatalf("wte row %d came back with %d grads for %d weights", i, len(wtOut.Rows[i].Grad), len(wtOut.Rows[i].Data))
+		}
+	}
+	if CFG.TieEmbeddings && back.Base["lm_head"] != back.Base["wte"] {
+		t.Fatal("the embedding tie was not re-established after the load")
+	}
+	if len(back.Deltas) != len(model.Deltas) {
+		t.Fatalf("%d delta modules came back for %d saved", len(back.Deltas), len(model.Deltas))
+	}
+	t.Logf("round trip identical, %d bytes, %d delta modules", len(a), len(back.Deltas))
+}
+
+// A checkpoint written by a process the low-memory killer reached mid-write is a
+// prefix of a valid document. The streamed loader walks it token by token, so
+// every cut lands inside some Token() or Decode() call: the gate is that each
+// one comes back as an error and a nil model, not as a panic taking the colony
+// with it, and not as a half-built organism that trains on garbage.
+func TestLoadCheckpointRejectsTruncation(t *testing.T) {
+	model, tok := smallOrganism(t)
+	CFG.CheckpointMinInterval = 0
+
+	dir := t.TempDir()
+	full := filepath.Join(dir, "full.json")
+	if err := SaveCheckpoint(model, tok, full); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	blob, err := os.ReadFile(full)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	// Cuts through the head, the base matrices, the deltas and the trailing
+	// scalars — the last one drops only the closing brace.
+	for _, frac := range []float64{0.01, 0.1, 0.33, 0.5, 0.75, 0.95} {
+		cut := int(float64(len(blob)) * frac)
+		path := filepath.Join(dir, "cut_"+strconv.Itoa(cut)+".json")
+		if err := os.WriteFile(path, blob[:cut], 0644); err != nil {
+			t.Fatalf("writing the truncated copy: %v", err)
+		}
+		m, tk, err := LoadCheckpoint([]string{"the organism speaks"}, path)
+		if err == nil {
+			t.Fatalf("a checkpoint truncated at %d of %d bytes loaded without an error", cut, len(blob))
+		}
+		if m != nil || tk != nil {
+			t.Fatalf("truncation at %d returned an organism alongside the error", cut)
+		}
+	}
+	short := filepath.Join(dir, "one_brace.json")
+	if err := os.WriteFile(short, []byte("{"), 0644); err != nil {
+		t.Fatalf("writing the one-byte copy: %v", err)
+	}
+	if _, _, err := LoadCheckpoint([]string{"x"}, short); err == nil {
+		t.Fatal(`a file holding only "{" loaded without an error`)
+	}
+
+	// And the untruncated file still loads, so the gate is about the cut and
+	// not about the fixture.
+	if _, _, err := LoadCheckpoint([]string{"the organism speaks"}, full); err != nil {
+		t.Fatalf("the complete checkpoint stopped loading: %v", err)
+	}
+	t.Logf("six truncations of a %d-byte checkpoint, all refused", len(blob))
 }

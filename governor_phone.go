@@ -229,15 +229,18 @@ var trainAbort atomic.Bool
 // by ntTrainCore's pullBack, so an aborted phase is progress kept, not lost.
 func trainAborting() bool { return trainAbort.Load() }
 
-// waitEvolution parks main in evolution mode until a signal arrives or the
-// trainer loop ends on its own (hibernation). On a signal it raises the train
-// abort and closes stop so the trainer winds down at the next step and the next
-// tick; when the trainer is already gone there is nothing to stop and the
-// process simply ends, releasing the organism's memory to the colony. Returns
-// the reason for the caller's log line.
-func waitEvolution(sigCh <-chan os.Signal, done <-chan struct{}, stop chan struct{}) string {
+// waitEvolution parks main in evolution mode until the shutdown channel closes
+// or the trainer loop ends on its own (hibernation). `shutdown` is closed by the
+// signal handler main arms before the bootstrap climb (repair 10), so a signal
+// that landed minutes earlier — during a first launch's warmup — is still
+// observable here. On shutdown it raises the train abort and closes stop so the
+// trainer winds down at the next step and the next tick; when the trainer is
+// already gone there is nothing to stop and the process simply ends, releasing
+// the organism's memory to the colony. Returns the reason for the caller's log
+// line.
+func waitEvolution(shutdown <-chan struct{}, done <-chan struct{}, stop chan struct{}) string {
 	select {
-	case <-sigCh:
+	case <-shutdown:
 		trainAbort.Store(true)
 		close(stop)
 		return "signal"

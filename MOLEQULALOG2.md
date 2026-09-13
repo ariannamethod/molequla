@@ -1415,3 +1415,108 @@ loose — the right direction, and a number to re-measure once the colony has ru
 a stage step under the new binary.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the checkpoint is read the way it is written, and the signal is armed before the first warmup
+
+Repair 9 closed with two things named and left: `LoadCheckpoint` still cost
+368 MB for a 105 MB file, and a fresh embryo's bootstrap climb ran before
+`signal.Notify` was installed, so a SIGTERM during a first launch killed the
+process outright. Both are closed here, on `claude/phone1-repair-load`.
+
+**The load, measured.** `TestCheckpointMemoryProfile`, against a read-only copy
+of earth's live checkpoint — `molequla-run/earth/molequla_ckpt.json`,
+111 135 696 bytes = 106.0 MB, stage 4, 4 834 408 params, vocab 687 — on
+`taskset -c 4-7`, with `500` written to the test's own `oom_score_adj` and the
+whole thing refusing to start below 2000 MB of `MemAvailable`:
+
+    LoadCheckpoint:                 RSS 7 → 159 MB (+152), HWM 7 → 159 MB (+152)
+    SaveCheckpoint (streamed):      RSS 159 → 167 MB (+8), wrote 106.0 MB
+    SaveCheckpoint (old encoder):   RSS 167 → 486 MB (+319), 106.0 MB in memory
+
+Repair 9 recorded `+368` on that load line against a 105.6 MB copy of the same
+file. The same before/after taken back to back in one session, the old path
+replicated beside the new one, reads `+349` and `+152`, and the token walk on its
+own — `readCheckpointStream` with no GPT built around it — costs `+83`.
+
+The old path held the weights three times: `json.Decoder` buffered the whole
+document because it was asked for one top-level value, the `CheckpointData` held
+every matrix again as `[][]float64`, and `deserializeMatrixParam` then built the
+`*Vec` rows from that. `readCheckpointStream` walks the document with
+`Token()` / `More()` / `Decode` into per-row targets, so each row goes straight
+into `NewVecWithGrad` and the decoder's buffer compacts down to the largest
+single value it is asked for, which is one row of 224 floats. Field order is not
+assumed and unknown keys are skipped, so a checkpoint written by the C, Rust or
+JS core still loads.
+
+What is left in the 152 is not a copy of anything. 4 834 408 params at a
+`float64` of data plus a `float64` of grad is 73.8 MB, and the walk costs 83 —
+the model, plus about nine of `*Vec` headers and allocator slack. The remaining
+69 MB is `NewGPT(tok)` inside `LoadCheckpoint`: it builds a complete
+random-initialised weight set at the restored dimensions, and the next statement
+replaces `model.Base` with the matrices just read. That transient predates this
+session and is not touched here, because the fresh matrices are also what a
+checkpoint missing a key silently falls back on — removing them turns a foreign
+or pre-SwiGLU checkpoint from quietly-random into a nil dereference, which is a
+decision about format compatibility rather than about memory.
+
+**The gates on the load.** `TestCheckpointRoundTripIsByteIdentical` saves the
+grown fixture, loads it back and saves again, and compares the two files byte for
+byte — 1 224 577 bytes, three delta modules — then checks the weights, the grad
+allocation, the embedding tie and the growth counters came back. It goes red as
+`the round trip changed the checkpoint (1225175 vs 1225170 bytes)` when the
+restore of `ActiveAlpha` is dropped. `TestLoadCheckpointRejectsTruncation` cuts a
+1 225 324-byte checkpoint at 1, 10, 33, 50, 75 and 95 percent, plus a file
+holding only `{`, and requires an error and a nil model from each; it goes red
+with `panic: runtime error: invalid memory address or nil pointer dereference`
+when `readCheckpointStream` is made to return what it has instead of the error —
+which is the failure it exists to catch, a half-built organism training on
+whatever it got. `TestCheckpointStreamMatchesEncoder` is unchanged and still
+holds the write side to the old encoder's bytes.
+
+**The signal, armed earlier.** `signal.Notify` now runs in `main` right after the
+CLI is parsed, before the checkpoint is opened and before the bootstrap climb,
+and its handler raises `trainAbort` and closes a `shutdown` channel;
+`waitEvolution` waits on that channel instead of on the signal channel, so a
+signal that landed minutes earlier is still there when the evolution loop is
+finally reached. The bootstrap's per-stage warmup answers the abort the same way
+the tick loop's does: it does not record `lastWarmupStage` for a phase it did not
+finish, and it writes what it has on the explicit path, which the debouncer
+cannot drop. `saveOnShutdown` takes the phase it is saving for, so the line says
+which loop ended. Evolution mode only — in the REPL a Ctrl+C must still end the
+process, and that bootstrap pauses for the user between stages anyway.
+
+Live, on a fresh embryo in a scratch `HOME` with a 173 643-byte earth corpus,
+`timeout -s TERM 20 ... --element earth --evolution --max-organisms 1`:
+
+    [init] Stage 1 (infant): embd=32, layer=1, head=2 — warmup 800 steps
+    [notorch] warmup complete: 320 steps, avg loss 3.3869 | 5080ms 63.0 steps/s
+    [notorch] warmup complete: 34 steps (stopped early, 240 requested), avg loss 3.5768
+    [init] checkpoint saved on signal
+
+— a 1 942 807-byte checkpoint, and relaunching in the same directory resumes at
+`[trainer] warmup for stage 1 (embd=32)` with no bootstrap line, which is also
+the streamed loader read end to end on a file it did not write in the same
+process. The same run with the early handler removed and nothing else changed
+leaves a 934 122-byte stage-0 checkpoint, no save line, and the stage-1 work
+gone: that is the red.
+
+**Also.** Two comments still named `gpu_forward.go` and `gpu_bindings_linux.go`,
+which left the root when the GPU lane became a package; they now point at
+`gpu_bridge.go` and `modules/gpu/`.
+
+`CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false ./...` — 180 pass,
+2 skipped, up from 178 by the two new gates. The skips are the two heavy
+measurements, which refuse to start below 2000 MB of `MemAvailable`; the load
+numbers above come from running the first of them by hand once the phone was
+quiet, as `MOLEQULA_CKPT_MEASURE=<read-only copy> go test -count=1 -run
+TestCheckpointMemoryProfile -v .`.
+
+One thing seen and not fixed: `TestBeatKeeperRefreshesMeshWithoutTicks` fails
+about one run in eight with `SQL logic error: no such table: organisms`, on this
+branch and on `origin/main` alike. Its fixture opens `sqlite` at `:memory:`
+through `database/sql`, where the database belongs to a connection and the pool
+is free to open a second one; the table is then missing on whichever connection
+the keeper's goroutine draws. It is the fixture, not the keeper, and it wants a
+shared cache or a single pinned connection.
+
+— Defender (Arianna Method, phone-1)
