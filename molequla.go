@@ -1031,7 +1031,7 @@ func (m *MatrixParam) Params() []*Vec {
 // RMSNorm normalizes a vector by its root mean square.
 func RMSNorm(x *Vec) *Vec {
 	ms := x.MeanSq()
-	scaleVal := math.Pow(ms.Data+1e-5, -0.5)
+	scaleVal := math.Pow(ms.Data+1e-6, -0.5) // eps 1e-6: the value notorch's nt_seq_rmsnorm uses (train ≡ infer, repair 2b)
 	n := len(x.Data)
 	d := make([]float64, n)
 	for i := 0; i < n; i++ {
@@ -1043,7 +1043,7 @@ func RMSNorm(x *Vec) *Vec {
 		xData := x.Data
 		out.backFn = func() {
 			s := scaleVal
-			dsDms := -0.5 * math.Pow(ms.Data+1e-5, -1.5)
+			dsDms := -0.5 * math.Pow(ms.Data+1e-6, -1.5)
 			cross := 0.0
 			for j := 0; j < n; j++ {
 				cross += out.Grad[j] * xData[j]
@@ -1989,6 +1989,10 @@ func (gpt *GPT) AddDeltaModule(alpha float64) {
 	mod["lm_head"] = NewDeltaAdapter(gpt.Tok.VocabSize, CFG.NEmbd, r, 0.02)
 	gpt.Deltas = append(gpt.Deltas, mod)
 	gpt.ActiveAlpha = append(gpt.ActiveAlpha, alpha)
+	// The notorch trainer registers delta adapters on its tape in a fixed
+	// order; a new module changes that order, so its positional Chuck slots
+	// must be rebuilt before the next burst (repair 2b).
+	ntOnGrowth()
 }
 
 func (gpt *GPT) AllBaseParams() []*Vec {

@@ -153,6 +153,20 @@ func ntSeqCrossEntropy(logitsIdx, targetsIdx, T, V int) int {
 	return int(C.nt_seq_cross_entropy(C.int(logitsIdx), C.int(targetsIdx), C.int(T), C.int(V)))
 }
 
+// ntSeqCrossEntropyMasked — op 32: cross-entropy over T positions where
+// mask[t] == 0 positions contribute neither loss nor gradient. Used so that a
+// document shorter than the window does not train the organism to emit the
+// pad token (repair 2b).
+func ntSeqCrossEntropyMasked(logitsIdx, targetsIdx, maskIdx, T, V int) int {
+	return int(C.nt_seq_cross_entropy_masked(C.int(logitsIdx), C.int(targetsIdx), C.int(maskIdx), C.int(T), C.int(V)))
+}
+
+// ntScale — y = s · x on the tape (NT_OP_SCALE). Used for the residual scale
+// 1/sqrt(NLayer) that inference applies to both branches (repair 2b).
+func ntScale(xIdx int, s float64) int {
+	return int(C.nt_scale(C.int(xIdx), C.float(s)))
+}
+
 // ── Mode ──
 
 func ntTrainMode(on bool) {
