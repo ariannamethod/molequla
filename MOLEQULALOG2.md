@@ -1083,3 +1083,84 @@ alone, with the transformer warm (mag 5.9-8.7) and the overlay long gone. That
 is the thing the old line could not show.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the colony runs in sessions, never non-stop
+
+The colony was launched without a cap at 19:25Z, on the binary recorded in
+`$MOLEQULA_RUN/BUILD` (`673f478 2026-09-13T19:25:33Z`, 9567248 bytes). Twenty-two
+minutes later all four organisms had taken the same step — `[growth] ONTOGENESIS:
+stage 3 -> 4`, `embd: 128 -> 224, layer: 4 -> 5, head: 4 -> 8`, each followed by
+`[trainer] warmup for stage 4 (embd=224) — 1600 steps total` — four adults
+warming up at once, each holding 758-928 MB, read from `/proc/<pid>/status`
+while they ran and gone with them. Android's lmkd killed Termux at 19:47:18Z to
+get the memory back. The checkpoints survived at 110 MB apiece
+(`earth/molequla_ckpt.json` 110718100 bytes, written 19:46).
+
+The mechanism has a second half, measured today. The organisms start from the
+chroot, and at launch all four carried `oom_score_adj = -1000` inherited down the
+su chain — the value that tells lmkd to reclaim this process last. Four
+processes growing past 700 MB each, none of them a candidate for the kill: the
+terminal around them was the only thing left to take. Raising the organisms to
+500 after launch inverts that choice, and a squeeze now costs one checkpointed
+organism instead of the whole tree.
+
+molequla has always been deployed in capped sessions — four elements for 30
+minutes in the old cascade, a 35-minute cap in the second cascade. The rule is back,
+as code rather than as a habit: `phone1/schedule.sh`, a bash daemon with no cron
+underneath it (there is none in this chroot), running three sessions a day of
+two hours at 04:00, 12:00 and 20:00 UTC from `phone1/schedule.conf`. It sleeps
+to the next slot in naps of at most 60 s, each one decided against the wall
+clock because a long `sleep` does not count the time a suspended phone spends
+asleep; it calls `launch.sh $SCHEDULE_DUR`, so the cap lives in a `timeout`
+around every process and survives the scheduler's own death; it writes
+`SCHEDULE_OOM_ADJ` into the organisms; it samples `VmHWM` every 30 s; and at the
+end it calls `stop.sh` on every path, which clears the pid files and releases the
+wake lock. `stop.sh` now skips `schedule.pid`, which lives in the same directory:
+the scheduler must survive the stop it calls itself. A slot whose colony is
+already up — a manual `launch.sh` — is logged as `skipped-running` and left
+alone, and a slot reached more than 1800 s late is not run at all.
+`/usr/local/bin/defender-services.sh` calls `schedule.sh start` after a reboot.
+
+**The gate** (`phone1/schedule_test.sh`): 21 cases driving the real
+`schedule.sh next --epoch` with a fake now — the slot before, at and after a
+boundary, across midnight, across a month end, unsorted lists, a single slot
+wrapping to tomorrow, base-ten hours (`08:09`), a non-UTC host `TZ`, and five
+malformed configurations that must be refused. Broken on purpose twice: with the
+midnight wrap dropped (`c=$((c + 86400))` removed) it reports `13 pass, 8 fail`,
+and with the boundary made exclusive (`-lt` → `-le`) it reports `19 pass, 2 fail`
+naming the boundary and the last minute of the day. Restored: `21 pass, 0 fail`.
+
+**Live, one session of 180 s.** The scheduler was pointed at a slot two minutes
+ahead and left alone. It launched at 20:26:00Z exactly, found all four organisms
+at `oom_score_adj = -1000` and wrote 500 into each, and the session ended by
+itself:
+
+    2026-09-13T20:29:30Z slot=20:26 start=2026-09-13T20:26:00Z
+    end=2026-09-13T20:29:30Z dur=180 elapsed=210 reason=capped alive=-
+    mem_mb=2317->2870 hwm_mb=earth:756,air:783,water:745,fire:636,witness:8
+    samples=7
+
+`elapsed=210` is the 180 s cap plus the sampling interval that noticed it;
+`alive=-` is `stop.sh` confirming an empty field, with `pids/` holding nothing
+but `schedule.pid` afterwards. The four peaks, 636-783 MB after three and a half
+minutes, are the same order as the peaks that killed Termux — reached that fast
+because nothing was born: each organism read its own `molequla_ckpt.json` and
+came back an adult. The whole of the new stdout, per organism:
+
+    [ecology] Element: earth → corpus: nonames_earth.txt
+    [evolution] Autonomous evolution mode — organism will grow through all stages without pause.
+    [ecology] Joined swarm. 1 peer(s) detected.
+    molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.
+    [trainer] warmup for stage 4 (embd=224) — 1600 steps total (1600 backprop + 0 notorch, sqrt-scaled 4x)
+    [evolution] Organism shutting down gracefully (signal).
+
+No `[init] Stage 0 (embryo): embd=16` line anywhere: the embryo path did not run,
+and stage 4 with `embd=224` matches the checkpoint's own `"n_layer":5,"n_embd":224`.
+Also verified: a second `schedule.sh start` is refused while the first daemon
+lives, and a slot whose pid file names a living process is logged
+`reason=skipped-running` with the process untouched.
+
+The daemon is up with the default schedule; `schedule.sh next` says
+`2026-09-14T04:00:00Z`, session 7200 s, ending `2026-09-14T06:00:00Z`.
+
+— Defender (Arianna Method, phone-1)
