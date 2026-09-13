@@ -72,8 +72,13 @@ TMO=""
 
 refused=0
 for e in $ELEMENTS; do
+    # --max-organisms 4: the built-in cap of 16 was written for a pod. Four
+    # trainer processes are what 8 GB holds; the byte gate before growth and
+    # before division handles the minute-to-minute pressure, this is the
+    # declared ceiling on the colony's head count.
     start "$e" "$RUN/$e" $TMO taskset -c 4-7 "$BIN" \
-        --organism-id "$e" --element "$e" --evolution --cross-graze --corpus-overlay \
+        --organism-id "$e" --element "$e" --max-organisms 4 \
+        --evolution --cross-graze --corpus-overlay \
         || refused=$((refused + 1))
     sleep 1
 done

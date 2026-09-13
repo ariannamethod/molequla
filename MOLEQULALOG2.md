@@ -1253,3 +1253,165 @@ rename belongs in whatever commit next touches those lines rather than in a
 cross-agent collision here.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — growth is a memory event, and a session that ends must leave its work on disk
+
+At 19:45-19:47Z all four organisms of the live colony crossed into stage 4
+together — `embd 128→224, layer 4→5, head 4→8`, then `warmup for stage 4 —
+1600 steps` — and each wrote a 110 MB `molequla_ckpt.json` inside those two
+minutes. Per-organism `VmHWM` after that was 758-928 MB against 231-240 MB
+before the step, `MemAvailable` fell to 740 MB with 125 MB of swap left, and at
+19:47:18Z Android's lmkd took `com.termux` and about twenty apps rather than
+the colony: processes started under Magisk su inherit `oom_score_adj=-1000`,
+while Termux sits at 0. The colony survived by being unkillable, which is the
+opposite of what a colony on a phone should be. Everything below is repair 9,
+on `claude/phone1-repair-growth-budget`.
+
+**Where the peak comes from, measured.** `growth_budget_test.go`,
+`TestCheckpointMemoryProfile`, run on `taskset -c 0-3` against a read-only copy
+of earth's checkpoint (105.6 MB on disk, stage 4, 4 814 696 params, vocab 643),
+with `500` written to the test's own `oom_score_adj` first and the whole thing
+refusing to start below 2000 MB of `MemAvailable`:
+
+    LoadCheckpoint:                 RSS 7 → 375 MB (+368), HWM 7 → 375 MB (+368)
+    SaveCheckpoint (streamed):      HWM 376 → 376 MB (+0), wrote 105.6 MB
+    SaveCheckpoint (old encoder):   HWM 184 → 521 MB (+337), 105.6 MB in memory
+
+The old save path paid for the weights three times: a `[][]float64` copy of
+every matrix into a `CheckpointData`, then `json.Encoder`'s own buffer, which
+holds the whole document before a byte reaches the file. `writeCheckpointJSON`
+now streams the same document matrix by matrix through a `bufio.Writer`, so the
+only large allocation alive at once is one row. The two paths are compared byte
+for byte in `TestCheckpointStreamMatchesEncoder`, with the old path kept in the
+test file as the oracle; the format did not change, only the allocations.
+Independently, `TestStage4SavePeak` grows an organism from an embryo to stage 4
+(4 642 654 params, `HWM 8 → 99 MB`) and saves it: streamed `HWM 99 → 177 MB`,
+old path `+319 MB` on top of that.
+
+Those numbers account for the incident. 368 MB of resident model plus 337 MB of
+save transient is 705 MB, against the 520-690 MB per-organism increment actually
+observed, and four organisms doing it inside two minutes is the 3.4 GB.
+
+**The gate.** `growthGateDecision` in `governor_phone.go` is the mitosis gate's
+arithmetic over a different cost: a stage step does not add a process, it
+multiplies this one, so the charge is `CFG.GrowthPeakFactorPct` percent of the
+organism's own `VmHWM` on top of a `CFG.GrowthMinFreeMB` floor. The factor is
+300 because the measured increment over the organism's own peak was
+`(758-231)/231 = 2.28` and `(928-240)/240 = 2.87`, rounded up for headroom; the
+floor is 256, matching `MitosisMinFreeMB`, and either knob at 0 disables the
+gate. `memGateDecision` does the comparison, unchanged, so there is one place
+that parses `/proc` and one place that decides. The gate stands at both growth
+call sites — the tick loop and the bootstrap climb — and a closed gate only
+defers: nothing about the decision is remembered, the stage is still wanted, and
+the next check grows. `GrowthWanted` is the one predicate both the gate and
+`MaybeGrowArchitecture` ask, so the stage arithmetic does not live in two places.
+
+**The colony lock.** `CoordinateWarmup` was the existing serializer and it stays
+off: its `continue` skips the whole tick, which froze three of four organisms in
+2026-06-03. Keeping four stage transitions apart does not cost that, so it is
+its own `growth_lock` row in mesh.db with the same atomic-admit shape as
+`training_lock`, taken before growth and released only after the warmup behind
+it — one memory event spanning ticks, one lock. The TTL is 300 s and the holder
+re-stamps it every 60 s, so the TTL only bounds how long a killed organism's
+lock blocks its siblings. `CFG.CoordinateGrowth` defaults on.
+
+**oom_score_adj.** Every process — organisms and witness, both pass through
+`main` — writes `CFG.OomScoreAdj` (default 300, 0 leaves it untouched) to
+`/proc/self/oom_score_adj` before anything else allocates, and says what it read
+back. Live: `[oom] oom_score_adj=300 (lmkd reaches for the organism before the
+terminal)`, with the shell wrappers around it still showing the inherited -1000.
+
+**The checkpoint on the way out.** After `phone1/stop.sh` at 20:14Z every
+checkpoint on disk still carried its 19:45-19:47Z growth-time mtime, and
+`earth.stdout` ended with a completed warmup phase followed by
+`[evolution] Organism shutting down gracefully (signal)` — the work of those
+minutes never reached the disk. Two things were missing. The exit path now saves
+under `model.mu` and passes `CFG.CkptPath` explicitly rather than `""`, because
+the empty path is the debounced periodic path and a shutdown inside
+`CheckpointMinInterval` of the last burst save writes nothing at all. And
+closing `stop` was never enough: `ntWarmupTrain` holds `model.mu` for its entire
+phase, so the first attempt at this sat on the mutex for 44 s past SIGTERM with
+the checkpoint still untouched, and would have sat there for the rest of the
+1600 steps. `trainAbort` is raised by `waitEvolution` on the signal and read by
+`ntTrainCore` every step; the loop leaves at the next step boundary, `pullBack`
+mirrors what was trained into `model.Base`, and the lock is free. A warmup cut
+short does not set `lastWarmupStage`, so the next session resumes that stage
+instead of walking into it untrained. The first run to survive a SIGTERM then
+announced `[notorch] warmup complete: 640 steps` while the checkpoint it saved
+had moved `global_step` by 174, because the line printed the steps requested
+rather than the steps taken; it now prints the steps that ran and appends
+`(stopped early, N requested)` when the abort cut the phase.
+
+**Gates, each shown red.** `growthGateDecision` made to ignore the factor:
+`open=true need=496, want open need=976`. `AcquireGrowthLock` made to admit
+everyone: `a sibling must be refused while another organism is growing`.
+`applyOomScoreAdj` made to return without writing: `read back "", want "300"`.
+The shutdown save sent through the debounced path: `the shutdown save wrote
+nothing — a SIGTERM'd session loses its work`. The streamed writer's first field
+renamed: `TestCheckpointStreamMatchesEncoder` red on the byte compare. The
+per-step abort check removed: the test never returns and `go test` fails on its
+own timeout at `600.033s`. Suite `CGO_ENABLED=1 taskset -c 0-3 go test -count=1
+-buildvcs=false ./...`: **178 PASS, 0 FAIL**, plus the two heavy measurements,
+which skip unless `MOLEQULA_CKPT_MEASURE` or `MOLEQULA_HEAVY` is set and were
+run and passed above. Baseline was 167.
+
+**Live, three runs, `taskset -c 0-3`, binary built with `-a`.** A stage-4
+organism restored from the checkpoint copy and given 300 s
+(`--element earth --evolution`): `oom_score_adj=300`, `VmHWM` 435 MB at t+40 s
+rising to 673 MB at t+290 s — against 758-928 MB for the same stage during the
+incident — then on SIGTERM
+
+    [evolution] Organism shutting down gracefully (signal).
+    [notorch] warmup complete: 174 steps (stopped early, 640 requested), ...
+    [evolution] checkpoint saved on signal
+
+with the checkpoint mtime moving 20:32:55Z → 20:38:13Z, `global_step` 3264 →
+3438 and `last_warmup_stage` still 3. A fresh embryo on the shipped defaults
+grows through `ONTOGENESIS: stage 0 -> 1` and `1 -> 2` with the gate silent. The
+same fresh embryo under a binary built with `GrowthMinFreeMB` set to 99999 —
+the only way to close the gate on a machine with 2.3 GB free, and not a shipped
+configuration — prints the deferral once per check and keeps ticking at stage 0:
+
+    [growth] deferred: free=2296 MB need=100128 MB
+    [debug-onto] tick=10 corpus=173643 ingested=134553 stage=0 freeze=0
+    [growth] deferred: free=2317 MB need=100194 MB
+
+**Two ceilings, declared rather than inherited.** A byte gate is a reaction to
+the machine minute by minute; the size of the colony and the size of its
+organisms are decisions, and on this phone they were pod defaults nobody chose.
+`CFG.MaxOrganisms` was 16 — sixteen trainer processes on 8 GB — and `--config`
+loads only birth paths, so there was no way to say otherwise at launch. Two
+flags now reach `CFG` in `parseCLIArgs`, before anything allocates:
+`--max-organisms N`, which the cascade governor's atomic admit already reads,
+and `--max-growth-stage N` for the new `CFG.MaxGrowthStage`, which `GrowthWanted`
+refuses to cross and announces once as `[growth] capped at stage N`. The default
+is the last index of `GrowthStages`, so an unset flag changes nothing; a value
+past the table or below zero clamps to the last stage rather than freezing an
+embryo by accident. Both are printed at startup and `phone1/launch.sh` now passes
+`--max-organisms 4`:
+
+    [caps] colony ≤ 4 organisms | growth ≤ stage 0 of 5 (embd=16, layer=1, head=1)
+    [growth] capped at stage 0
+
+— live, once, with the organism carrying on at stage 0 for the rest of the run
+against a corpus (`ingested=134553`) that would otherwise have taken it to stage
+2. The gates: `TestMaxGrowthStageRefusesTheNextStage` grows an organism one stage,
+sets the ceiling to the stage it is standing on and asserts nothing moves, then
+raises the ceiling and asserts it moves again — red as `GrowthWanted must be
+false at the ceiling` when the check is removed. `TestMaxOrganismsOneRefusesTheSecondAdmit`
+refuses a divide at a cap of 1, admits it at 4, and checks that the flags
+actually land in `CFG` — red as `--max-organisms 4 left CFG.MaxOrganisms at 16`
+when the parse is dropped.
+
+**Left, named.** `LoadCheckpoint` still costs 368 MB for a 105 MB checkpoint —
+the decoder buffers the whole document and then materialises `CheckpointData`
+before the `MatrixParam`s — and it was not touched here; streaming the load is a
+second repair. The bootstrap climb of a *fresh* embryo still has no signal
+handler, because `signal.Notify` runs after it; that path saves after each
+completed stage warmup, so only an in-flight first-launch warmup is lost. The
+factor 300 is calibrated on pre-repair peaks that included the 337 MB save
+transient this session removed, which makes the gate conservative rather than
+loose — the right direction, and a number to re-measure once the colony has run
+a stage step under the new binary.
+
+— Defender (Arianna Method, phone-1)

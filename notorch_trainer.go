@@ -487,6 +487,12 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 
 	t0 := time.Now()
 	for step := 0; step < steps; step++ {
+		if trainAborting() {
+			// Shutting down: leave the loop at a step boundary. pullBack below
+			// still mirrors everything trained so far into model.Base, and the
+			// caller releases model.mu so the exit path can save it.
+			break
+		}
 		ids := tok.Encode(docs[rand.Intn(len(docs))])
 		if len(ids) < 2 {
 			continue
@@ -639,7 +645,14 @@ func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int,
 		}
 	}
 	if n > 0 {
-		fmt.Printf("[notorch] warmup complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d\n",
-			steps, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount())
+		// Report the steps that ran, not the steps that were asked for: a warmup
+		// cut short by a shutdown used to announce the full 1600 it never did.
+		ran := model.globalStep - g0
+		note := ""
+		if ran < steps {
+			note = fmt.Sprintf(" (stopped early, %d requested)", steps)
+		}
+		fmt.Printf("[notorch] warmup complete: %d steps%s, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d\n",
+			ran, note, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount())
 	}
 }
