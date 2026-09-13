@@ -688,7 +688,7 @@ The ecology grows itself.
 
 ## Engineering Log
 
-Eight bugs that almost killed the ecology (five interactive-mode + three AML/C integration leaks at ~97 MB/step pre-fix, ~0.6 MB/step post-fix), the CGO cache trap (`go build -a` mandatory), and the full per-commit history of Phase A (GPU), Phase B (graze), Phase C (ecology) — see the first engineering log in git history (`git show 8203d5d^:PROJECT_LOG.md`); the living log is `MOLEQULALOG2.md`.
+Eight bugs that almost killed the ecology (five interactive-mode + three AML/C integration leaks at ~97 MB/step pre-fix, ~0.6 MB/step post-fix), the CGO cache trap (`go build -a` mandatory), and the full per-commit history of Phase A (GPU), Phase B (graze), Phase C (ecology) — see the first engineering log in git history (`git show 8203d5d^:PROJECT_LOG.md`); the living log is `MOLEQULALOG2.md`; what comes next, in order, is `ROADMAP.md`.
 
 ---
 
