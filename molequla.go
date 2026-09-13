@@ -73,6 +73,11 @@ type Config struct {
 	// DNARetainSeconds — the writer prunes its own fragments older than this;
 	// readers never delete (see dna_field.go).
 	DNARetainSeconds float64 `json:"dna_retain_seconds"`
+	// DNARetainFiles — the writer also keeps at most this many of its own
+	// fragments, newest first, whatever their age (repair 5): an embryo emits
+	// ~1.4 fragments/s and the age bound alone lets a directory reach
+	// thousands of files that every sibling ReadDirs every tick. 0 disables.
+	DNARetainFiles int `json:"dna_retain_files"`
 	// TickJitterSeconds — random extra sleep per tick so sibling processes do
 	// not scan the DNA tree in lockstep.
 	TickJitterSeconds float64 `json:"tick_jitter_seconds"`
@@ -270,6 +275,7 @@ var CFG = Config{
 	DNAExtraSources:      nil,  // "world" joins here when the eye writes
 	DNAMaxReadsPerTick:   8,    // repair 3: catch up over ticks, not in one
 	DNARetainSeconds:     1800, // repair 3: the writer prunes its own fragments after 30 min
+	DNARetainFiles:       256,  // repair 5: and keeps at most 256 of them (~1.3 MB at 5 KB each). Tunable; 0 disables.
 	TickJitterSeconds:    0.05, // repair 3: de-phase sibling scans
 	TieEmbeddings:        true,
 	NLayer:               1,
@@ -3761,6 +3767,24 @@ func updateReservoirCorpus(db *sql.DB, corpusPath string, maxLines int) int {
 	msgs := dbRecentMessages(db, 64)
 	newSents := extractCandidateSentences(msgs)
 	if len(newSents) == 0 {
+		// --evolution never writes the messages table (REPL only), so the cap
+		// must hold without it (repair 5). A DNA fragment is one ~5 KB line
+		// and dnaRead appends every one it eats, so the bound is on bytes as
+		// well as lines: maxLines × MaxLineChars is the most loadCorpusLines
+		// can ever hand back from this file. Under both caps the file is left
+		// alone; over either it is rewritten as the reservoir.
+		if maxLines <= 0 {
+			return 0
+		}
+		fi, err := os.Stat(corpusPath)
+		if err != nil {
+			return 0
+		}
+		lines := loadCorpusLines(corpusPath)
+		if len(lines) <= maxLines && fi.Size() <= int64(maxLines)*int64(CFG.MaxLineChars) {
+			return 0
+		}
+		saveCorpusLines(corpusPath, reservoirMixKeep(lines, nil, maxLines))
 		return 0
 	}
 
@@ -5918,7 +5942,7 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	os.WriteFile(fname, []byte(frag+"\n"), 0644)
 	fmt.Printf("[dna] %s wrote %d bytes to ecology\n", element, len(frag))
 	// The writer is the only one that deletes: readers keep cursors (repair 3).
-	dnaPruneOwn(element, time.Duration(CFG.DNARetainSeconds*float64(time.Second)))
+	dnaPruneOwn(element, time.Duration(CFG.DNARetainSeconds*float64(time.Second)), CFG.DNARetainFiles)
 }
 
 // dnaRead eats fragments from every source this organism reads (the other

@@ -181,7 +181,7 @@ func TestDNAFieldWriterPrunesItsOwnByAge(t *testing.T) {
 	if err := os.Chdir(filepath.Join(root, "earth")); err != nil {
 		t.Fatal(err)
 	}
-	if removed := dnaPruneOwn("earth", 30*time.Minute); removed != 1 {
+	if removed := dnaPruneOwn("earth", 30*time.Minute, 0); removed != 1 {
 		t.Fatalf("pruned %d fragments, want 1", removed)
 	}
 	if n := dnaCountFiles(t, root, "earth"); n != 1 {
@@ -190,6 +190,52 @@ func TestDNAFieldWriterPrunesItsOwnByAge(t *testing.T) {
 	// Order of names is numeric, not lexical: step 10 comes after step 9.
 	if !dnaNewer("gen_100_10.txt", "gen_100_9.txt") || dnaNewer("gen_100_9.txt", "gen_100_10.txt") {
 		t.Fatal("fragment order must compare <unix>,<step> numerically")
+	}
+}
+
+// The age bound alone lets an embryo's directory reach thousands of files
+// (~1.4 fragments/s measured); the writer also keeps at most N, newest first.
+func TestDNAFieldWriterKeepsNewestN(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	root, restore := dnaTestTree(t)
+	defer restore()
+	now := time.Now().Unix()
+	for i := 1; i <= 5; i++ { // all fresh; steps 1..5, step 10 last to test numeric order
+		dnaWriteFragment(t, root, "earth", "gen_"+itoa64(now-60)+"_"+itoa64(int64(i))+".txt", dnaTestFrags[i%3])
+	}
+	dnaWriteFragment(t, root, "earth", "gen_"+itoa64(now-60)+"_10.txt", dnaTestFrags[0])
+	if err := os.Chdir(filepath.Join(root, "earth")); err != nil {
+		t.Fatal(err)
+	}
+	if removed := dnaPruneOwn("earth", 30*time.Minute, 3); removed != 3 {
+		t.Fatalf("pruned %d fragments, want 3 (six fresh, keep three)", removed)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "dna", "output", "earth"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	want := map[string]bool{
+		"gen_" + itoa64(now-60) + "_4.txt":  true,
+		"gen_" + itoa64(now-60) + "_5.txt":  true,
+		"gen_" + itoa64(now-60) + "_10.txt": true,
+	}
+	if len(left) != 3 {
+		t.Fatalf("%d fragments left, want 3: %v", len(left), left)
+	}
+	for _, name := range left {
+		if !want[name] {
+			t.Fatalf("kept %s, want the three newest by numeric order (4, 5, 10): %v", name, left)
+		}
+	}
+	// keep = 0 leaves the count unbounded; the age bound still applies.
+	if removed := dnaPruneOwn("earth", 30*time.Minute, 0); removed != 0 {
+		t.Fatalf("keep=0 must not prune fresh fragments, removed %d", removed)
 	}
 }
 
