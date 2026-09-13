@@ -1,0 +1,12 @@
+# model weights — never committed, fetched separately (see README)
+models/
+*.gguf
+
+# build artifacts
+ocelli
+ocelli_asan
+*.o
+*.dSYM/
+
+# local scratch
+*.png.txt
