@@ -163,8 +163,8 @@ func dnaListNew(dir, last string) []string {
 // <unix> in the file name. The writer is the only one allowed to delete; a
 // reader that fell behind by more than retain loses the oldest fragments and
 // nothing else.
-func dnaPruneOwn(element string, retain time.Duration) int {
-	if element == "" || retain <= 0 {
+func dnaPruneOwn(element string, retain time.Duration, keep int) int {
+	if element == "" || (retain <= 0 && keep <= 0) {
 		return 0
 	}
 	dir := filepath.Join("../dna/output", element)
@@ -172,18 +172,36 @@ func dnaPruneOwn(element string, retain time.Duration) int {
 	if err != nil {
 		return 0
 	}
-	cutoff := time.Now().Add(-retain).Unix()
+	cutoff := int64(0)
+	if retain > 0 {
+		cutoff = time.Now().Add(-retain).Unix()
+	}
 	removed := 0
+	var kept []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		u, _, ok := dnaFragOrder(e.Name())
-		if !ok || u >= cutoff {
+		if !ok {
 			continue
 		}
-		if os.Remove(filepath.Join(dir, e.Name())) == nil {
-			removed++
+		if u < cutoff {
+			if os.Remove(filepath.Join(dir, e.Name())) == nil {
+				removed++
+			}
+			continue
+		}
+		kept = append(kept, e.Name())
+	}
+	// Count bound (repair 5): of what the age bound left, keep the newest
+	// `keep` fragments and drop the rest, oldest first.
+	if keep > 0 && len(kept) > keep {
+		sort.Slice(kept, func(i, j int) bool { return dnaNewer(kept[j], kept[i]) }) // oldest first
+		for _, name := range kept[:len(kept)-keep] {
+			if os.Remove(filepath.Join(dir, name)) == nil {
+				removed++
+			}
 		}
 	}
 	return removed

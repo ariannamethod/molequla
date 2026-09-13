@@ -26,7 +26,7 @@ WHAT THIS IS:
 - Trainer: notorch tape (Chuck, **canonical** — `notorch_trainer.go` + `cgo_notorch.go`, GPU on CUDA / CPU otherwise) + AML/C autograd via CGO (~8000 lines, fallback via `--trainer aml`)
 - AML — a custom programming language for differentiable computation
 - Ontogenesis: embryo (10K params) → adult (10M params) — minutes on a seeded corpus, hours under natural cross-graze feed
-- DNA exchange: organisms write generated text for others to consume
+- DNA exchange: organisms write generated text for others to consume. The tree is a field, not a queue: readers keep cursors, the writer prunes its own output to the last 30 min and at most 256 fragments, and every organism's corpus is a reservoir capped at `max_corpus_lines` (8000) lines and `max_corpus_lines × max_line_chars` bytes in every mode, `--evolution` included
 - Consciousness: 5 implemented features (dissonance, pattern breaking,
   self-prediction error, conscience, immune system)
 - Self-meta-learning: organism tracks which actions improve loss,

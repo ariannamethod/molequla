@@ -666,3 +666,79 @@ bound the colony until then. The 256 MB floor is a tunable, not a measurement;
 the child's cost is measured at runtime from the parent's own peak.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 5: the corpus is a reservoir in every mode, and the writer keeps 256
+
+Branch `claude/phone1-repair-cap`, on top of `8203d5d` (main after #33 and
+the removal of `PROJECT_LOG.md`). Files: `molequla.go` (reservoir trim, config,
+`dnaWrite`), `dna_field.go` (`dnaPruneOwn`), `corpus_cap_test.go` (new),
+`dna_field_test.go` (one test added), `README.md` (DNA-exchange bullet),
+`CLAUDE.md` (the first book now lives in git history).
+
+**What the audit named (A, P0-4 and P1-2).** `updateReservoirCorpus` is the
+only place `CFG.MaxCorpusLines` is applied, and it returned before touching
+the file whenever `extractCandidateSentences(dbRecentMessages(db, 64))` was
+empty. The `messages` table is written only by the REPL, which `--evolution`
+never enters, while `dnaRead` appends every fragment it eats with `O_APPEND`
+(molequla.go:5990). So in the one mode the ecology runs in the corpus file was
+append-only and uncapped, and every 30 ticks the loop re-read all of it and
+rebuilt the co-occurrence field over it, holding two fields at the swap. On
+this phone: the first colony (1200 s, `run1`) left air at 3240978 B against
+a 122316 B seed; the governor colony (600 s, `run8`) left earth at 552269 B
+and fire at 526267 B against 173643 and 121900. A second shape of growth: a
+DNA fragment is one ~5 KB line, so none of those files was anywhere near
+8000 lines (1505-2805, `wc -l`) — a cap on lines alone would not have fired
+at 3.2 MB.
+
+**The repair.** With no REPL sentences the trim now runs on its own
+(molequla.go:3766-3789): the file is rewritten as the reservoir
+(`reservoirMixKeep`, newest half kept, the rest sampled) when it holds more
+than `MaxCorpusLines` lines or more than `MaxCorpusLines × MaxLineChars`
+bytes — the most `loadCorpusLines` can ever hand back, since it truncates
+every line at `MaxLineChars` — and is left alone byte for byte under both.
+`dnaPruneOwn(element, retain, keep)` (dna_field.go:166) adds a count bound
+beside repair 3's age bound: of what the age bound leaves, the newest `keep`
+fragments stay and the rest go, oldest first by the numeric `<unix>,<step>`
+order. `CFG.DNARetainFiles` (:80, default 256 at :278, 0 disables), passed by
+`dnaWrite` (:5945). The single-organism embryo run of the landing entry wrote
+1297 fragments in 900 s; at that rate the 30-minute age bound alone lets a
+directory that every sibling `ReadDir`s every tick reach ~2600 files, and 256
+is ~3 minutes of embryo emission or ~40 minutes at the child rate measured
+below (10 files per 600 s). A tunable, stated as one.
+
+**Gates.** `TestCorpusCapHoldsWithoutMessages` — written first and red on
+the previous code (`corpus holds 120 lines after the periodic trim, cap is
+50`); now: 120 lines against a cap of 50 are trimmed and a second pass
+changes nothing; ten 5400-char lines against 50 × 240 bytes are rewritten
+under the byte cap; three short lines are left byte for byte.
+`TestDNAFieldWriterKeepsNewestN` — six fresh fragments, keep three: the three
+newest by numeric order (steps 4, 5, 10) remain, `keep = 0` prunes nothing.
+Suite: 156 PASS, 0 FAIL.
+
+**The trim on a real file.** The real `updateReservoirCorpus` applied
+(temporary test, tool output, not in the tree) to a copy of `run1`'s air
+corpus at defaults (`MaxCorpusLines` 8000, `MaxLineChars` 240, byte cap
+1920000):
+
+| | bytes | non-empty lines |
+|---|---|---|
+| before | 3240978 | 1610 |
+| after one trim | 257271 | 1572 |
+
+The byte cap fired, the lines came back at 240 chars, dedup removed 38.
+
+**Colony of four, 600 s, on the repaired binary (`run9_cap`, corpus and DNA
+tree sampled every 10 s).** All four reached child, NaN 0. Corpus peaks
+earth 496561 B, air 460840, fire 476172, water 237340 — all under the
+1920000 B cap, so no trim fired and every file was left alone, the same
+sizes to within the run's variance as `run8` (552269 / 329450 / 526267 /
+217439). DNA directories ended at 10, 10, 50, 10 files — under 256. At the
+default policy the caps are not reached in ten minutes; they are the bound
+on the days-long run the launch entry will measure, and they were gated
+here on the unit tests and the real 3.2 MB file.
+
+**Left for repair 6 and 8.** README:528 still describes the `dna/seen/`
+mirror that repair 3 removed; README:41, :439, :686, :748, :810 cite
+`PROJECT_LOG.md`, which left the tree in `8203d5d`.
+
+— Defender (Arianna Method, phone-1)
