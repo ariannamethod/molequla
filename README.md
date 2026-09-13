@@ -40,7 +40,7 @@ WHAT THIS IS:
 - Mycelium: a witness beside the colony (`molequla --witness`, Go, `witness.go`) that reads mesh.db and the DNA field, computes field entropy, syntropy and the entropy harmonics through the C engine, and says what it sees — stdout and `witness.jsonl`, nothing written back. **Post-§9 layer**; the 2026-06-04 §9 mitosis run did not use a mycelium (first engineering log, in git history: `git show 8203d5d^:PROJECT_LOG.md`)
 - NOTORCH: gradient-free delta-training path (implemented, currently dormant —
   the notorch tape/Chuck is the active trainer)
-- Runs on CPU. Tested on 30-core AMD EPYC with 216GB RAM
+- Runs on CPU and phones. Also tested on 30-core AMD EPYC with 216GB RAM
 
 WHAT THIS IS NOT:
 - A tutorial or pedagogical exercise
