@@ -130,6 +130,12 @@ func TestBeatKeeperRefreshesMeshWithoutTicks(t *testing.T) {
 // Hibernation ends the trainer loop; main must end with it instead of parking
 // on a signal that never comes.
 func TestWaitEvolutionEndsWhenTrainerExits(t *testing.T) {
+	// trainAbort is process-global and, in a live organism, never lowered again;
+	// a test that raises it must put it back or every trainer test after this one
+	// returns without a step.
+	trainAbort.Store(false)
+	defer trainAbort.Store(false)
+
 	sigCh := make(chan os.Signal, 1)
 	done := make(chan struct{})
 	stop := make(chan struct{})
@@ -149,6 +155,9 @@ func TestWaitEvolutionEndsWhenTrainerExits(t *testing.T) {
 		t.Fatal("stop must stay open when the trainer already exited")
 	default:
 	}
+	if trainAborting() {
+		t.Fatal("a trainer that exited on its own must not raise the shutdown abort")
+	}
 
 	sigCh2 := make(chan os.Signal, 1)
 	stop2 := make(chan struct{})
@@ -160,5 +169,10 @@ func TestWaitEvolutionEndsWhenTrainerExits(t *testing.T) {
 	case <-stop2:
 	default:
 		t.Fatal("a signal must close stop so the trainer winds down")
+	}
+	// Closing stop is not enough on its own: a warmup holds model.mu for its
+	// whole phase, so the step loop has to be told to stop too.
+	if !trainAborting() {
+		t.Fatal("a signal must raise the train abort, or the exit path waits on model.mu")
 	}
 }

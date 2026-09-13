@@ -226,8 +226,13 @@ type Config struct {
 	OverloadLossHigh       float64 `json:"overload_loss_high"`        // adult mitosis: mean recent burst loss above this = overwhelmed (confidently-wrong)
 	OverloadLossEps        float64 `json:"overload_loss_eps"`         // adult mitosis: loss-delta floor; meanDelta > -eps = bursts not reducing loss
 	OverloadLossWindow     int     `json:"overload_loss_window"`      // adult mitosis: # recent bursts for lossOverload (decoupled from SyntropyWindow: adult bursts are ~17min apart, so 8 would take ~2.3h; entropy is per-tick, loss is per-burst)
-	MaxOrganisms           int     `json:"max_organisms"`             // cascade governor: hard ceiling on live colony size, checked before divide (0 = uncapped). The per-process 300s cooldown cannot bound a multi-process lineage; this is the OOM/SIGKILL backstop.
+	MaxOrganisms           int     `json:"max_organisms"`             // cascade governor: hard ceiling on live colony size, checked before divide (0 = uncapped). The per-process 300s cooldown cannot bound a multi-process lineage; this is the OOM/SIGKILL backstop. --max-organisms N overrides it (phone-1 passes 4).
+	MaxGrowthStage         int     `json:"max_growth_stage"`          // repair 9: hard ceiling on ontogenesis — the organism never grows past this GrowthStages index. Default is the last stage, so unset means unchanged behaviour; --max-growth-stage N overrides it. The byte gate protects the machine moment by moment; this makes the ceiling explicit.
 	MitosisMinFreeMB       int     `json:"mitosis_min_free_mb"`       // byte gate before divide (repair 4): MemAvailable must be >= this floor + the parent's own peak RSS (VmHWM), the measured cost of the child it spawns. 0 disables.
+	GrowthMinFreeMB        int     `json:"growth_min_free_mb"`        // byte gate before ontogenesis (repair 9): MemAvailable must be >= this floor + GrowthPeakFactorPct% of the organism's own peak RSS. 0 disables.
+	GrowthPeakFactorPct    int     `json:"growth_peak_factor_pct"`    // repair 9: what one stage step costs, as a percentage of the organism's current peak RSS. Measured, not guessed — see MOLEQULALOG2.md 2026-09-13.
+	CoordinateGrowth       bool    `json:"coordinate_growth"`         // repair 9: hold a colony-wide lock across growth AND the warmup that follows, so four siblings do not peak together. Unlike CoordinateWarmup this does not serialize the micro-bursts.
+	OomScoreAdj            int     `json:"oom_score_adj"`             // repair 9: value written to /proc/self/oom_score_adj at startup. Magisk su hands down -1000, which makes the colony unkillable and feeds Termux to lmkd instead. 0 = leave untouched.
 	CheckpointMinInterval  float64 `json:"checkpoint_min_interval"`   // write-storm throttle: min seconds between DEFAULT-path (periodic) full-model JSON checkpoints (0 = no throttle). Explicit-path saves (mitosis parent ckpt) are never throttled.
 
 	// consciousness: per-token dissonance feedback
@@ -348,8 +353,13 @@ var CFG = Config{
 	OverloadLossHigh:       5.0,  // healthy adult QuickLoss ~3.6; overwhelmed adult 5.3 (resume) climbing to 8-9 under cross-graze → 5.0 floor captures the regime, clears healthy
 	OverloadLossEps:        0.05, // loss-delta within ±0.05 of zero = not improving
 	OverloadLossWindow:     3,    // 3 sustained high-loss adult bursts = overwhelmed (burst cadence ~17min at adult; 8 would take ~2.3h)
-	MaxOrganisms:           16,   // cascade cap: ≤16 live organisms (each is a full trainer process). Tunable; 0 disables.
+	MaxOrganisms:           16,   // cascade cap: ≤16 live organisms (each is a full trainer process). Tunable; 0 disables. Phone-1 launches with --max-organisms 4.
+	MaxGrowthStage:         5,    // last index of GrowthStages above: adult, no cap. --max-growth-stage 4 keeps a phone colony at teen.
 	MitosisMinFreeMB:       256,  // headroom left to the machine after a child the size of the parent's peak RSS is added. Tunable; 0 disables.
+	GrowthMinFreeMB:        256,  // headroom left to the machine after one stage step. Tunable; 0 disables.
+	GrowthPeakFactorPct:    300,  // a stage step multiplied VmHWM by ~3.3-3.9x on 2026-09-13 (231-240 MB -> 758-928 MB per organism); charge 300% of the current peak for the increment.
+	CoordinateGrowth:       true, // growth + warmup serialized colony-wide; the micro-burst path stays parallel (that is CoordinateWarmup, still off).
+	OomScoreAdj:            300,  // lmkd takes the organism before Termux (which sits at 0). Tunable; 0 = leave untouched.
 	CheckpointMinInterval:  30.0, // throttle periodic full-model checkpoints to ≤1/30s (coalesces the growth/burst storm). Tunable; 0 disables. Mitosis ckpt (explicit path) bypasses.
 
 	// consciousness defaults
@@ -1810,7 +1820,8 @@ type GPT struct {
 	globalStep       int     // global training step counter (for cosine LR + checkpoint)
 	syntropyTempOff  float64 // temperature offset from syntropy state (-0.05 to +0.05)
 
-	growthFreezeRemaining int // ontogenesis: freeze base after growth, train only deltas
+	growthFreezeRemaining int  // ontogenesis: freeze base after growth, train only deltas
+	growthCapLogged       bool // the MaxGrowthStage ceiling is announced once, not every check (repair 9)
 	growthStepOffset      int // reset to globalStep on each growth — for LR warmup phase
 	lastWarmupStage       int // last stage that completed warmup (-1 = none)
 	corpusIngestedTotal   int // ontogenesis growth clock: monotonic Σ of all text ever ingested (seed + dnaRead). Replaces reservoir file size as the stage gate.
@@ -2202,8 +2213,11 @@ func (gpt *GPT) TargetGrowthStage(corpusChars int) int {
 	return target
 }
 
-// MaybeGrowArchitecture checks if growth is needed and executes it. Returns true if grew.
-func (gpt *GPT) MaybeGrowArchitecture() bool {
+// GrowthWanted reports whether MaybeGrowArchitecture would grow right now. It is
+// the same three conditions, in one place, so the callers that must gate growth
+// on memory or on a colony lock ask before paying for it instead of repeating the
+// stage arithmetic (the duplicated-invariant bug, CLAUDE.md).
+func (gpt *GPT) GrowthWanted() bool {
 	current := gpt.CurrentGrowthStage()
 	if current < 0 {
 		return false // legacy checkpoint, skip growth
@@ -2211,12 +2225,40 @@ func (gpt *GPT) MaybeGrowArchitecture() bool {
 	if gpt.growthFreezeRemaining > 0 {
 		return false // still stabilizing from last growth
 	}
-	target := gpt.TargetGrowthStage(gpt.corpusIngestedTotal)
-	if target <= current {
+	if gpt.TargetGrowthStage(gpt.corpusIngestedTotal) <= current {
 		return false
 	}
+	// The declared ceiling. The byte gate defers a step the machine cannot
+	// afford this minute; this one is permanent, and it is what keeps a phone
+	// colony off a stage nobody chose for it. Said once, not every ten ticks.
+	if current >= maxGrowthStage() {
+		if !gpt.growthCapLogged {
+			gpt.growthCapLogged = true
+			fmt.Printf("[growth] capped at stage %d\n", maxGrowthStage())
+		}
+		return false
+	}
+	return true
+}
+
+// maxGrowthStage is CFG.MaxGrowthStage clamped to the growth table: a value past
+// the last stage, or a negative one, is no cap at all.
+func maxGrowthStage() int {
+	last := len(CFG.GrowthStages) - 1
+	if CFG.MaxGrowthStage < 0 || CFG.MaxGrowthStage > last {
+		return last
+	}
+	return CFG.MaxGrowthStage
+}
+
+// MaybeGrowArchitecture checks if growth is needed and executes it. Returns true if grew.
+func (gpt *GPT) MaybeGrowArchitecture() bool {
+	if !gpt.GrowthWanted() {
+		return false
+	}
+	current := gpt.CurrentGrowthStage()
 	// Grow only one stage at a time — prevent catastrophic multi-stage jumps
-	target = current + 1
+	target := current + 1
 
 	newEmbd := CFG.GrowthStages[target][1]
 	newLayer := CFG.GrowthStages[target][2]
@@ -3493,61 +3535,192 @@ func SaveCheckpoint(model *GPT, tok *EvolvingTokenizer, path string) error {
 		path = CFG.CkptPath
 	}
 
-	merges := make([][]string, len(tok.Merges))
-	for i, m := range tok.Merges {
-		merges[i] = []string{m.A, m.B}
-	}
-
-	cfgJSON, _ := json.Marshal(CFG)
-
-	base := make(map[string][][]float64)
-	for k, v := range model.Base {
-		base[k] = serializeMatrixParam(v)
-	}
-
-	deltas := make([]map[string]DeltaJSON, len(model.Deltas))
-	for i, mod := range model.Deltas {
-		dm := make(map[string]DeltaJSON)
-		for name, da := range mod {
-			dm[name] = DeltaJSON{
-				A: serializeMatrixParam(da.A),
-				B: serializeMatrixParam(da.B),
-			}
-		}
-		deltas[i] = dm
-	}
-
-	ckpt := CheckpointData{
-		Cfg: cfgJSON,
-		Tokenizer: TokenizerJSON{
-			Tokens:       tok.Tokens,
-			BPEEnabled:   tok.BPEEnabled,
-			Merges:       merges,
-			TrainedChars: tok.TrainedChars,
-		},
-		Base:              base,
-		Alpha:             model.ActiveAlpha,
-		Deltas:            deltas,
-		InitEmbedSnapshot: model.InitEmbedSnapshot,
-		GlobalStep:        model.globalStep,
-		GrowthStepOffset:  model.growthStepOffset,
-		LastWarmupStage:   intPtr(model.lastWarmupStage),
-		CorpusIngestedTotal: model.corpusIngestedTotal,
-	}
-
 	// Atomic write: temp file + rename (prevents corruption on crash)
 	tmpPath := path + ".tmp"
 	f, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
-	err = json.NewEncoder(f).Encode(ckpt)
+	bw := bufio.NewWriterSize(f, 1<<20)
+	err = writeCheckpointJSON(bw, model, tok)
+	if err == nil {
+		err = bw.Flush()
+	}
 	f.Close()
 	if err != nil {
 		os.Remove(tmpPath)
 		return err
 	}
 	return os.Rename(tmpPath, path)
+}
+
+// writeCheckpointJSON streams the checkpoint that CheckpointData describes,
+// matrix by matrix, instead of building one (repair 9). The old path paid for
+// the weights three times over: a [][]float64 copy of every matrix in a
+// CheckpointData, then json.Encoder's own buffer, which holds the entire
+// document — 110 MB for a stage-4 organism — before a byte reaches the file.
+// Four organisms doing that within two minutes is what took the phone's
+// userspace down on 2026-09-13. Here the only large allocation alive at once is
+// one row. The bytes are identical to the old encoder's; checkpoint_stream_test
+// compares them.
+func writeCheckpointJSON(bw *bufio.Writer, model *GPT, tok *EvolvingTokenizer) error {
+	cfgJSON, err := json.Marshal(CFG)
+	if err != nil {
+		return err
+	}
+	merges := make([][]string, len(tok.Merges))
+	for i, m := range tok.Merges {
+		merges[i] = []string{m.A, m.B}
+	}
+	tokJSON, err := json.Marshal(TokenizerJSON{
+		Tokens:       tok.Tokens,
+		BPEEnabled:   tok.BPEEnabled,
+		Merges:       merges,
+		TrainedChars: tok.TrainedChars,
+	})
+	if err != nil {
+		return err
+	}
+	bw.WriteString(`{"cfg":`)
+	bw.Write(cfgJSON)
+	bw.WriteString(`,"tokenizer":`)
+	bw.Write(tokJSON)
+
+	// Map keys are emitted in sorted order, as encoding/json does. The map itself
+	// is always an object, never null: the old path copied into a fresh map.
+	bw.WriteString(`,"base":{`)
+	names := make([]string, 0, len(model.Base))
+	for k := range model.Base {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for i, k := range names {
+		if i > 0 {
+			bw.WriteString(",")
+		}
+		key, err := json.Marshal(k)
+		if err != nil {
+			return err
+		}
+		bw.Write(key)
+		bw.WriteString(":")
+		if err := writeMatrixParamJSON(bw, model.Base[k]); err != nil {
+			return err
+		}
+	}
+	bw.WriteString("}")
+
+	alpha, err := json.Marshal(model.ActiveAlpha)
+	if err != nil {
+		return err
+	}
+	bw.WriteString(`,"alpha":`)
+	bw.Write(alpha)
+
+	// Likewise a slice of the same length, never null.
+	bw.WriteString(`,"deltas":[`)
+	for i, mod := range model.Deltas {
+		if i > 0 {
+			bw.WriteString(",")
+		}
+		dnames := make([]string, 0, len(mod))
+		for k := range mod {
+			dnames = append(dnames, k)
+		}
+		sort.Strings(dnames)
+		bw.WriteString("{")
+		for j, k := range dnames {
+			if j > 0 {
+				bw.WriteString(",")
+			}
+			key, err := json.Marshal(k)
+			if err != nil {
+				return err
+			}
+			bw.Write(key)
+			bw.WriteString(`:{"A":`)
+			if err := writeMatrixParamJSON(bw, mod[k].A); err != nil {
+				return err
+			}
+			bw.WriteString(`,"B":`)
+			if err := writeMatrixParamJSON(bw, mod[k].B); err != nil {
+				return err
+			}
+			bw.WriteString("}")
+		}
+		bw.WriteString("}")
+	}
+	bw.WriteString("]")
+
+	if len(model.InitEmbedSnapshot) > 0 { // json:"...,omitempty"
+		snap, err := json.Marshal(model.InitEmbedSnapshot)
+		if err != nil {
+			return err
+		}
+		bw.WriteString(`,"init_embed_snapshot":`)
+		bw.Write(snap)
+	}
+	fmt.Fprintf(bw, `,"global_step":%d,"growth_step_offset":%d,"last_warmup_stage":%d,"corpus_ingested_total":%d}`+"\n",
+		model.globalStep, model.growthStepOffset, model.lastWarmupStage, model.corpusIngestedTotal)
+	return nil
+}
+
+// writeMatrixParamJSON emits what serializeMatrixParam would have produced, one
+// row at a time: Nout rows, a missing row as null (the nil slot make() leaves),
+// an empty row as [] (the empty slice make(...,0) produces).
+func writeMatrixParamJSON(bw *bufio.Writer, mp *MatrixParam) error {
+	if mp == nil {
+		bw.WriteString("null")
+		return nil
+	}
+	bw.WriteString("[")
+	for i := 0; i < mp.Nout; i++ {
+		if i > 0 {
+			bw.WriteString(",")
+		}
+		if i >= len(mp.Rows) || mp.Rows[i] == nil {
+			bw.WriteString("null")
+			continue
+		}
+		if len(mp.Rows[i].Data) == 0 {
+			bw.WriteString("[]")
+			continue
+		}
+		row, err := json.Marshal(mp.Rows[i].Data)
+		if err != nil {
+			return err
+		}
+		if _, err := bw.Write(row); err != nil {
+			return err
+		}
+	}
+	bw.WriteString("]")
+	return nil
+}
+
+// shutdownDrain is how long the process waits for the trainer loop to answer the
+// signal before saving anyway. Long enough for a tick, far shorter than a warmup.
+const shutdownDrain = 10 * time.Second
+
+// saveOnShutdown writes the organism's state on the way out of evolution mode.
+// It passes CFG.CkptPath explicitly rather than "": the empty path is the
+// debounced periodic path, and a shutdown that lands within CheckpointMinInterval
+// of the last burst save would be silently dropped — which is the whole failure
+// this repairs. A session that ends every time by SIGTERM (capped runs) keeps its
+// progress only here.
+func saveOnShutdown(model *GPT, tok *EvolvingTokenizer, why string) {
+	path := CFG.CkptPath
+	if path == "" {
+		path = "molequla_ckpt.json"
+	}
+	model.mu.Lock()
+	err := SaveCheckpoint(model, tok, path)
+	model.mu.Unlock()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[evolution] checkpoint NOT saved on %s: %v\n", why, err)
+		return
+	}
+	fmt.Printf("[evolution] checkpoint saved on %s\n", why)
 }
 
 func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error) {
@@ -5102,6 +5275,8 @@ type SwarmRegistry struct {
 	PidFile    string
 	MeshDB     *sql.DB
 	keeper     *beatKeeper // repeats the last heartbeat on its own clock (repair 4)
+	growthMu   sync.Mutex
+	growthStop chan struct{} // closed by ReleaseGrowthLock; stops the lock refresher (repair 9)
 }
 
 // StartKeeper launches the heartbeat keeper: from now until stop closes, the
@@ -5181,6 +5356,12 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		return err
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS mitosis_lock(
+		organism_id TEXT PRIMARY KEY, acquired_at REAL)`)
+	if err != nil {
+		db.Close()
+		return err
+	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS growth_lock(
 		organism_id TEXT PRIMARY KEY, acquired_at REAL)`)
 	if err != nil {
 		db.Close()
@@ -5356,6 +5537,89 @@ func (sr *SwarmRegistry) ReleaseTrainingLock() {
 		return
 	}
 	sr.MeshDB.Exec("DELETE FROM training_lock WHERE organism_id=?", sr.OrganismID)
+}
+
+// The growth lock is the training lock's shape over a longer event. Growth and
+// the warmup behind it are one memory peak lasting minutes, so the TTL is minutes
+// and the holder re-stamps it on a ticker; the TTL only bounds how long a lock
+// left by a killed organism blocks its siblings. It is a separate table from
+// training_lock on purpose: CoordinateWarmup serializes every micro-burst, which
+// cost 3 of 4 organisms their whole tick (2026-06-03), and that is not the price
+// of keeping four stage transitions apart.
+const (
+	growthLockTTL     = 300.0
+	growthLockRefresh = 60 * time.Second
+)
+
+// AcquireGrowthLock admits one grower at a time across the colony. No mesh = solo
+// = always admitted. On success a refresher keeps the lock fresh until Release.
+func (sr *SwarmRegistry) AcquireGrowthLock() bool {
+	if sr.MeshDB == nil {
+		return true
+	}
+	now := float64(time.Now().UnixMilli()) / 1000.0
+	cutoff := now - growthLockTTL
+	result, err := sr.MeshDB.Exec(
+		`INSERT OR REPLACE INTO growth_lock(organism_id, acquired_at)
+		 SELECT ?, ? WHERE NOT EXISTS (
+		   SELECT 1 FROM growth_lock WHERE organism_id != ? AND acquired_at > ?
+		 )`,
+		sr.OrganismID, now, sr.OrganismID, cutoff)
+	if err != nil {
+		return false
+	}
+	rows, _ := result.RowsAffected()
+	if rows <= 0 {
+		return false
+	}
+	sr.startGrowthRefresh()
+	return true
+}
+
+// RefreshGrowthLock re-stamps the holder's row. A row that is not the holder's is
+// never touched, so a refresh cannot steal a lock.
+func (sr *SwarmRegistry) RefreshGrowthLock() {
+	if sr.MeshDB == nil {
+		return
+	}
+	sr.MeshDB.Exec("UPDATE growth_lock SET acquired_at=? WHERE organism_id=?",
+		float64(time.Now().UnixMilli())/1000.0, sr.OrganismID)
+}
+
+func (sr *SwarmRegistry) startGrowthRefresh() {
+	sr.growthMu.Lock()
+	defer sr.growthMu.Unlock()
+	if sr.growthStop != nil {
+		return // already refreshing
+	}
+	stop := make(chan struct{})
+	sr.growthStop = stop
+	go func() {
+		t := time.NewTicker(growthLockRefresh)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				sr.RefreshGrowthLock()
+			}
+		}
+	}()
+}
+
+// ReleaseGrowthLock stops the refresher and frees the lock for the next sibling.
+func (sr *SwarmRegistry) ReleaseGrowthLock() {
+	sr.growthMu.Lock()
+	if sr.growthStop != nil {
+		close(sr.growthStop)
+		sr.growthStop = nil
+	}
+	sr.growthMu.Unlock()
+	if sr.MeshDB == nil {
+		return
+	}
+	sr.MeshDB.Exec("DELETE FROM growth_lock WHERE organism_id=?", sr.OrganismID)
 }
 
 // performMitosis divides the organism. Parent continues. The child inherits the
@@ -5993,6 +6257,22 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 			i++
 		} else if os.Args[i] == "--once" {
 			witnessOnce = true
+		} else if os.Args[i] == "--max-organisms" && i+1 < len(os.Args) {
+			// Hard ceiling on the live colony, the cascade governor's admit
+			// count. The default 16 was written for a pod; a phone passes 4.
+			if v, err := strconv.Atoi(os.Args[i+1]); err == nil && v >= 0 {
+				CFG.MaxOrganisms = v
+			}
+			i++
+		} else if os.Args[i] == "--max-growth-stage" && i+1 < len(os.Args) {
+			// Hard ceiling on ontogenesis: the organism stops at this stage
+			// index whatever the corpus says. Clamped in main against the
+			// growth table; the default is the last stage, so unset changes
+			// nothing.
+			if v, err := strconv.Atoi(os.Args[i+1]); err == nil && v >= 0 {
+				CFG.MaxGrowthStage = v
+			}
+			i++
 		} else if os.Args[i] == "--cross-graze" {
 			// Dario-style cross-organism logit injection — read sibling DNA
 			// emissions mirrored to ../dna/seen/<sibling>/ and boost their
@@ -6028,6 +6308,16 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 	tickCount := 0
 	var docs []string     // persists across ticks; reloaded throttled (see loop)
 	lastFieldRebuild := -1 // tick of last corpus reload + field rebuild
+	// Growth and the warmup behind it are one memory event spanning ticks, so the
+	// colony lock taken before growth is released only after the warmup (repair 9).
+	growthLockHeld := false
+	releaseGrowth := func() {
+		if growthLockHeld && swarm != nil {
+			swarm.ReleaseGrowthLock()
+		}
+		growthLockHeld = false
+	}
+	defer releaseGrowth()
 	// Stage-gated GPU: tiny stages run faster on CPU (kernel-launch overhead
 	// dwarfs the small matmuls — measured 8 steps/s on GPU at child vs ~90 on
 	// CPU); GPU pays off only at teen/adult. Match the current (seed) stage.
@@ -6111,7 +6401,12 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// notorchTrainSteps DISABLED in warmup — diverges at stage 5 (loss 3.5→116)
 			// notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)
 			model.mu.Lock()
-			model.lastWarmupStage = currentStage
+			// A warmup cut short by a shutdown is not a warmup done: leaving
+			// lastWarmupStage behind means the next session resumes it instead of
+			// walking into the stage untrained.
+			if !trainAborting() {
+				model.lastWarmupStage = currentStage
+			}
 			SaveCheckpoint(model, tok, "")
 			model.mu.Unlock()
 
@@ -6120,6 +6415,11 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			}
 			dbLogGrowth(db, model, tok, docs, 0.0, fmt.Sprintf("warmup_stage_%d", currentStage))
 			fmt.Printf("[trainer] warmup complete at stage %d. base may freeze now, like a proud fossil.\n", currentStage)
+			releaseGrowth() // the peak is over — the next sibling may grow
+		} else {
+			// Nothing to warm up (no corpus, or the stage is already warmed): the
+			// growth lock must not outlive the event it was taken for.
+			releaseGrowth()
 		}
 
 		if model.lastWarmupStage >= 0 && qbuf.ShouldTrigger() && len(docs) > 0 {
@@ -6278,16 +6578,36 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			}
 			model.mu.Lock()
 			fmt.Printf("[debug-onto] tick=%d corpus=%d ingested=%d stage=%d freeze=%d\n", tickCount, corpusChars, model.corpusIngestedTotal, model.CurrentGrowthStage(), model.growthFreezeRemaining)
-			if model.MaybeGrowArchitecture() {
-				ntOnGrowth()                                    // reset the notorch tape — Net2Net changed dims (06_PLAN S1)
-				ntSetGPUForStage(model.CurrentGrowthStage())    // flip CPU→GPU at teen/adult
-				SaveCheckpoint(model, tok, "")
-				nP := 0
-				for _, m := range model.Base {
-					nP += m.Nout * m.Nin
+			// (repair 9) Two gates stand before ontogenesis, and a closed one only
+			// defers: nothing about the decision is written down, so the next tick
+			// that finds the memory (or the lock) grows. First the byte gate — a
+			// stage step multiplies this process's peak, and four of them at once
+			// took the phone's userspace down on 2026-09-13. Then the colony lock,
+			// held through the warmup, so the four peaks do not coincide.
+			if model.GrowthWanted() {
+				switch {
+				case !growthMemGateCheck():
+					// growthMemGateCheck printed the deferral
+				case CFG.CoordinateGrowth && swarm != nil && !swarm.AcquireGrowthLock():
+					fmt.Println("[growth] deferred: a sibling is growing (colony growth lock held)")
+				default:
+					if CFG.CoordinateGrowth && swarm != nil {
+						growthLockHeld = true
+					}
+					if model.MaybeGrowArchitecture() {
+						ntOnGrowth()                                 // reset the notorch tape — Net2Net changed dims (06_PLAN S1)
+						ntSetGPUForStage(model.CurrentGrowthStage()) // flip CPU→GPU at teen/adult
+						SaveCheckpoint(model, tok, "")
+						nP := 0
+						for _, m := range model.Base {
+							nP += m.Nout * m.Nin
+						}
+						dbLogGrowth(db, model, tok, docs, 0.0,
+							fmt.Sprintf("ontogenesis:stage=%d|params=%d", model.CurrentGrowthStage(), nP))
+					} else {
+						releaseGrowth() // nothing grew after all; do not hold the colony
+					}
 				}
-				dbLogGrowth(db, model, tok, docs, 0.0,
-					fmt.Sprintf("ontogenesis:stage=%d|params=%d", model.CurrentGrowthStage(), nP))
 			}
 			model.mu.Unlock()
 		}
@@ -6420,7 +6740,16 @@ func capColonyThreads() {
 
 func main() {
 	capColonyThreads() // cgroup-aware thread cap — prevents the multi-process GPU stall; MUST run before any BLAS/cgo init
-	rand.Seed(42)      // And lo, determinism shall pretend to tame chaos.
+	// (repair 9) Say what this process is worth to the low-memory killer before
+	// anything else allocates. Organisms and the witness both pass here; under
+	// Magisk su they would otherwise inherit -1000 and the phone would kill the
+	// terminal instead of the colony (2026-09-13).
+	if adj, err := applyOomScoreAdj(oomScoreAdjPath, CFG.OomScoreAdj); err != nil {
+		fmt.Fprintf(os.Stderr, "[oom] could not set oom_score_adj=%d: %v\n", CFG.OomScoreAdj, err)
+	} else if adj != "" {
+		fmt.Fprintf(os.Stderr, "[oom] oom_score_adj=%s (lmkd reaches for the organism before the terminal)\n", adj)
+	}
+	rand.Seed(42) // And lo, determinism shall pretend to tame chaos.
 
 	// Parse CLI args for child organisms
 	organismID, configPath, element, evolution := parseCLIArgs()
@@ -6472,6 +6801,15 @@ func main() {
 
 	if evolution {
 		fmt.Println("[evolution] Autonomous evolution mode — organism will grow through all stages without pause.")
+	}
+
+	// The two declared ceilings, said out loud at startup: a colony on a phone
+	// is bounded by choice, not by whatever the pod defaults were (repair 9).
+	if len(CFG.GrowthStages) > 0 {
+		CFG.MaxGrowthStage = maxGrowthStage()
+		cap := CFG.GrowthStages[CFG.MaxGrowthStage]
+		fmt.Printf("[caps] colony ≤ %d organisms | growth ≤ stage %d of %d (embd=%d, layer=%d, head=%d)\n",
+			CFG.MaxOrganisms, CFG.MaxGrowthStage, len(CFG.GrowthStages)-1, cap[1], cap[2], cap[3])
 	}
 
 	// Child organism: load birth config from parent
@@ -6640,6 +6978,12 @@ func main() {
 				break
 			}
 			// Try to grow to next stage (gated by corpus size)
+			// (repair 9) The bootstrap climb answers to the same byte gate as the
+			// tick loop. Breaking out is a deferral, not a refusal: the trainer
+			// loop retries the stage every ten ticks once the memory is there.
+			if model.GrowthWanted() && !growthMemGateCheck() {
+				break
+			}
 			if !model.MaybeGrowArchitecture() {
 				break // corpus too small for next stage, or already at max
 			}
@@ -6752,6 +7096,18 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		why := waitEvolution(sigCh, done, stop)
 		fmt.Printf("\n[evolution] Organism shutting down gracefully (%s).\n", why)
+		// The signal closed `stop`, but a tick loop inside a post-growth warmup
+		// answers it only minutes later. Give it a short, bounded chance to reach
+		// a tick boundary, then write the checkpoint regardless: on 2026-09-13
+		// stop.sh landed 28 minutes of warmup and every ckpt on disk still
+		// carried its growth-time mtime, because nothing saved on the way out.
+		if why == "signal" {
+			select {
+			case <-done:
+			case <-time.After(shutdownDrain):
+			}
+		}
+		saveOnShutdown(model, tok, why)
 		return
 	}
 

@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -86,6 +89,59 @@ func mitosisMemGateOpen(floorMB int64) (open bool, freeMB, needMB int64) {
 	return
 }
 
+// growthGateDecision is the byte gate before ontogenesis, the same arithmetic as
+// memGateDecision over a different cost: a stage transition does not add a
+// process, it multiplies this one. The cost is expressed as factorPct percent of
+// the organism's own peak RSS, measured from what a stage step actually does to
+// VmHWM (MOLEQULALOG2.md 2026-09-13, repair 9). factorPct <= 0 charges nothing
+// but the floor; floorMB <= 0 disables the gate entirely.
+func growthGateDecision(freeMB, peakMB, floorMB int64, factorPct int) (open bool, needMB int64) {
+	if factorPct < 0 {
+		factorPct = 0
+	}
+	return memGateDecision(freeMB, peakMB*int64(factorPct)/100, floorMB)
+}
+
+// growthMemGateOpen applies growthGateDecision to the live machine.
+func growthMemGateOpen(floorMB int64, factorPct int) (open bool, freeMB, needMB int64) {
+	freeMB = memAvailableMB()
+	open, needMB = growthGateDecision(freeMB, ownPeakRSSMB(), floorMB, factorPct)
+	return
+}
+
+// growthMemGateCheck is the gate as the trainer calls it: one line per deferral,
+// and the caller tries again on a later tick because nothing about the decision
+// is remembered.
+func growthMemGateCheck() bool {
+	open, freeMB, needMB := growthMemGateOpen(int64(CFG.GrowthMinFreeMB), CFG.GrowthPeakFactorPct)
+	if !open {
+		fmt.Printf("[growth] deferred: free=%d MB need=%d MB\n", freeMB, needMB)
+	}
+	return open
+}
+
+// oomScoreAdjPath is the live knob; tests pass a temp file instead.
+const oomScoreAdjPath = "/proc/self/oom_score_adj"
+
+// applyOomScoreAdj raises this process's OOM badness so the phone's lmkd reaches
+// for the organism before it reaches for the terminal that owns the session.
+// Processes started under Magisk su inherit oom_score_adj=-1000, which made the
+// colony unkillable and cost Termux and ~20 apps on 2026-09-13. v == 0 leaves the
+// value untouched; non-linux is a no-op. Returns the value read back.
+func applyOomScoreAdj(path string, v int) (string, error) {
+	if v == 0 || runtime.GOOS != "linux" {
+		return "", nil
+	}
+	if err := os.WriteFile(path, []byte(strconv.Itoa(v)+"\n"), 0644); err != nil {
+		return "", err
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(got)), nil
+}
+
 // beatKeeper repeats the organism's last reported heartbeat on its own clock,
 // so the mesh sees the organism as alive while the tick loop is blocked inside
 // an inline warmup after growth. SwarmRegistry.Heartbeat feeds it the fresh
@@ -160,14 +216,29 @@ func (b *beatKeeper) Run(stop <-chan struct{}, interval time.Duration) {
 	}
 }
 
+// trainAbort is raised once, on the way out, and never lowered: the step loops
+// in notorch_trainer.go read it every step and return early. Closing `stop` is
+// not enough, because a warmup holds model.mu for its whole phase — 1600 steps
+// at stage 4 — so a shutdown that only closes `stop` waits half an hour for the
+// mutex and the checkpoint is written after the session has already been killed
+// (2026-09-13: every ckpt on disk kept its growth-time mtime through stop.sh).
+var trainAbort atomic.Bool
+
+// trainAborting reports whether the process is shutting down. Training steps
+// stop at the next step boundary; the weights trained so far are mirrored back
+// by ntTrainCore's pullBack, so an aborted phase is progress kept, not lost.
+func trainAborting() bool { return trainAbort.Load() }
+
 // waitEvolution parks main in evolution mode until a signal arrives or the
-// trainer loop ends on its own (hibernation). On a signal it closes stop so
-// the trainer winds down; when the trainer is already gone there is nothing
-// to stop and the process simply ends, releasing the organism's memory to the
-// colony. Returns the reason for the caller's log line.
+// trainer loop ends on its own (hibernation). On a signal it raises the train
+// abort and closes stop so the trainer winds down at the next step and the next
+// tick; when the trainer is already gone there is nothing to stop and the
+// process simply ends, releasing the organism's memory to the colony. Returns
+// the reason for the caller's log line.
 func waitEvolution(sigCh <-chan os.Signal, done <-chan struct{}, stop chan struct{}) string {
 	select {
 	case <-sigCh:
+		trainAbort.Store(true)
 		close(stop)
 		return "signal"
 	case <-done:

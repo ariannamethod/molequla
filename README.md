@@ -37,6 +37,7 @@ WHAT THIS IS:
 - SyntropyTracker: 8 autonomous decisions based on entropy/KL/purpose
 - Mitosis: adults divide under sustained overload (loss path and entropy path both fire), child inherits parent weights — machine-verified on GPU 2026-06-04 (**5 `action=divide` firings across 3 adults**: fire ×1 loss-path, water ×1 loss-path, air ×3 mixed paths; **earth never divided**; 2 children spawned, Fire's preserved in full with a birth manifest, Air's as a spawn log line; observed cascading to ~50 spawns — this is the **pre-governor** run)
 - Cascade governor (landed on main 2026-06-29, GPU-verified): the colony is now bounded — `CFG.MaxOrganisms` (default 16) enforced by an atomic mesh.db admit, the 300s divide cooldown seeded at birth, and divide relieving **both** loss and entropy overload so a divider re-divides only on fresh overwhelm. The ~50-spawn cascade above predates the governor; with it the colony self-limits and caps at MaxOrganisms. On a small machine the governor also counts bytes (phone-1, 2026-09-13): a divide needs `MemAvailable` ≥ the parent's own peak RSS + `CFG.MitosisMinFreeMB` (default 256 MB, 0 disables), a heartbeat keeper keeps an organism in the live count through its multi-minute inline warmups, and hibernation ends the process so its memory returns to the colony.
+- Growth budget (phone-1, 2026-09-13): ontogenesis is a memory event, not only an architecture one, so a stage step answers to the same kind of gate as a divide. It needs `MemAvailable` ≥ `CFG.GrowthMinFreeMB` (default 256 MB, 0 disables) + `CFG.GrowthPeakFactorPct` percent of the organism's own peak RSS (default 300, measured from a stage step that multiplied VmHWM by 3.3–3.9×); a closed gate defers and the next tick tries again. Across the colony one `growth_lock` row in mesh.db admits a single grower at a time and is held through the warmup behind it (`CFG.CoordinateGrowth`, default on) — unlike `CFG.CoordinateWarmup` this never serializes the micro-bursts. Checkpoints are streamed matrix by matrix instead of being built in memory first (337 MB less transient on a 105 MB stage-4 checkpoint), every process writes `CFG.OomScoreAdj` (default 300) to its own `oom_score_adj` so the phone's low-memory killer reaches for an organism before the terminal, and a SIGTERM in evolution mode stops the step loop at the next step and writes the checkpoint on the way out. Above both gates sit two declared ceilings, settable per launch and printed as the startup `[caps]` line: `--max-organisms N` (`CFG.MaxOrganisms`, default 16, phone-1 passes 4) and `--max-growth-stage N` (`CFG.MaxGrowthStage`, default the last stage, so unset changes nothing).
 - Mycelium: a witness beside the colony (`molequla --witness`, Go, `witness.go`) that reads mesh.db and the DNA field, computes field entropy, syntropy and the entropy harmonics through the C engine, and says what it sees — stdout and `witness.jsonl`, nothing written back. **Post-§9 layer**; the 2026-06-04 §9 mitosis run did not use a mycelium (first engineering log, in git history: `git show 8203d5d^:PROJECT_LOG.md`)
 - NOTORCH: gradient-free delta-training path (implemented, currently dormant —
   the notorch tape/Chuck is the active trainer)
@@ -757,12 +758,18 @@ for d in earth air water fire; do
     nohup ./molequla_cgo \
         --organism-id $d \
         --element $d \
+        --max-organisms 4 \
         --evolution --cross-graze --corpus-overlay > training_aml.log 2>&1 &
     cd ..
 done
 # --element sets the corpus (nonames_<element>.txt); the checkpoint and
 # memory.sqlite3 live in the working directory. The binary knows no
 # --corpus / --db / --ckpt flags.
+# --max-organisms N sets the cascade governor's ceiling (default 16, written
+# for a pod; phone1/launch.sh passes 4) and --max-growth-stage N stops
+# ontogenesis at that GrowthStages index (default: the last stage, adult —
+# `--max-growth-stage 4` keeps a colony at teen). Both are printed at startup
+# as the [caps] line.
 
 # The witness, a fifth process beside the four (reads mesh.db and ../dna/output,
 # writes stdout + witness.jsonl, never writes back):
@@ -797,10 +804,10 @@ bash tests/test_all.sh
 
 ```
 # Go + C (primary; line counts as of 2026-09-13)
-molequla.go              6841 lines   Go organism — lifecycle, ecology, autograd (inference + loss), generation, coherence layer, GPU dispatch, graze, cascade governor, thread cap
+molequla.go              7215 lines   Go organism — lifecycle, ecology, autograd (inference + loss), generation, coherence layer, GPU dispatch, graze, cascade governor, growth budget, streamed checkpoint, thread cap
 cgo_aml.go               114 lines    CGO bridge to ariannamethod.c (OpenBLAS via pkg-config)
 aml_trainer.go           352 lines    AML training wrapper, script generation (fallback trainer, --trainer aml)
-notorch_trainer.go       645 lines    notorch tape trainer — CANONICAL (CFG.Trainer default "notorch"), Chuck; the tape computes the function inference runs (repair 2b)
+notorch_trainer.go       658 lines    notorch tape trainer — CANONICAL (CFG.Trainer default "notorch"), Chuck; the tape computes the function inference runs (repair 2b)
 cgo_notorch.go           202 lines    CGO bridge to the system libnotorch
 cgo_notorch_cpu.go       15 lines     notorch CPU/BLAS link (default build)
 cgo_notorch_cuda.go      22 lines     notorch CUDA link (-tags cuda), adds -I modules/gpu/csrc
@@ -810,7 +817,7 @@ metaweights_seeding.go   124 lines    gamma->epsilon embedding seeding from co-o
 spa_coherence.go         164 lines    Pure-Go SPA helper (sentence connectedness + weak-sentence gate)
 cross_graze.go           181 lines    Dario-style cross-organism logit injection (sibling DNA → rank-decay boost), cursor per sibling
 dna_field.go             208 lines    The DNA tree as a field: sources, cursors, numeric fragment order, writer-side pruning
-governor_phone.go        176 lines    Byte gate before division, heartbeat keeper, the evolution wait
+governor_phone.go        247 lines    Byte gates before division and before growth, oom_score_adj, heartbeat keeper, the evolution wait and its train abort
 witness.go               498 lines    The mycelium as a witness (`--witness`): reads mesh.db + the DNA field, says what it sees, writes nothing back
 witness_cgo.go           73 lines     cgo bindings to am_method_field_* / am_harmonic_* (am_method_step deliberately unbound)
 ariannamethod/
@@ -842,12 +849,13 @@ molequla.js              3971 lines   JavaScript organism — runs in browser
 modules/node_cli.js      306 lines    Node.js CLI module
 index.html               Web interface for JS version
 
-# Tests (166 in package main, 2026-09-13)
+# Tests (178 in package main, 2026-09-13)
 molequla_test.go         2633 lines   Go unit tests (122)
 molequla_rrpram_test.go  306 lines    op-33 low-rank RRPRAM parity (4)
 governor_test.go         149 lines    cascade governor — mitosis slot cap, colony thread cap, both-path relieve, ckpt debounce (6)
-governor_phone_test.go   164 lines    byte gate, heartbeat keeper, evolution wait (5)
+governor_phone_test.go   178 lines    byte gate, heartbeat keeper, evolution wait + train abort (5)
 mitosis_cooldown_test.go 26 lines     divide cooldown seeded at birth (1)
+growth_budget_test.go    718 lines    growth byte gate, the two declared ceilings, colony growth lock, oom_score_adj, streamed checkpoint == encoder, shutdown save, train abort (11, 2 heavy measurements skipped unless asked)
 parity_test.go           150 lines    train ≡ infer: tape loss vs LossOnSequence, delta adapters trained (3)
 notorch_trainer_test.go  73 lines     the positional table is trained (1)
 dna_field_test.go        262 lines    every reader eats every fragment, per-tick cap, extra sources, writer pruning by age and count (5)
