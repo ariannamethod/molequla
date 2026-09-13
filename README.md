@@ -525,7 +525,7 @@ type CrossField struct {
 
 ### Source feed
 
-Sibling DNA fragments are already mirrored to `../dna/seen/<sibling>/` by `dnaRead` (commit `e5c1685`). cross_graze reads from the mirror so the `dna/output/` consume cleanup does not race the scan.
+cross_graze reads sibling fragments straight from `../dna/output/<sibling>/`, the field `dnaRead` eats from, keeping a per-sibling cursor in the same numeric fragment order; nothing is mirrored and readers never delete, so the scan cannot race a cleanup (repairs 3 and 6, 2026-09-13). The boost is always applied to the logits sampling reads, and the metaweights overlay fades over `mean |logit|` 1.0 → 2.0 instead of switching off at 1.0.
 
 ### Mechanic
 

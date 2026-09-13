@@ -39,6 +39,39 @@ var (
 // force until real training raises mag past 1.0 (smooth gate at tg=0.5).
 const metaTFGateThreshold = 1.0
 
+// metaFadeWidth — how far above metaTFGateThreshold, in mean |logit|, the
+// overlay takes to fade out. At the threshold the weightless bundle applies
+// in full; at threshold + width the overlay is gone and the transformer
+// speaks alone. Before repair 6 (MOLEQULALOG2.md, 2026-09-13) the whole
+// additive stack vanished in one step at the threshold.
+const metaFadeWidth = 1.0
+
+// overlayFadeProgress is 0 while the transformer is untrained (tmag ≤
+// threshold), 1 once the overlay has faded out (tmag ≥ threshold +
+// metaFadeWidth), linear in between. The caller's overlay weight is 1 - this,
+// and the coefficient bundle slides along the same ramp, so nothing steps.
+func overlayFadeProgress(tmag float64) float64 {
+	s := (tmag - metaTFGateThreshold) / metaFadeWidth
+	if s < 0 {
+		return 0
+	}
+	if s > 1 {
+		return 1
+	}
+	return s
+}
+
+// lerpCoeffs interpolates two coefficient bundles: s = 0 → a, s = 1 → b.
+func lerpCoeffs(a, b MetaCoeffs, s float64) MetaCoeffs {
+	return MetaCoeffs{
+		Heb: a.Heb + s*(b.Heb-a.Heb),
+		Pro: a.Pro + s*(b.Pro-a.Pro),
+		Ds:  a.Ds + s*(b.Ds-a.Ds),
+		Bg:  a.Bg + s*(b.Bg-a.Bg),
+		Tg:  a.Tg + s*(b.Tg-a.Tg),
+	}
+}
+
 // OverlayScratch holds reusable [V]float64 buffers + cached static terms
 // (destiny, unigram) for one GenerateResonant call. Per-step bigram/trigram/
 // hebbian buffers are reset only at indices that were touched the previous
@@ -211,10 +244,10 @@ func MetaweightsOverlay(
 		}
 	}
 	tmag /= float64(V)
-	coeffs := metaCoeffsWeightless
-	if tmag > metaTFGateThreshold {
-		coeffs = metaCoeffsTrained
-	}
+	// The bundle slides from the weightless reference values to the trained
+	// ones across the fade band above the threshold (repair 6); below it the
+	// weightless bundle applies unchanged.
+	coeffs := lerpCoeffs(metaCoeffsWeightless, metaCoeffsTrained, overlayFadeProgress(tmag))
 
 	// 1.5. Transformer gate — silence untrained transformer logits before
 	// overlay (pitomadom.c:583-586 inspiration). Only kicks in below the
@@ -422,7 +455,15 @@ func MetaweightsRepetitionPenalty(logits []float64, ids []int) {
 		if dup {
 			continue
 		}
-		logits[t] *= 0.5
+		// Halve a positive logit; leave a negative one where it is. The
+		// reference multiplies unconditionally, and after the overlay's
+		// unigram damping (-2.0 on rare tokens) a repeated token with a
+		// negative logit was moved toward zero — up the ranking — by ×0.5:
+		// the penalty rewarded repetition where the overlay had declared the
+		// token unlikely (audit C, C-OVL-04). Repair 6.
+		if logits[t] > 0 {
+			logits[t] *= 0.5
+		}
 		if seenN < 12 {
 			seen[seenN] = t
 			seenN++
@@ -431,8 +472,8 @@ func MetaweightsRepetitionPenalty(logits []float64, ids []int) {
 	if cl >= 2 {
 		last := ids[cl-2]
 		for ri := 0; ri < cl-1; ri++ {
-			if ids[ri] == last && ids[ri+1] >= 0 && ids[ri+1] < V {
-				logits[ids[ri+1]] *= 0.2
+			if ids[ri] == last && ids[ri+1] >= 0 && ids[ri+1] < V && logits[ids[ri+1]] > 0 {
+				logits[ids[ri+1]] *= 0.2 // same sign rule as above (C-OVL-04)
 			}
 		}
 	}
