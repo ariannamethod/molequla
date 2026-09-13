@@ -31,12 +31,6 @@ is long — an organism lives for months of sessions, not for one uptime.
   sessions a day of two hours (04:00, 12:00, 20:00 UTC) by default, one line per
   session in `schedule.log` with memory at start and end and the peak RSS seen,
   restart after reboot through the node's service script.
-- **GPU Go code out of the root** (`claude/phone1-gpu-modules`). The cuBLAS
-  bindings, the matvec body and the notorch-GPU switch move to `modules/gpu/`
-  beside the C and CUDA sources they wrap; the root keeps one tagged hook file
-  and its stub. The `-tags cuda` side is a mechanical move until a machine with
-  nvcc can build it.
-
 ## Next
 
 1. **First scheduled sessions and the numbers they leave.** Per session: stage
@@ -69,8 +63,12 @@ is long — an organism lives for months of sessions, not for one uptime.
   between the incoherent early stages and the transformer. After the first
   scheduled sessions and after the verdict on Netta's Body 1.
 - **Two more ideas from Oleg**, told after the eye lands. Not written here yet.
-- **CUDA build verified** once polygon has a GPU: `go build -tags cuda` against
-  `modules/gpu/`, then the parallel-GPU training path measured again.
+- **CUDA build linked** once a machine has the libraries. `go build -tags cuda`
+  already compiles and vets the whole GPU lane on the phone — `go build -tags
+  cuda ./modules/gpu` exits 0 — and stops at the link with `cannot find
+  -lnotorch_gpu -lcudart -lcublas`. What is left is that link and the run:
+  `libnotorch_gpu` built from `modules/gpu/csrc/`, then the parallel-GPU
+  training path measured again.
 
 ## Debt (notorch, seen from molequla)
 
@@ -87,3 +85,10 @@ is long — an organism lives for months of sessions, not for one uptime.
   the tree fitted to the phone and the README read against the code. Entries with
   numbers in `MOLEQULALOG2.md`; commits `e1a820d` … `5879dda` on main.
 - Launch scripts and the emission line (`#38` `e7ccbe6`, `#39` `673f478`).
+- **GPU Go code out of the root** (`claude/phone1-gpu-modules`). The cuBLAS
+  bindings, the matvec body and the notorch-GPU switch are the Go package
+  `modules/gpu`; the vendored C and CUDA sources moved one level down to
+  `modules/gpu/csrc/`, since cgo compiles every `.c` file beside a package. The
+  root keeps `gpu_bridge.go`, untagged rather than tagged: the package is a
+  pure-Go no-op off the CUDA build, so one file replaced the seven and no stub
+  was needed. Entry with the numbers in `MOLEQULALOG2.md`.

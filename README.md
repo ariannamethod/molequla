@@ -435,7 +435,7 @@ Deep lock-in killed. The post-Q embryo emits BPE subword chains, sentence-like p
 
 ### Phase A — Fundament Underneath
 
-Four fundament patches in vendored AML + notorch before the coherence layer: opt-in SIMD shim (`notorch_simd.h` AVX2+FMA cblas, `make simd` x86_64), backward CPU-sync audit (NT_OP_MUL / SILU / RMSNORM / SEQ_RMSNORM), NaN guard API (`AM_NanGuard`, not yet wired), upstream sgemm alpha fix (CBLAS contract). ~825 lines across 6 files, zero default-build runtime change. Detail: the first engineering log, in git history (`git show 8203d5d^:PROJECT_LOG.md`). The vendored notorch and its SIMD / CUDA sources live under `modules/gpu/` since 2026-09-13; the Go build links the system `libnotorch`.
+Four fundament patches in vendored AML + notorch before the coherence layer: opt-in SIMD shim (`notorch_simd.h` AVX2+FMA cblas, `make simd` x86_64), backward CPU-sync audit (NT_OP_MUL / SILU / RMSNORM / SEQ_RMSNORM), NaN guard API (`AM_NanGuard`, not yet wired), upstream sgemm alpha fix (CBLAS contract). ~825 lines across 6 files, zero default-build runtime change. Detail: the first engineering log, in git history (`git show 8203d5d^:PROJECT_LOG.md`). The vendored notorch and its SIMD / CUDA sources live under `modules/gpu/csrc/` since 2026-09-13; the Go build links the system `libnotorch`.
 
 ---
 
@@ -445,12 +445,21 @@ Branch `molequla-gpu-fwd` adds an optional `--gpu` flag that routes inference ma
 
 ### Wire
 
+The GPU code is the Go package `modules/gpu`, imported by the organism package
+unconditionally; the root keeps only the two functions that touch molequla's own
+types. On every build that is not linux + `-tags cuda` the package is pure Go
+and compiles no cgo at all — `go list` reports `GoFiles=[notorch_stub.go
+stub.go] CgoFiles=[]` — so the phones carry the API and none of the toolchain.
+
 | File | LOC | Build | Role |
 |------|-----|-------|------|
-| `gpu_bindings_linux.go` | 196 | `//go:build linux && cuda` | CGO wraps `gpu_init` / `gpu_alloc` / `gpu_upload` / `gpu_download` / `gpu_sgemm_nt` / `gpu_rmsnorm` / `gpu_silu` / `gpu_cache_weight` / `gpu_get_weight` / `gpu_multi_head_attention` from `modules/gpu/ariannamethod_cuda.h` |
-| `gpu_forward.go` | 131 | `//go:build linux && cuda` | `MatvecGPU(x)` matvec via cached weight + scratch slots; `gpuRefreshWeights(gpt)` flattens `gpt.Base` to float32 + caches per-name (idempotent) |
-| `gpu_bindings_stub.go` | 36 | `//go:build !linux || !cuda` | Matching signatures, `gpuReady() = false` |
-| `gpu_forward_stub.go` | 17 | `//go:build !linux || !cuda` | Stub `MatvecGPU` returns nil so the dispatcher silently falls back |
+| `modules/gpu/bindings_cuda.go` | 198 | `//go:build linux && cuda` | CGO wraps `gpu_init` / `gpu_alloc` / `gpu_upload` / `gpu_download` / `gpu_sgemm_nt` / `gpu_rmsnorm` / `gpu_silu` / `gpu_cache_weight` / `gpu_get_weight` / `gpu_multi_head_attention` from `modules/gpu/csrc/ariannamethod_cuda.h`. Exports `Init` / `Shutdown` / `Ready` / `CacheWeight` |
+| `modules/gpu/forward_cuda.go` | 70 | `//go:build linux && cuda` | `Matvec(key, x, nout)` — cached weight × activation through cuBLAS sgemm on two fixed scratch slots, raw `[]float32` in and out |
+| `modules/gpu/notorch_cuda.go` | 61 | `//go:build cuda` | `NotorchEnable` / `NotorchSetStage` / `NotorchDispatchCount` for the training tape, and the package's cgo directives: `-DUSE_CUDA`, `-I${SRCDIR}/csrc`, `-lnotorch_gpu -lcudart -lcublas` |
+| `modules/gpu/stub.go` | 20 | `//go:build !linux \|\| !cuda` | Same exported API, `Ready() = false`, `Matvec` returns nil |
+| `modules/gpu/notorch_stub.go` | 20 | `//go:build !cuda` | Trainer reports CPU/BLAS, dispatch count 0 |
+| `gpu_bridge.go` | 101 | untagged | The only GPU code in the organism package: `MatvecGPU` (Vec ↔ float32) and `gpuRefreshWeights` (the `gpt.Base` walk), plus the five one-line names the call sites use. No build tag — both bodies return early when `gpu.Ready()` is false |
+| `cgo_notorch_cuda.go` | 22 | `//go:build cuda` | Linkage only: the root package's own `-DUSE_CUDA` (it changes the shape of `nt_tensor`, `notorch.h:34`, and opens the `ariannamethod_cuda.h` include in `ariannamethod.c:85`) and `-lnotorch_gpu` |
 
 ### Dispatch
 
@@ -469,17 +478,19 @@ Inference-only by construction: `gradEnabled.Load()` gates training back to CPU/
 
 ### Cache + grow safety
 
-`gpuRefreshWeights(gpt)` (`gpu_forward.go:105-131`) walks `gpt.Base`, flattens each matrix to contiguous float32, calls `gpu_cache_weight(name, ...)` per entry. Called once at the top of `generateResonantLocked`, the single generation path — the chat REPL, `dnaWrite` and the warmup probes all go through `GenerateResonant` — so background-trainer bursts cannot leak stale activations through generation.
+`gpuRefreshWeights(gpt)` (`gpu_bridge.go`) walks `gpt.Base`, flattens each matrix to contiguous float32, calls `gpu.CacheWeight(name, ...)` per entry. Called once at the top of `generateResonantLocked`, the single generation path — the chat REPL, `dnaWrite` and the warmup probes all go through `GenerateResonant` — so background-trainer bursts cannot leak stale activations through generation.
 
 `MatrixParam.invalidateGPU()` clears `gpuKey` and is called from `GrowRows` / `GrowCols` / `Grow`. Without this the next dispatch reads a cached weight at the old shape while the host pointer holds the new one. Caught in audit (Opus subagent, 2026-05-14 P1).
 
 ### Build
 
 ```bash
-# Linux pod: the GPU library is built from the vendored notorch under modules/gpu/
-# (notorch.c with -DUSE_CUDA plus the nvcc object) and installed as libnotorch_gpu;
-# cgo_notorch_cuda.go adds -I modules/gpu for ariannamethod_cuda.h.
-nvcc -O2 -c modules/gpu/notorch_cuda.cu -o modules/gpu/notorch_cuda.o
+# Linux pod: the GPU library is built from the vendored notorch under
+# modules/gpu/csrc/ (notorch.c with -DUSE_CUDA plus the nvcc object) and installed
+# as libnotorch_gpu. The sources sit one level below the Go package because cgo
+# compiles every .c file beside a package; both cgo_notorch_cuda.go and
+# modules/gpu/notorch_cuda.go add -I into csrc for ariannamethod_cuda.h.
+nvcc -O2 -c modules/gpu/csrc/notorch_cuda.cu -o modules/gpu/csrc/notorch_cuda.o
 CGO_ENABLED=1 go build -a -tags cuda -o molequla_cgo .
 
 # darwin/arm64 (or any non-Linux): drop -tags cuda, stubs activate automatically
@@ -792,8 +803,8 @@ aml_trainer.go           352 lines    AML training wrapper, script generation (f
 notorch_trainer.go       645 lines    notorch tape trainer — CANONICAL (CFG.Trainer default "notorch"), Chuck; the tape computes the function inference runs (repair 2b)
 cgo_notorch.go           202 lines    CGO bridge to the system libnotorch
 cgo_notorch_cpu.go       15 lines     notorch CPU/BLAS link (default build)
-cgo_notorch_cuda.go      52 lines     notorch CUDA link (-tags cuda), adds -I modules/gpu
-gpu_notorch_stub.go      20 lines     notorch GPU stub (non-CUDA)
+cgo_notorch_cuda.go      22 lines     notorch CUDA link (-tags cuda), adds -I modules/gpu/csrc
+gpu_bridge.go            101 lines    Bridge to modules/gpu: MatvecGPU (Vec ↔ float32) + the gpt.Base walk; untagged
 metaweights_overlay.go   480 lines    Q-style additive logit overlay (B+T+H+A+F) with the fade band
 metaweights_seeding.go   124 lines    gamma->epsilon embedding seeding from co-occurrence
 spa_coherence.go         164 lines    Pure-Go SPA helper (sentence connectedness + weak-sentence gate)
@@ -802,14 +813,16 @@ dna_field.go             208 lines    The DNA tree as a field: sources, cursors,
 governor_phone.go        176 lines    Byte gate before division, heartbeat keeper, the evolution wait
 witness.go               498 lines    The mycelium as a witness (`--witness`): reads mesh.db + the DNA field, says what it sees, writes nothing back
 witness_cgo.go           73 lines     cgo bindings to am_method_field_* / am_harmonic_* (am_method_step deliberately unbound)
-gpu_bindings_linux.go    196 lines    CGO bindings to modules/gpu/ariannamethod_cuda.h (linux && cuda)
-gpu_forward.go           131 lines    Inference matvec via cuBLAS sgemm + weight cache refresh (linux && cuda)
-gpu_bindings_stub.go     36 lines     Stub signatures for non-CUDA builds (gpuReady=false)
-gpu_forward_stub.go      17 lines     Stub MatvecGPU returning nil so the dispatcher falls back
 ariannamethod/
   ariannamethod.c        8000 lines   AML/C autograd engine (the language) + SPA ops + HarmonicNet / METHOD field operators
   ariannamethod.h        1051 lines   C header, 80+ field state parameters
-modules/gpu/                          GPU and SIMD sources; not compiled by the default (CPU) Go build
+modules/gpu/                          Go package `gpu` — the whole GPU lane; pure Go (no cgo) unless linux + -tags cuda
+  bindings_cuda.go       198 lines    CGO bindings to csrc/ariannamethod_cuda.h (linux && cuda)
+  forward_cuda.go        70 lines     Inference matvec via cuBLAS sgemm on the cached weight (linux && cuda)
+  notorch_cuda.go        61 lines     Trainer GPU enable / stage switch / dispatch count + the package's cgo directives (cuda)
+  stub.go                20 lines     Same exported API for non-CUDA builds (Ready=false, Matvec nil)
+  notorch_stub.go        20 lines     Trainer stub: CPU/BLAS, dispatch count 0 (non-CUDA)
+modules/gpu/csrc/                     Vendored GPU and SIMD sources; compiled by nvcc/cc on a CUDA host, never by the Go build
   notorch.c              4739 lines   Vendored notorch core — the source of libnotorch_gpu on CUDA hosts (lags the canon; see MOLEQULALOG2.md)
   notorch.h              694 lines    Vendored notorch header
   notorch_cuda.cu        1344 lines   CUDA kernels; compiled by nvcc into the GPU library

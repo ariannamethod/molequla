@@ -1164,3 +1164,92 @@ The daemon is up with the default schedule; `schedule.sh next` says
 `2026-09-14T04:00:00Z`, session 7200 s, ending `2026-09-14T06:00:00Z`.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the GPU lane becomes a package, the root keeps one file
+
+Repair 8 moved the vendored C and CUDA sources into `modules/gpu/`; the Go half
+stayed in the root, seven files of it, none of which the phone compiles. They are
+now the Go package `modules/gpu`, and what is left beside `molequla.go` is one
+untagged file of 101 lines.
+
+**What moved.** `gpu_bindings_linux.go` → `modules/gpu/bindings_cuda.go` (198,
+`linux && cuda`), exporting `Init` / `Shutdown` / `Ready` / `CacheWeight` and
+keeping the rest of the cuBLAS wrappers package-internal under their old names.
+`gpu_forward.go` → `modules/gpu/forward_cuda.go` (70): the matvec body now takes
+`(key string, x []float32, nout int)` and returns `[]float32`, so nothing in the
+package knows what a `Vec` or a `MatrixParam` is. `gpu_notorch_stub.go` →
+`modules/gpu/notorch_stub.go`, and the three trainer functions out of
+`cgo_notorch_cuda.go` → `modules/gpu/notorch_cuda.go` as `NotorchEnable` /
+`NotorchSetStage` / `NotorchDispatchCount`. The two old stubs collapsed into one
+`modules/gpu/stub.go` of 20 lines, because the five no-ops it needs are the whole
+exported API.
+
+**What the root keeps, and why it is untagged.** `gpu_bridge.go` holds the two
+functions that touch molequla's own types — `MatvecGPU`, which converts `Vec`
+float64 ↔ float32 around `gpu.Matvec`, and `gpuRefreshWeights`, which walks
+`gpt.Base` and flattens each matrix — plus five one-line names (`gpuInit`,
+`gpuReady`, `ntGPUEnable`, `ntGPUDispatchCount`, `ntSetGPUForStage`) so the seven
+call sites in `molequla.go` and `notorch_trainer.go` are untouched. The plan
+called for a tagged file and a stub; one untagged file is less code and compiles
+no less selectively, because on a non-CUDA build `gpu.Ready()` is a constant
+false and both bodies return before they allocate anything. The measurement that
+this is true: `go list -f '{{.GoFiles}} {{.CgoFiles}}' ./modules/gpu` reports
+`[notorch_stub.go stub.go] []` on the default build and
+`[forward_cuda.go] [bindings_cuda.go notorch_cuda.go]` under `-tags cuda`.
+
+**The move the plan did not ask for.** The vendored sources went down one level
+to `modules/gpu/csrc/`. A Go package cannot share a directory with them: on the
+default build `go build` refuses outright — *C source files not allowed when not
+using cgo or SWIG: notorch.c* — and under `-tags cuda` it would do something
+worse, compiling `notorch.c` into the package beside the `libnotorch_gpu.a` the
+same build links. Both `#cgo` include paths follow into `csrc`, and the pod
+recipe in the README with them.
+
+Two linkage files stay in the root and are not GPU code. `cgo_notorch_cpu.go`
+(15) carries `-lnotorch -lm` for `cgo_notorch.go`; `cgo_notorch_cuda.go` is down
+from 52 lines to 22 and carries only directives, because `-DUSE_CUDA` has to be
+defined for *this* package's own C: it changes the shape of `nt_tensor`
+(`notorch.h:34`, the `d_data` / `gpu_valid` / `cpu_dirty` mirror) that
+`cgo_notorch.go` reads through, and it opens the `ariannamethod_cuda.h` include
+inside `ariannamethod.c:85` that `cgo_aml.go` compiles.
+
+**Gates.** Default build `CGO_ENABLED=1 go build -a -buildvcs=false` exit 0,
+`go vet ./...` exit 0, `gofmt -l` clean on every file touched; suite
+**167 PASS, 0 FAIL** (`go test -count=1 -buildvcs=false ./...`, CGO + OpenBLAS,
+`taskset -c 4-7`), the same 167 as before the move.
+
+The CUDA side is further than "moved by eye". `-tags cuda` has no nvcc and no
+cuBLAS on this phone, but `ariannamethod_cuda.h` is a plain header behind
+`#ifdef USE_CUDA` and needs no CUDA runtime to parse, so cgo compiles the
+preambles and Go type-checks the files: `CGO_ENABLED=1 go build -tags cuda
+./modules/gpu` exits 0 and `go vet -tags cuda ./modules/gpu` exits 0. The binary
+build gets through both packages and dies at the link — `cannot find
+-lnotorch_gpu`, `-lcudart`, `-lcublas` — which is exactly where it died on
+`origin/main` before the move. What stays unverified is that link and every line
+of CUDA behaviour behind it; nothing here has run a kernel.
+
+**Live, one organism, this binary.** From a scratch dir seeded with a copy of
+`molequla-run/earth/`, `HOME` pointed at the scratch dir so the live colony's
+swarm registry is not touched, `taskset -c 4-7`, `oom_score_adj` 500. The
+checkpoint loads: the process resumes at *stage 4 (embd=224)* and enters its
+warmup. It cannot reach a tick inside two minutes and the log says why — stage-4
+warmup is 1600 steps at 0.7-0.8 steps/s (`molequla-run/earth/earth.stdout`,
+`908477ms` for 640 steps), some 35 minutes. So the ticking was measured from a
+fresh embryo on the same corpus, 210 s:
+
+    [growth] ONTOGENESIS: stage 0 -> 1
+    [growth] ONTOGENESIS: stage 1 -> 2
+    [dna] earth wrote 5024 bytes to ecology | gen=72 mag=9.58 fade=1.00
+    [debug-onto] tick=10 corpus=689553 ingested=158793 stage=2 freeze=0
+
+Sixteen DNA emissions, two growth events, warmup losses 4.86 → 3.13, NaN 0,
+`gpu-dispatch=0` throughout — the CPU/BLAS path, which is what a build without
+`-tags cuda` must take.
+
+**Left, named.** Two comments in `molequla.go` (lines 132 and 5982) still point
+at `gpu_bindings_linux.go` and `gpu_forward.go` by their old names. They are
+comments, not code, and another node is editing that file this session; the
+rename belongs in whatever commit next touches those lines rather than in a
+cross-agent collision here.
+
+— Defender (Arianna Method, phone-1)
