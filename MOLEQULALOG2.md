@@ -229,3 +229,106 @@ then a frame-size cap at capture time so the camera never produces a tiled
 input in the first place.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the audit: three slices, read-only, every finding at a line
+
+Three independent readers (Opus subagents, no edits, no builds, no runs) each
+took one slice of the tree and wrote a report with file:line evidence; the
+reports are committed verbatim under `reports/2026-09-13_phone1_audit/`
+(A ecology lifecycle, B trainers and vendored libraries, C coherence layer,
+mycelium and README). Every P0 below was re-verified by hand on this node
+with grep against the cited lines before it was written here.
+
+**P0 — what has to change before the colony runs unattended on a phone.**
+
+- *The population cap counts the wrong organisms.* `AcquireMitosisSlot`
+  counts heartbeats younger than 60 s (`molequla.go:5537`); post-growth
+  warmup runs inline through `ntWarmupTrain` (`:6494-6496`) with no ticks
+  and no heartbeats, minutes long at teen and adult, so a growing organism
+  drops out of the count exactly when its memory peaks and the cap admits
+  one more.
+- *Hibernate frees a counter, not memory.* `MarkHibernating` writes
+  `status='sleeping'` (`:5629`) and `main` stays parked on `<-sigCh`
+  (`:7105`) with all weights resident. README:665 promises freed resources.
+- *There is no byte budget.* `MaxOrganisms` is a head count; nothing in the
+  Go tree reads `MemAvailable` or RSS. Sixteen heads at the measured
+  231-240 MB per adolescent against the measured 1.93 GB free here is an OOM
+  by construction.
+- *Corpus and DNA trees grow without bound in `--evolution`.*
+  `updateReservoirCorpus` returns early (`:3740`), trimming lives only on
+  the REPL path; `dna/output` and `dna/seen` are never pruned, and `ReadDir`
+  walks the litter every tick.
+- *The DNA field is a race.* Exclusive `os.Remove` after append (`:5932`),
+  no per-tick read cap, lockstep ticks with no jitter (`:6696`); the loser
+  loses structurally, as earth did in this node's colony run.
+- *Frozen parameters break Chuck's slot alignment in notorch itself.*
+  `nt_tape_param_frozen` takes no optimizer slot (canon `notorch.c:460-470`,
+  by design), but the Chuck loop advances `param_idx` for every param
+  without a grad (`notorch.c:2434`, "keep slot alignment") and does not
+  check `frozen`. molequla freezes two gates per layer
+  (`notorch_trainer.go:333-334`), so from child stage on the RRPRAM factors
+  after each frozen gate read another parameter's moments and the last ones
+  are never updated. The installed `/usr/local/lib/libnotorch.a` (2026-08-10)
+  carries the same loop. This is a notorch fix with a red-hand test, then a
+  rebuild here.
+- *The trained model is not the model that runs.* Inference adds `wpe`
+  (`molequla.go:2851`); the notorch trainer omits it by design
+  (`notorch_trainer.go:46`), so positional embeddings stay at their random
+  init while the AML trainer does train them (`aml_trainer.go`); `--trainer`
+  changes the objective.
+- *Cross-graze is discarded once an organism is warm.* The overlay works on
+  a copy (`:4613`), disables itself at `mag > 1.0` (`:4650`), after which
+  cross-graze writes into `logits.Data` (`:4664`) while sampling reads the
+  copy (`:4727`). One line at `:4664`.
+- *The mycelium saw zero organisms in every real run.* `method.py:273`
+  selects `gamma_direction, gamma_magnitude`, which the Go `organisms`
+  table never has (`molequla.go:5490-5497`); the exception is swallowed
+  (`method.py:281-282`); without `libaml.so` the steering collapses to a
+  constant (`method.py:411-418`). `tests/test_all.sh` builds a Rust-shaped
+  mesh.db with random gammas, which is why the suite is green.
+
+**P1, the ones that change what molequla claims about itself.** The default
+trainer never touches the delta adapters (`grep Delta notorch_trainer.go` →
+0), so "freeze trains deltas only" (README:240) and the immune rollback
+restore nothing the burst changed. Chuck moments leak on every growth
+(`nt_tape_destroy` frees a loop bounded by a count `nt_tape_clear` already
+zeroed; about 51 MB abandoned by adult, estimate from the code). The 8/16/32
+progressive warmup is inert from infant on (`notorch_trainer.go:219-222`
+pins `seqLen = BlockSize`). The AML trainer has no gradient clipping and no
+NaN guard and destroys Chuck state every burst. `relieveOverload` runs before
+the burst history is captured, so a loss-path child inherits an empty
+biography. `QuickLoss` samples four random documents per call against an
+`OverloadLossEps` of 0.05. `CFG.MetaC*` and eight other config fields are
+read by nothing. The vendored `ariannamethod/notorch.c` is compiled by
+nothing in the Go build (only `ariannamethod/Makefile:34`, into `libaml.so`
+for the Python tier); the Go binary links the installed library.
+
+**P2.** Dead code with zero callers: `trainSteps`, `notorchTrainSteps`,
+`GenerateSentence` (330 lines), `MetricBoost`. The freeze counter lives in
+six places, the architecture in two, the element list in three shapes
+(`molequla.go:5834`, `cross_graze.go:60`, `molequla.c:4958`). `sweep.sh`
+greps `[spa-gate]` while the code prints `[spa]`, so the SPA column of every
+sweep was zero. Tests: 141 = 133 in package main + 8 in `tests/`; README's
+132 miscounts `governor_test.go` (six tests). README line numbers drifted by
+about 65. `Dockerfile:37` omits the mandatory `-a`.
+
+**Two things the audit cleared.** `ariannamethod.c:1500` is a compiler range
+artefact: `out_len` comes from `am_array_new`, which refuses `len <= 0`
+(`:1061`). And the vendored notorch has no molequla-specific hunks at all;
+a resync re-applies nothing, and on the CPU path buys nothing either, since
+the packed kernels and thread pool never touch `nt_seq_linear`.
+
+**Repair order, as decided on this node.** (1) notorch: the frozen-slot loop,
+with a test that goes red on a frozen param placed before a trainable one;
+rebuild `libnotorch.a` here. (2) `wpe` registered in the notorch trainer.
+(3) DNA as a field: per-reader cursor over `seen/`, emitter-side pruning,
+tick jitter; the `world` source rides the same mechanism. (4) Governor:
+heartbeat during warmup, a byte budget from `MemAvailable`, hibernate that
+exits with state saved, replace-instead-of-grow at the cap. (5) Corpus and
+DNA growth capped in evolution. (6) The one-line cross-graze target and an
+overlay fade without a cliff. (7) Mycelium as a Go witness on the contract
+report C names: the Go table's real columns, `dna/seen`, the `am_method_*`
+and `am_harmonic_*` symbols already linked into the binary through
+`cgo_aml.go` with zero Go callers. (8) README brought to the code.
+
+— Defender (Arianna Method, phone-1)
