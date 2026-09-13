@@ -43,11 +43,14 @@ type ntOrderedParam struct {
 }
 
 // ntContentParams returns the content-transformer weights in a fixed order:
-// wte, then per layer {wq,wk,wv,wo,fc_g,fc_v,fc2}, then lm_head. wpe is omitted
-// — the trainer uses RoPE for position (06_PLAN §6, audit #3).
+// wte, wpe, then per layer {wq,wk,wv,wo,fc_g,fc_v,fc2}, then lm_head. wpe is a
+// trained parameter because inference adds it to every token (ForwardStep,
+// wte[tok] + wpe[pos]) on top of RoPE, and the AML trainer trains it too; a
+// trainer that omits it leaves the mouth running on a random positional table.
 func ntContentParams(model *GPT) []ntOrderedParam {
-	out := make([]ntOrderedParam, 0, 2+7*model.NLayer)
+	out := make([]ntOrderedParam, 0, 3+7*model.NLayer)
 	out = append(out, ntOrderedParam{"wte", model.Base["wte"]})
+	out = append(out, ntOrderedParam{"wpe", model.Base["wpe"]})
 	for l := 0; l < model.NLayer; l++ {
 		pfx := fmt.Sprintf("l%d.", l)
 		for _, suf := range []string{"wq", "wk", "wv", "wo", "fc_g", "fc_v", "fc2"} {
@@ -91,19 +94,20 @@ func ntUnflattenMatrix(mp *MatrixParam, flat []float32) {
 
 // ntBuildForward builds molequla's transformer on the active notorch tape and
 // returns the cross-entropy loss tape index. pIdx holds the CONTENT param tape
-// indices in ntContentParams order (unchanged from Inc1 — wte, 7·NLayer content,
-// lm_head). wrIdx/gateCIdx/gateRIdx are the Inc2 per-layer RRPRAM tape indices
+// indices in ntContentParams order (wte, wpe, 7·NLayer content, lm_head).
+// wrIdx/gateCIdx/gateRIdx are the Inc2 per-layer RRPRAM tape indices
 // (registered separately, AFTER content, so content Chuck slots are untouched —
 // B1); a layer with no hybrid head has wrIdx[l] < 0. tokIdx/tgtIdx are inputs.
 func ntBuildForward(model *GPT, pIdx, wrIdx, gateCIdx, gateRIdx []int, tokIdx, tgtIdx, T, vocab int) int {
 	D := model.NEmbd
 	headDim := D / model.NHead
 	wte := pIdx[0]
+	wpe := pIdx[1]
 	lmHead := pIdx[len(pIdx)-1]
 
-	h := ntSeqEmbedding(wte, -1, tokIdx, T, D) // WTE only — RoPE handles position
+	h := ntSeqEmbedding(wte, wpe, tokIdx, T, D) // wte[tok] + wpe[pos], as inference does; RoPE on q/k below
 	for l := 0; l < model.NLayer; l++ {
-		b := 1 + l*7
+		b := 2 + l*7
 		wq, wk, wv, wo := pIdx[b], pIdx[b+1], pIdx[b+2], pIdx[b+3]
 		fcG, fcV, fc2 := pIdx[b+4], pIdx[b+5], pIdx[b+6]
 
@@ -316,6 +320,7 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 			pIdx[i] = ntTapeParam(t)
 		}
 		ntTapeNoDecay(pIdx[0]) // wte — no weight decay on embeddings
+		ntTapeNoDecay(pIdx[1]) // wpe — same rule for the positional table
 
 		// Inc2: register the combined Wr (trainable, AFTER the content params so
 		// content Chuck slots keep their identity — B1) and the frozen gate
