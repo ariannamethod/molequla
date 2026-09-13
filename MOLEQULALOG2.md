@@ -1545,11 +1545,18 @@ still have an order; the pair `(unix, seq)` is exactly what `dnaNewer` compares.
     2026-09-14T18:48. And it has not moved more than 50 m since the last pass
     (2 m from it).
 
-The cam1 sentence is the front camera hallucinating in the dark — the phone was
-lying on a table and the lens saw almost nothing. That is the shape of the noise
-this organ produces and it is left in the record rather than filtered out: the
-eye reports what it believes, and an organism eating the DNA field is eating a
-belief either way. An earlier pass the same minute, on a lit kitchen table,
+The cam1 sentence was read as a hallucination when the pass was logged; the
+person who owns the balcony corrected it. The phone lay on a balcony with tiled
+walls and a towel hung up to dry beside it, in light he calls terrible, and the
+front camera saw tile and hanging cloth and named the nearest thing it knows:
+a bathroom and a shower curtain. The substance was right and the label was
+the closest word in a 500M vocabulary — the same failure shape as the "tablecloth
+with a drawing" that was tile floor and shadow in the first eye measurement above.
+It is left in the record rather than filtered out: the eye reports what it
+believes, and an organism eating the DNA field is eating a belief either way;
+the ledger of change (ROADMAP item 10) is what turns a hundred identical
+"bathrooms" beside a place line that says balcony, night, fog into a contradiction
+the organism can hold. An earlier pass the same minute, on a lit kitchen table,
 produced «A blurry kitchen table shows a green bowl, a spoon, and a plate, with
 a blurry background that looks like a kitchen counter» — the same engine, and
 right.

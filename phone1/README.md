@@ -96,6 +96,17 @@ reading by, each fragment one sentence behind a bracketed header
 that reads as plain text to whatever eats it. The sequence number only ever
 grows, so two fragments written in the same second still have an order.
 
+What the first night's passes looked like, for scale: the back camera on a
+dark balcony wrote «A close-up view shows a keyboard with white keys and a dark
+background», and there was a keyboard. On a lit table it wrote «a green bowl,
+a spoon, and a plate», and there were. The front camera, facing tiled walls
+and a towel hung up to dry in what the owner of the balcony calls terrible
+light, wrote «A bathroom with a shower curtain hanging» — tile and hanging
+cloth, named with the nearest word a 500M model has. Nothing is filtered:
+the fragment is what the eye believed, and the organisms eat beliefs. The
+correction, when it comes, comes from the other senses and from time
+(ROADMAP item 10), not from a filter in this script.
+
 The eye is `reffs/ocelli/eye`, the pure-C SmolVLM2-500M engine, on the q6_k Yent
 decoder with one global frame (`SMOLVLM_NOSPLIT=1`): 14-16 s and a peak of
 1020 MB per frame on this phone, measured with `/usr/bin/time -v`. Nothing in
