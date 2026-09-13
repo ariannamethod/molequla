@@ -99,3 +99,6 @@ ariannamethod/*.dylib
 
 # Railway local data dir (state lives on volume in production)
 /data/
+
+# Reference clones for inspiration (arianna.c, dario, ...) — not part of the repo
+/reffs/
