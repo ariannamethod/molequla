@@ -27,9 +27,22 @@ LDFLAGS += $(BLAS_LIBS)
 SRC = ears.c encoder.c decoder.c tokenizer.c mel.c ggml_bin.c nnops.c
 HDR = ears.h nnops.h mel.h ggml_bin.h
 
-# where the oracle lives; override on the command line if the checkout moved
-WHISPER ?= $(HOME)/arianna/whisper.cpp
-REF     ?= $(HOME)/arianna/ears-reference
+# Where the oracle and the reference wavs live. Neither is inside this repo and
+# neither is needed to build: `make` wants only notorch and OpenBLAS; `make test`
+# wants both of these.
+#
+# The default is derived from this Makefile's own path, not from $(HOME): inside
+# the phone's chroot $(HOME) is /root while the tree lives under
+# /data/data/com.termux/files/home/arianna, and a $(HOME)-relative default
+# pointed the gates at a directory that does not exist. Three levels up from
+# senses/ears is the repository's parent — the `arianna/` directory that holds
+# molequla, whisper.cpp and ears-reference side by side. Override either on the
+# command line when a checkout sits somewhere else:
+#
+#   make test WHISPER=/elsewhere/whisper.cpp REF=/elsewhere/ears-reference
+ARIANNA ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
+WHISPER ?= $(ARIANNA)/whisper.cpp
+REF     ?= $(ARIANNA)/ears-reference
 
 all: ears
 

@@ -111,8 +111,12 @@ A56): more cores is not faster, the slowest core class sets the pace.
 - Name the classical per-parameter diagonal optimizer baseline in new text. The
   optimizer here is Chuck; the README's historical mentions stay as history.
 - Turn `reffs/` into a dependency. It holds gitignored reference clones
-  (arianna.c, dario, q, actually.life, microkarpathy, netta, ocelli,
-  ariannamethod.ai) for reading and lineage, nothing links against them.
+  (arianna.c, dario, q, actually.life, microkarpathy, netta, loragrad, yent,
+  ariannamethod.ai) for reading and lineage, nothing links against them. ocelli
+  left that list on 2026-09-13: the senses are the tree's own now, in `senses/`,
+  and they came in by `git subtree add` with their history rather than by a
+  copy. See `senses/README.md` — two C engines, each built by its own Makefile
+  and run as a separate process, neither linked into the Go build.
 
 ## Commits and attribution
 

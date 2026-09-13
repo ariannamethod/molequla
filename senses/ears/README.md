@@ -68,13 +68,35 @@ Two things notorch does not have, and what was done about them:
 `-O2 -Wall -Werror`, C11, linking the system `libnotorch.a` with OpenBLAS found
 through `pkg-config openblas`. notorch is not vendored.
 
-Weights are not in this repo. They are whisper.cpp's own:
+**The two halves have different appetites.** `make` builds `ears` and needs
+nothing but notorch, OpenBLAS and a C compiler — 1.7 s from cold on the A56, no
+checkout of anything else, no weights. `make test` is the parity suite and needs
+both of the things that are not here: a built whisper.cpp to be the oracle
+(`harness/oracle_dump` `#include`s `src/whisper.cpp`, and `gate_speed` runs
+`build-blas/bin/whisper-cli`), and the reference wavs with their stored oracle
+transcripts. `WHISPER` and `REF` say where those are:
+
+    make test WHISPER=/elsewhere/whisper.cpp REF=/elsewhere/ears-reference
+
+The defaults are derived from this Makefile's own path rather than from `$HOME`,
+which is what they used before this organ moved into molequla — inside the
+phone's chroot `$HOME` is `/root` while the tree lives under
+`/data/data/com.termux/files/home/arianna`, so a `$HOME`-relative default named a
+directory that does not exist. Three levels up from `senses/ears` is the
+directory holding molequla, `whisper.cpp` and `ears-reference` side by side,
+which on the phone is exactly where they are.
+
+Weights are not in this repo. They are whisper.cpp's own, unconverted — `ears`
+reads the ggml format as it ships:
 
     bash models/download-ggml-model.sh tiny
     bash models/download-ggml-model.sh base
 
 Multilingual, not the `.en` variants — `ears` v1 requires a multilingual vocab
-(51865 entries) because the special-token layout is derived from it.
+(51865 entries) because the special-token layout is derived from it. On phone-1
+the same two files are kept at `~/models/ears/`, outside the tree, where
+`phone1/senses.sh` reads them; they are mirrored on Hugging Face under
+[`ataeff/molequla`](https://huggingface.co/ataeff/molequla) in `ears/`.
 
 ## Parity
 

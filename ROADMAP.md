@@ -51,7 +51,7 @@ is long — an organism lives for months of sessions, not for one uptime.
    itself landed on `claude/phone1-senses`, but on the opposite schedule to the
    one written here (Oleg, 2026-09-13: the senses are gatherers, they run on
    their own): `phone1/senses.sh` takes both cameras through
-   `reffs/ocelli/eye` in senses slots *between* the colony windows, not beside
+   `senses/ocelli/eye` in senses slots *between* the colony windows, not beside
    the witness inside one, and `--dna-extra-sources world,sound,place` is the
    switch `CFG.DNAExtraSources` was waiting for. What is still open is the
    session case: if the eye is ever to run while organisms are alive, its
@@ -71,29 +71,17 @@ is long — an organism lives for months of sessions, not for one uptime.
 6. **Replacement instead of growth under a full machine.** When the byte budget
    refuses growth for long, an organism yields to a sibling rather than waiting
    forever; needs a channel between organisms that does not exist yet.
-7. **Ears — whisper on notorch, parity with ggerganov** (Oleg, 2026-09-13: "if
-   there is sight there must be hearing"). The reference exists since
-   2026-09-13: whisper.cpp `1da4dc8` built with OpenBLAS at
-   `~/arianna/whisper.cpp`, tiny and base multilingual ggml weights, three wavs
-   (`jfk`, the same sentence played through the phone speaker and re-recorded
-   by the microphone, eight seconds of room), transcripts, token JSON, timings
-   and the full tensor layout of both models under `~/arianna/ears-reference/`.
-   On cores 4-7 with four threads: jfk tiny 10.5 s / 178 MB peak, base 19.9 s /
-   287 MB; the re-recorded sentence comes back on both models. Room noise on
-   base ran 185 s through temperature fallbacks before settling on `[Motor]`,
-   so a no-speech gate goes in early. The port: an `ears` organ in C on the
-   canon notorch, loading the ggml `.bin` directly (whisper is not GGUF), with
-   the log-mel front end written from scratch (notorch has no FFT) and
-   everything after it on existing primitives; gate: byte-equal transcript and
-   token ids against whisper.cpp on the three wavs. Input from the microphone
-   into `dna/output/sound/` as a sixth source. Not only speech: a plain
-   sound-event detector in C ahead of the model turns a bang, a door, a voice
-   into one line even when no words are said; a model that names sounds, not
-   just words, comes later. The interim path is already wired: `senses.sh`
-   records twelve seconds a slot and runs whisper.cpp tiny at
-   `-t 4 -l auto -nth 0.6 -sns`, writing `dna/output/sound/` only when speech
-   survives the noise-tag filter; `SENSES_ASR` and `SENSES_ASR_MODEL` are the
-   two variables the C organ replaces.
+7. **Sound that is not speech** (Oleg, 2026-09-13: "if there is sight there must
+   be hearing"). The speech half is closed below — `senses/ears` is the organ and
+   `senses.sh` runs it. What is still open is everything a transcript throws
+   away: a plain sound-event detector in C ahead of the model, so that a bang, a
+   door, a passing voice becomes one line even when no words are said; and later
+   a model that names sounds rather than words. Today a quiet twelve seconds
+   produces nothing, which is correct for speech and empty for hearing. Also
+   open: the encoder gap, `senses/ears/EARSLOG.md` measures whisper.cpp 3.4-4.3×
+   faster on the same wav and names the reason (its threaded REPACK kernel
+   against a single `nt_qmatmul` per projection), which is a notorch debt below
+   as much as an ears one.
 8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
    but the mycelium speaking. First step costs nothing — the witness's line
    through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
@@ -145,6 +133,24 @@ is long — an organism lives for months of sessions, not for one uptime.
 
 ## Closed
 
+- **The senses gathered into one folder** (`claude/phone1-senses-tree`,
+  2026-09-13). Oleg's decision: the organs live inside molequla, in `senses/`,
+  and neither gets a repository of its own. The eye came across from the
+  gitignored `reffs/ocelli` and the ears from the local `arianna/ears` checkout,
+  both by `git subtree add`, so both arrive with their own commits behind them —
+  eleven for ocelli up to `c4fe095`, two for ears up to `047a141`. `senses.sh`
+  now runs `senses/ocelli/eye` and, for the first time, molequla's own
+  recognizer instead of whisper.cpp's binary. Numbers in `MOLEQULALOG2.md`.
+- **Ears — whisper on notorch, parity with ggerganov** (2026-09-13). The organ is
+  `senses/ears`: the ggml `.bin` reader, a log-mel front end written from scratch
+  because notorch has no FFT, and encoder, decoder and tokenizer on notorch
+  primitives. No Python in the build, the tests or the conversion path — there is
+  no conversion path. Gated token for token against whisper.cpp under pure greedy
+  on six rows (tiny and base × `jfk`, `speech_air_14s`, `ambient_8s`), plus mel,
+  encoder and speed gates; `senses/ears/EARSLOG.md` holds the runs, including the
+  slot bug found in whisper.cpp's own no-speech probability. Wired into the field
+  as the default of `SENSES_ASR` / `SENSES_ASR_MODEL`, with whisper-cli kept
+  behind the same two variables.
 - Repairs 1-8 (2026-09-13): notorch frozen slot, `wpe` on the tape, DNA as a
   field, governor bytes and heartbeat, corpus and DNA caps, cross-graze under the
   overlay and the overlay fade, the witness in Go and the end of the Python tier,

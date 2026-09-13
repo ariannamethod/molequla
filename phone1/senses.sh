@@ -8,10 +8,11 @@
 #
 # Three organs, three directories under $MOLEQULA_RUN/dna/output/:
 #   eye   -> world/   one camera frame each from the back and the front camera,
-#                     through reffs/ocelli/eye (SmolVLM2-500M in C), one
+#                     through senses/ocelli/eye (SmolVLM2-500M in C), one
 #                     fragment per sentence.
-#   ears  -> sound/   12 s from the microphone through whisper.cpp tiny, one
-#                     fragment, and only when there was speech in it.
+#   ears  -> sound/   12 s from the microphone through senses/ears (whisper on
+#                     notorch) on the tiny weights, one fragment, and only when
+#                     there was speech in it.
 #   place -> place/   one fragment: where the phone is, what the sky is doing,
 #                     and whether it moved since the last pass.
 #
@@ -21,8 +22,10 @@
 # these directories are food, pruned by the hand that fills them.
 #
 # Every value below can be overridden from the environment; the ASR binary and
-# model are two variables on purpose, so the native `ears` on notorch replaces
-# whisper.cpp without touching the rest of this file.
+# model are two variables on purpose, and that is what let the native `ears` on
+# notorch take over from whisper.cpp — the binary and the weights moved, the
+# rest of this file did not. whisper-cli is still reachable through the same
+# two variables, see the ears block.
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,16 +42,18 @@ LASTF="$SENSES_DIR/place.last"
 LOCK="$SENSES_DIR/.lock"
 
 # --- the eye ---------------------------------------------------------------
-# The eye is not part of this repo and nothing here links against it: `reffs/`
-# holds reference clones, never dependencies. SENSES_EYE is the one variable
-# that names the wrapper — the checkout beside this one if it is there, the
-# ocelli checkout on this phone otherwise.
+# The eye lives in this repo now: senses/ocelli, the pure-C SmolVLM engine,
+# built by its own Makefile and run through its `eye` wrapper. Nothing links
+# against it — it is a separate process with its own notorch copy, and this
+# file only ever executes the wrapper. SENSES_EYE is the one variable that
+# names it: the tree this script is in, or the checkout on this phone when
+# senses.sh is being run from somewhere else.
 SENSES_EYE="${SENSES_EYE:-}"
 if [ -z "$SENSES_EYE" ]; then
-    if [ -x "$REPO/reffs/ocelli/eye" ]; then
-        SENSES_EYE="$REPO/reffs/ocelli/eye"
+    if [ -x "$REPO/senses/ocelli/eye" ]; then
+        SENSES_EYE="$REPO/senses/ocelli/eye"
     else
-        SENSES_EYE="$HOME_TERMUX/arianna/molequla/reffs/ocelli/eye"
+        SENSES_EYE="$HOME_TERMUX/arianna/molequla/senses/ocelli/eye"
     fi
 fi
 SENSES_EYE_MODELS="${SENSES_EYE_MODELS:-$HOME_TERMUX/models/ocelli}"
@@ -57,7 +62,7 @@ SENSES_EYE_MMPROJ="${SENSES_EYE_MMPROJ:-$SENSES_EYE_MODELS/yent_eye_smolvlm2_lor
 SENSES_EYE_PROMPT="${SENSES_EYE_PROMPT:-Describe this image in one sentence.}"
 SENSES_EYE_CAMS="${SENSES_EYE_CAMS:-0 1}"
 # The eye resizes the longest edge to 2048 before it does anything else
-# (reffs/ocelli/vision.c:55-66). A 4080x3060 camera jpeg would be decoded to
+# (senses/ocelli/vision.c:55-66). A 4080x3060 camera jpeg would be decoded to
 # 150 MB of float first; 1024 costs 9 MB and, with one global frame, ends up
 # at the same 512x512 the tower sees.
 SENSES_EYE_EDGE="${SENSES_EYE_EDGE:-1024}"
@@ -65,13 +70,37 @@ SENSES_EYE_EDGE="${SENSES_EYE_EDGE:-1024}"
 SENSES_EYE_MIN_MB="${SENSES_EYE_MIN_MB:-1300}"
 
 # --- the ears --------------------------------------------------------------
-SENSES_ASR="${SENSES_ASR:-$HOME_TERMUX/arianna/whisper.cpp/build-blas/bin/whisper-cli}"
-SENSES_ASR_MODEL="${SENSES_ASR_MODEL:-$HOME_TERMUX/arianna/whisper.cpp/models/ggml-tiny.bin}"
-# tiny, four threads, language auto. -nth is the no-speech threshold and -sns
-# suppresses non-speech tokens: base spent 185 s on 8 s of room noise and said
-# "[Motor]" (arianna/ears-reference/REFERENCE.md); tiny on the same wav emitted
-# nothing, which is the behaviour wanted here.
-SENSES_ASR_ARGS="${SENSES_ASR_ARGS:--t 4 -l auto -nth 0.6 -sns -nt -np}"
+# The recognizer is molequla's own organ: senses/ears, whisper on notorch, in C,
+# gated token for token against whisper.cpp on six rows (senses/ears/EARSLOG.md).
+# Weights live outside the repo, beside the eye's, and are whisper.cpp's own
+# ggml files — the tiny one by default, the base one one variable away.
+#
+# whisper-cli remains the fallback through the same two variables: point
+# SENSES_ASR at it and the command line switches with the binary's name, because
+# the two take their model and their wav differently (ears positionally,
+# whisper-cli through -m and -f). SENSES_ASR_KIND forces the choice when the
+# binary is named something else.
+SENSES_ASR="${SENSES_ASR:-$REPO/senses/ears/ears}"
+SENSES_ASR_MODEL="${SENSES_ASR_MODEL:-$HOME_TERMUX/models/ears/ggml-tiny.bin}"
+SENSES_ASR_KIND="${SENSES_ASR_KIND:-auto}"
+if [ "$SENSES_ASR_KIND" = auto ]; then
+    case "$(basename "$SENSES_ASR")" in
+        ears) SENSES_ASR_KIND=ears ;;
+        *)    SENSES_ASR_KIND=whisper-cli ;;
+    esac
+fi
+# Four threads, language auto, and the same no-speech threshold on both sides:
+# `ears --no-speech-thold 0.6` is whisper-cli's `-nth 0.6`. On whisper-cli -sns
+# also suppresses non-speech tokens, because base spent 185 s on 8 s of room
+# noise and said "[Motor]" (arianna/ears-reference/REFERENCE.md); ears drops the
+# whole window instead and prints nothing at all, which is the behaviour wanted
+# here and what the ambient_8s rows of its transcript gate check.
+if [ -z "${SENSES_ASR_ARGS:-}" ]; then
+    case "$SENSES_ASR_KIND" in
+        ears) SENSES_ASR_ARGS="-l auto -t 4 --no-speech-thold 0.6" ;;
+        *)    SENSES_ASR_ARGS="-t 4 -l auto -nth 0.6 -sns -nt -np" ;;
+    esac
+fi
 SENSES_REC_SECONDS="${SENSES_REC_SECONDS:-12}"
 # Shorter than this, after the noise tags are stripped, is not speech.
 SENSES_SPEECH_MIN_CHARS="${SENSES_SPEECH_MIN_CHARS:-8}"
@@ -290,8 +319,16 @@ do_ears() {
     fi
     rm -f "$remote"
 
-    txt="$(taskset -c "$CPUS" "$SENSES_ASR" -m "$SENSES_ASR_MODEL" -f "$wav" \
-           $SENSES_ASR_ARGS 2>/dev/null)"
+    # Both engines put the transcript, and nothing else, on stdout: ears keeps
+    # its per-window no_speech/avg_logprob lines on stderr, whisper-cli is told
+    # to with -nt -np. So neither needs a parser, only the right argument order
+    # — which is why no --json or -q was added to ears.c for this.
+    case "$SENSES_ASR_KIND" in
+        ears) txt="$(taskset -c "$CPUS" "$SENSES_ASR" "$SENSES_ASR_MODEL" "$wav" \
+                     $SENSES_ASR_ARGS 2>/dev/null)" ;;
+        *)    txt="$(taskset -c "$CPUS" "$SENSES_ASR" -m "$SENSES_ASR_MODEL" -f "$wav" \
+                     $SENSES_ASR_ARGS 2>/dev/null)" ;;
+    esac
     rc=$?
     t1="$(date -u +%s)"
     EARS_WALL=$((t1 - t0))
@@ -302,10 +339,12 @@ do_ears() {
         return 1
     fi
 
-    # Room noise does not become a sentence. Bracketed tags ([Motor], (wind),
-    # *music*) are what the recognizer emits when it hears something that is
-    # not speech; with those gone, what is left must still be long enough to
-    # be a sentence and must contain a letter.
+    # Room noise does not become a sentence. ears suppresses a whole window on
+    # its own no-speech probability and prints an empty line for it, so most of
+    # this is the belt to that brace — and the brace whisper-cli does not have.
+    # Bracketed tags ([Motor], (wind), *music*) are what a recognizer emits when
+    # it hears something that is not speech; with those gone, what is left must
+    # still be long enough to be a sentence and must contain a letter.
     clean="$(printf '%s' "$txt" \
         | sed -E 's/\[[^]]*\]//g; s/\([^)]*\)//g; s/\*[^*]*\*//g' \
         | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
