@@ -937,3 +937,102 @@ tree; if wanted they return as Go benchmarks in repair 8. The Rust core's
 and is one `if let Ok` branch to remove.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 8: the tree fits the phone, and the README reads as the code
+
+Branch `claude/phone1-repair-readme`, on top of `e9fd58f` (main after #36),
+two commits: the build, then the text and the dead code.
+
+**modules/gpu.** Seven files under `ariannamethod/` were not compiled by the
+CPU build — the Go binary compiles `ariannamethod.c` through cgo and links
+the system `libnotorch` — yet sat beside the two that are: the vendored
+notorch core (`notorch.c` 4739 lines, `notorch.h`), its CUDA kernels and
+declarations (`notorch_cuda.cu` 1344, `notorch_cuda.h`), the AML CUDA header
+(`ariannamethod_cuda.h`) and the x86 SIMD shims (`notorch_simd.h`,
+`notorch_simd_scalar.h`). They moved to `modules/gpu/`, beside
+`modules/node_cli.js`; on CUDA hosts they are the source of `libnotorch_gpu`,
+and `cgo_notorch_cuda.go` adds `-I${SRCDIR}/modules/gpu` for
+`ariannamethod_cuda.h`, which `ariannamethod.c` includes under `USE_CUDA`.
+The Go GPU files stay at the root behind their build tags: a Go package is a
+directory. Not compiled here — there is no `nvcc` on this phone and none on
+polygon (`ssh polygon which nvcc` → nothing) — so the `-tags cuda` build is
+to be verified on a CUDA host before the next pod run.
+
+**The move exposed a header the build had been lying to itself about.**
+`cgo_notorch.go` says `#include <notorch.h>` with
+`-I/usr/local/include/ariannamethod`, but cgo concatenates every file's
+`#cgo CFLAGS` package-wide, and `cgo_aml.go`'s `-I${SRCDIR}/ariannamethod`
+came first — so the Go bridge compiled against the vendored
+`ariannamethod/notorch.h` and linked the canon `libnotorch.a`. The two
+disagree at `nt_tensor_new`: `int len` in the vendored header
+(`modules/gpu/notorch.h:43`), `size_t len` in the canon
+(`/usr/local/include/ariannamethod/notorch.h:42`). It worked because on
+AArch64 a 32-bit write to `w0` zeroes the top of `x0`. With the vendored
+header out of the include path the first build failed on exactly that line
+(`cannot use _Ctype_int(length) … as _Ctype_ulong`), `ntTensorNew` now passes
+`size_t`, and the other wrappers already matched. The include order the
+build now uses, from `go build -x`: `-I…/ariannamethod
+-I/usr/include/aarch64-linux-gnu/openblas-pthread/ -I/usr/local/include/ariannamethod`.
+
+**OpenBLAS by pkg-config.** Four cgo files carried
+`/usr/include/x86_64-linux-gnu/openblas-pthread/` and its `-L` twin — paths
+that do not exist on aarch64, which is why every build on this phone needed
+`CGO_CFLAGS`/`CGO_LDFLAGS` overrides (C-RDM-10). They now say `#cgo linux
+pkg-config: openblas`; `pkg-config --libs openblas` here gives
+`-L/usr/lib/aarch64-linux-gnu/openblas-pthread/ -lopenblas`. `CGO_ENABLED=1 go
+build -a .` with no environment builds: 9742256 B. The tuned recipe
+(`-O3 -march=native`) stays the phone's and is now in the README.
+
+**Dead code leaves `molequla.go`: 7359 → 6838 lines.** `GenerateSentence`
+(C-RDM-07), a second 338-line generation loop with no caller — the chat
+REPL, `dnaWrite` and the warmup probes all go through `GenerateResonant`;
+the pure-Go per-parameter training path (C-RDM-08, -13): `trainSteps`, its
+step and state helpers, the moment map on `GPT`, the three `CFG` knobs that
+fed only it; the six overlay knobs `CFG.MetaC*` and `MetaLogitOverlayFloor`
+(C-OVL-03), declared, serialised and read by nothing — the overlay uses the
+package constants and slides between them; `LossOnBatch`, orphaned by the
+first cut. Three behaviours change with it: the SPA reseed restores
+`CFG.SPACoherenceGate` with a `defer` (C-SPA-02: a panic in the inner
+generation left the gate off for the process); a mitosis child inherits
+`--corpus-overlay` (C-RDM-12: it was born without it); `sweep.sh` launches
+with `--element --evolution` — `--corpus/--db/--ckpt` were never parsed
+(C-RDM-01) — and counts `[spa]`, which the code emits, instead of
+`[spa-gate]`, which it never did (C-RDM-06).
+
+**Tests against the real thing (C-TST-01).** `tests/molequla_test.go` was
+`package tests` with `SoftmaxProbs` and `TopKTopPSample` pasted in: eight
+tests that could not go red on a change to the real functions. They moved to
+`sampling_test.go` in package `main`, bodies unchanged, and the `tests/`
+package is gone. Suite: 166 PASS, 0 FAIL — the same 166 as before, all in
+one package now.
+
+**README.** The launch command passes the flags the binary has and shows
+the witness as the fifth process; the sampling pipeline says which regime
+the hard mask belongs to (C-RDM-02) and how the overlay fades; the Go
+autograd is described as inference and loss measurement, training on the
+notorch tape (C-RDM-08); the growth step names the tape-state reset
+(C-RDM-13); all nine `molequla.go:NNNN` cites became function names
+(C-RDM-09 — line numbers rot with every commit, names do not); the five
+`PROJECT_LOG.md` pointers point at `git show 8203d5d^:PROJECT_LOG.md`; the
+build section carries the pkg-config linkage and the phone recipe
+(C-RDM-10); the DNA layer is stated as Go/C/Rust (C-RDM-14); the file and
+test tables are regenerated from `wc -l` and `grep -c '^func Test'`
+(C-RDM-05). C-RDM-03, -04 and -11 were closed by repairs 6 and 7.
+`CLAUDE.md` follows: the vendored notorch lives in `modules/gpu`, 166 green.
+
+**Colony of four plus the witness, 300 s, on this binary (`run11_readme`).**
+150 witness ticks, 0 schema errors this time (the mesh had been migrated by
+the previous run); 84 ticks of `no organisms alive` until the first
+registration, then three to four organisms per tick; at the end air at
+stage 3 (1367k params), earth, water and fire at stage 2 (268k), `global_step`
+2000-2032, field entropy 1.489, actions wait 84 / explore 30 / sustain 22 /
+dampen 14, eight DNA events. NaN 0 in all four. Same shape as `run10` at the
+same age; the deletions changed nothing the organisms do.
+
+**Left, named.** The Rust core's reader of the `field_steering` row — one
+`if let Ok` branch that reads nothing and degrades correctly — stays: no
+`cargo` on this phone or on polygon to verify a Rust edit. The old Python
+benchmarks return as Go benchmarks only if wanted. `standalone-py/molequla.py`
+stays as the historical origin.
+
+— Defender (Arianna Method, phone-1)

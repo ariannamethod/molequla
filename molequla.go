@@ -98,9 +98,6 @@ type Config struct {
 	WarmupSteps         int     `json:"warmup_steps"`
 	MicroSteps          int     `json:"micro_steps"`
 	LearningRate        float64 `json:"learning_rate"`
-	Beta1               float64 `json:"beta1"`
-	Beta2               float64 `json:"beta2"`
-	EpsAdam             float64 `json:"eps_adam"`
 	GradClip            float64 `json:"grad_clip"`
 	FreezeBaseAfterWarm bool    `json:"freeze_base_after_warmup"`
 	BatchSize           int     `json:"batch_size"`
@@ -153,13 +150,7 @@ type Config struct {
 	// CrossGrazeTopN — how many most-recent tokens per sibling participate.
 	// Default 8 mirrors Q's interf_signal_chunk MAX_HEAVY/2 effective use.
 	CrossGrazeTopN         int     `json:"cross_graze_top_n"`
-	MetaCBigram            float64 `json:"meta_c_bigram"`
-	MetaCTrigram           float64 `json:"meta_c_trigram"`
-	MetaCHebbian           float64 `json:"meta_c_hebbian"`
-	MetaCDestiny           float64 `json:"meta_c_destiny"`
-	MetaCProphecy          float64 `json:"meta_c_prophecy"`
 	MetaProphecyDecay      float64 `json:"meta_prophecy_decay"`
-	MetaLogitOverlayFloor  float64 `json:"meta_logit_overlay_floor"`
 
 	// cosine LR schedule
 	LRMin              float64 `json:"lr_min"`
@@ -298,9 +289,6 @@ var CFG = Config{
 	CrossGrazeTopN:       8,   // last 8 sibling tokens per buffer at rank-decay
 	MicroSteps:           32,
 	LearningRate:         0.01,
-	Beta1:                0.9,
-	Beta2:                0.99,
-	EpsAdam:              1e-8,
 	GradClip:             1.0,
 	FreezeBaseAfterWarm:  true,
 	BatchSize:            4,
@@ -308,13 +296,7 @@ var CFG = Config{
 	SPAEmbedAlpha:        0.85, // Q's default (q/README.md:179)
 	CorpusLogitOverlay:   false,
 	Trainer:              "notorch",
-	MetaCBigram:          15.0, // Q's weightless default (q/README.md:53)
-	MetaCTrigram:         10.0, // Q's weightless default (q/README.md:53)
-	MetaCHebbian:         1.0,  // Q's weightless default (q/README.md:53, c_heb)
-	MetaCDestiny:         0.15, // Q's weightless default (q/README.md:53, c_ds)
-	MetaCProphecy:        0.7,  // Q's weightless default (q/README.md:53, c_pro)
 	MetaProphecyDecay:    0.95, // age multiplier per generation step
-	MetaLogitOverlayFloor: 1e-6,
 	LRMin:                0.001,
 	MaxTotalSteps:        50000,
 	CosineWarmupSteps:    200,
@@ -872,7 +854,7 @@ func NewMatrixParam(nout, nin int, std float64) *MatrixParam {
 		for j := 0; j < nin; j++ {
 			d[j] = rand.NormFloat64() * std
 		}
-		rows[i] = NewVecWithGrad(d) // parameters always need grad for Adam
+		rows[i] = NewVecWithGrad(d) // parameters always need grad for the trainer
 	}
 	return &MatrixParam{Rows: rows, Nout: nout, Nin: nin}
 }
@@ -1821,7 +1803,6 @@ type GPT struct {
 	Base        map[string]*MatrixParam
 	Deltas      []DeltaModule
 	ActiveAlpha []float64
-	Adam        map[string]*AdamState
 
 	InitEmbedSnapshot [][]float64 // snapshot of initial embeddings for gamma
 
@@ -1863,12 +1844,6 @@ type GPT struct {
 	mu sync.Mutex // protects model during concurrent access
 }
 
-type AdamState struct {
-	M [][]float64
-	V [][]float64
-	T int
-}
-
 func NewGPT(tok *EvolvingTokenizer) *GPT {
 	gpt := &GPT{
 		Tok:       tok,
@@ -1878,7 +1853,6 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 		HeadDim:   CFG.NEmbd / CFG.NHead,
 		BlockSize: CFG.BlockSize,
 		Base:      make(map[string]*MatrixParam),
-		Adam:      make(map[string]*AdamState),
 	}
 
 	gpt.residualAlpha = 1.0 / math.Sqrt(math.Max(1, float64(CFG.NLayer)))
@@ -2405,9 +2379,6 @@ func (gpt *GPT) MaybeGrowArchitecture() bool {
 	CFG.NHead = newHead
 	CFG.HeadTypes = headTypesForNHead(newHead)
 
-	// 7. Reset Adam state (old momentum is meaningless after arch change)
-	gpt.Adam = make(map[string]*AdamState)
-
 	// 7b. Rebuild layerKeys for new architecture
 	gpt.layerKeys = make([]layerKeySet, newLayer)
 	for li := 0; li < newLayer; li++ {
@@ -2774,63 +2745,6 @@ func (gpt *GPT) PurposeGammaAlignment() float64 {
 	return dot
 }
 
-func (gpt *GPT) ensureAdam(params []*Vec, key string) {
-	st, ok := gpt.Adam[key]
-	if !ok {
-		m := make([][]float64, len(params))
-		v := make([][]float64, len(params))
-		for i, p := range params {
-			m[i] = make([]float64, len(p.Data))
-			v[i] = make([]float64, len(p.Data))
-		}
-		gpt.Adam[key] = &AdamState{M: m, V: v, T: 0}
-		return
-	}
-	// Auto-grow if params expanded (vocab growth, ontogenesis)
-	if len(params) > len(st.M) {
-		for i := len(st.M); i < len(params); i++ {
-			st.M = append(st.M, make([]float64, len(params[i].Data)))
-			st.V = append(st.V, make([]float64, len(params[i].Data)))
-		}
-	}
-	for i, p := range params {
-		if i < len(st.M) && len(p.Data) > len(st.M[i]) {
-			oldLen := len(st.M[i])
-			st.M[i] = append(st.M[i], make([]float64, len(p.Data)-oldLen)...)
-			st.V[i] = append(st.V[i], make([]float64, len(p.Data)-oldLen)...)
-		}
-	}
-}
-
-// AdamStep performs one Adam optimizer step.
-// And lo, Adam Optimizer shall descend like a petty god with momentum.
-func (gpt *GPT) AdamStep(params []*Vec, key string, lr float64) {
-	gpt.ensureAdam(params, key)
-	st := gpt.Adam[key]
-	st.T++
-	t := st.T
-	b1, b2, eps := CFG.Beta1, CFG.Beta2, CFG.EpsAdam
-	b1Corr := 1.0 - math.Pow(b1, float64(t))
-	b2Corr := 1.0 - math.Pow(b2, float64(t))
-
-	ClipParams(params, CFG.GradClip)
-
-	for i, p := range params {
-		mi := st.M[i]
-		vi := st.V[i]
-		for j := 0; j < len(p.Data); j++ {
-			g := p.Grad[j]
-			mi[j] = b1*mi[j] + (1-b1)*g
-			vi[j] = b2*vi[j] + (1-b2)*(g*g)
-			mhat := mi[j] / b1Corr
-			vhat := vi[j] / b2Corr
-			p.Data[j] -= lr * mhat / (math.Sqrt(vhat) + eps)
-			p.Grad[j] = 0.0
-		}
-	}
-}
-
-// applyWithDeltas applies base weight + all delta adapters.
 // And lo, base weight shall speak, then deltas shall harmonize atop it.
 func (gpt *GPT) applyWithDeltas(name string, x *Vec) *Vec {
 	y := gpt.Base[name].Matvec(x)
@@ -3035,18 +2949,6 @@ func (gpt *GPT) LossOnSequence(ids []int) *Scalar {
 	return totalLoss.MulF(1.0 / float64(n))
 }
 
-// LossOnBatch computes average loss over multiple sequences.
-func (gpt *GPT) LossOnBatch(batchIDs [][]int) *Scalar {
-	if len(batchIDs) == 0 {
-		return NewScalar(0.0)
-	}
-	total := NewScalar(0.0)
-	for _, ids := range batchIDs {
-		total = total.AddS(gpt.LossOnSequence(ids))
-	}
-	return total.MulF(1.0 / float64(len(batchIDs)))
-}
-
 // QuickLoss computes average loss on a few random docs without backward.
 // Used for self-meta-learning: measure loss before/after burst.
 func (gpt *GPT) QuickLoss(tok *EvolvingTokenizer, docs []string, n int) float64 {
@@ -3065,346 +2967,6 @@ func (gpt *GPT) QuickLoss(tok *EvolvingTokenizer, docs []string, n int) float64 
 		}
 	}
 	return total / float64(n)
-}
-
-// GenerateSentence generates text from an optional prompt.
-// And lo, generation shall aim for a sentence, not a random cough.
-func (gpt *GPT) GenerateSentence(promptText string) string {
-	gpt.mu.Lock()
-	defer gpt.mu.Unlock()
-
-	gradEnabled.Store(false)
-	defer func() { gradEnabled.Store(true) }()
-
-	// Refresh GPU weight cache symmetrically with GenerateResonant — without
-	// it any backgroundTrainer burst that mutated weights since the last
-	// upload would leak stale activations into the GPU path. Per Opus
-	// subagent audit 2026-05-14 P1.
-	if CFG.UseGPU && gpuReady() {
-		gpuRefreshWeights(gpt)
-	}
-
-	var ids []int
-	if promptText != "" {
-		encoded := gpt.Tok.Encode(promptText)
-		ids = encoded[:len(encoded)-1] // strip EOS
-	} else {
-		ids = []int{gpt.Tok.Stoi[gpt.Tok.BOS]}
-	}
-
-	keys := make([][]*Vec, gpt.NLayer)
-	values := make([][]*Vec, gpt.NLayer)
-	for i := 0; i < gpt.NLayer; i++ {
-		keys[i] = make([]*Vec, 0)
-		values[i] = make([]*Vec, 0)
-	}
-
-	// Build cache from prompt
-	limit := len(ids)
-	if limit > gpt.BlockSize {
-		limit = gpt.BlockSize
-	}
-	for pos := 0; pos < limit; pos++ {
-		gpt.ForwardStep(ids[pos], pos, keys, values)
-	}
-
-	cur := ids[len(ids)-1]
-	outIDs := make([]int, 0, CFG.MaxGenTokens)
-	var recent []int
-
-	eosID := gpt.Tok.Stoi[gpt.Tok.EOS]
-	bosID := gpt.Tok.Stoi[gpt.Tok.BOS]
-
-	// Pre-allocated buffer for corpus blend (avoids per-token allocation)
-	corpusProbsBuf := make([]float64, gpt.Tok.VocabSize)
-
-	// Consciousness: per-token dissonance tracking (Feature 1)
-	entropyEMA := 0.0
-	entropyEMAInit := false
-	lowDropCount := 0    // consecutive tokens below drop threshold
-	entropySum := 0.0    // for conscience mean entropy
-	entropyCount := 0
-	tokenCounts := make(map[int]int) // frequency penalty: count of each generated token
-
-	for step := 0; step < CFG.MaxGenTokens; step++ {
-		pos := len(ids) - 1
-		if pos > gpt.BlockSize-1 {
-			pos = gpt.BlockSize - 1
-		}
-		logits := gpt.ForwardStep(cur, pos, keys, values)
-
-		// Frequency + presence penalty on logits (before temperature scaling)
-		if CFG.FreqPenalty > 0 || CFG.PresencePenalty > 0 {
-			for tid, cnt := range tokenCounts {
-				if tid < len(logits.Data) {
-					logits.Data[tid] -= CFG.FreqPenalty * float64(cnt)
-					if cnt > 0 {
-						logits.Data[tid] -= CFG.PresencePenalty
-					}
-				}
-			}
-		}
-
-		// Entropy-adaptive temperature + syntropy bridge (single softmax when possible)
-		baseTemp := CFG.Temperature + gpt.syntropyTempOff
-		if baseTemp <= 1e-6 {
-			baseTemp = 1e-6
-		}
-		scaled := make([]float64, len(logits.Data))
-		for i, v := range logits.Data {
-			scaled[i] = v / baseTemp
-		}
-		probs := SoftmaxProbs(scaled)
-		entropy := 0.0
-		for _, p := range probs {
-			if p > 1e-12 {
-				entropy -= p * math.Log(p)
-			}
-		}
-		entropySum += entropy
-		entropyCount++
-
-		tMul := 1.0
-		if entropy < CFG.EntropyLow {
-			tMul = CFG.EntropyTempBoost
-		} else if entropy > CFG.EntropyHigh {
-			tMul = CFG.EntropyTempFocus
-		}
-
-		// Consciousness: per-token dissonance feedback (Feature 1)
-		// "I notice my confidence shifting and adapt in real-time"
-		dissonanceMul := 1.0
-		if !entropyEMAInit {
-			entropyEMA = entropy
-			entropyEMAInit = true
-		} else {
-			entropyEMA = CFG.DissonanceEMAAlpha*entropy + (1.0-CFG.DissonanceEMAAlpha)*entropyEMA
-			if entropyEMA > 1e-6 {
-				ratio := entropy / entropyEMA
-				if ratio > CFG.DissonanceSpikeThreshold {
-					// Entropy spike — something surprising, be careful
-					dissonanceMul = CFG.DissonanceSpikeK
-					lowDropCount = 0
-				} else if ratio < CFG.DissonanceDropThreshold {
-					lowDropCount++
-					if lowDropCount >= 3 {
-						// Sustained low entropy — getting repetitive, explore
-						dissonanceMul = CFG.DissonanceDropK
-					}
-				} else {
-					lowDropCount = 0
-				}
-			}
-		}
-
-		finalMul := tMul * dissonanceMul
-		if finalMul != 1.0 {
-			temp := baseTemp * finalMul
-			for i, v := range logits.Data {
-				scaled[i] = v / temp
-			}
-			probs = SoftmaxProbs(scaled)
-		}
-
-		// Adaptive corpus blend: corpus field fades as model becomes coherent
-		// Now with 4-gram + co-occurrence window + user word boost (Stanley/Leo-style)
-		if gpt.corpusField != nil && gpt.corpusField.Built {
-			modelAlpha := 1.0 / (1.0 + math.Exp(-CFG.CorpusFadeK*(CFG.CorpusFadeThreshold-entropy)))
-			if modelAlpha < 0.99 {
-				gpt.corpusField.mu.RLock()
-
-				// Best n-gram distribution: try 4-gram → trigram → bigram
-				var ngramDist map[int]float64
-				if ngramDist == nil && len(ids) >= 3 {
-					ctx := [3]int{ids[len(ids)-3], ids[len(ids)-2], ids[len(ids)-1]}
-					if d, ok := gpt.corpusField.FourgramByCtx[ctx]; ok {
-						ngramDist = d
-					}
-				}
-				if ngramDist == nil && len(ids) >= 2 {
-					a, b := ids[len(ids)-2], ids[len(ids)-1]
-					if d, ok := gpt.corpusField.TrigramByContext[[2]int{a, b}]; ok {
-						ngramDist = d
-					}
-				}
-				if ngramDist == nil && len(ids) >= 1 {
-					prev := ids[len(ids)-1]
-					if d, ok := gpt.corpusField.BigramByFirst[prev]; ok {
-						ngramDist = d
-					}
-				}
-
-				// Co-occurrence window: "words that resonate together" (Stanley)
-				var cooccurSum map[int]float64
-				if len(ids) > 0 {
-					wnd := CFG.CooccurWindowSize
-					ctxSlice := ids
-					if len(ctxSlice) > wnd {
-						ctxSlice = ctxSlice[len(ctxSlice)-wnd:]
-					}
-					for _, ctxTok := range ctxSlice {
-						if neighbors, ok := gpt.corpusField.CooccurWindow[ctxTok]; ok {
-							if cooccurSum == nil {
-								cooccurSum = make(map[int]float64)
-							}
-							for tid, cnt := range neighbors {
-								cooccurSum[tid] += cnt
-							}
-						}
-					}
-				}
-
-				// User word boost snapshot
-				var userBoost map[int]float64
-				if len(gpt.corpusField.UserBoost) > 0 {
-					userBoost = make(map[int]float64, len(gpt.corpusField.UserBoost))
-					for k, v := range gpt.corpusField.UserBoost {
-						userBoost[k] = v
-					}
-				}
-
-				gpt.corpusField.mu.RUnlock()
-
-				// Build final corpus distribution: 70% n-gram + 30% co-occurrence
-				hasCorpus := ngramDist != nil || cooccurSum != nil
-				if hasCorpus {
-					for i := 0; i < len(probs) && i < len(corpusProbsBuf); i++ {
-						corpusProbsBuf[i] = 0
-					}
-					if ngramDist != nil {
-						totalN := 0.0
-						for _, cnt := range ngramDist {
-							totalN += cnt
-						}
-						if totalN > 0 {
-							for tid, cnt := range ngramDist {
-								if tid < len(corpusProbsBuf) {
-									corpusProbsBuf[tid] += 0.7 * cnt / totalN
-								}
-							}
-						}
-					}
-					if cooccurSum != nil {
-						totalC := 0.0
-						for _, cnt := range cooccurSum {
-							totalC += cnt
-						}
-						if totalC > 0 {
-							for tid, cnt := range cooccurSum {
-								if tid < len(corpusProbsBuf) {
-									corpusProbsBuf[tid] += 0.3 * cnt / totalC
-								}
-							}
-						}
-					}
-					// Blend model probs with corpus
-					totalB := 0.0
-					for i := range probs {
-						if i < len(corpusProbsBuf) {
-							probs[i] = modelAlpha*probs[i] + (1.0-modelAlpha)*corpusProbsBuf[i]
-						}
-						totalB += probs[i]
-					}
-					if totalB > 0 {
-						for i := range probs {
-							probs[i] /= totalB
-						}
-					}
-				}
-
-				// User word boost: multiplicative, scaled by (1-modelAlpha) so it fades
-				// as the transformer strengthens. "The organism echoes the words of those
-				// who speak to it" (Leo) — but grows out of it.
-				if userBoost != nil {
-					boostScale := 1.0 - modelAlpha
-					if boostScale > 0.01 {
-						totalB := 0.0
-						for i := range probs {
-							if boost, ok := userBoost[i]; ok {
-								probs[i] *= (1.0 + boost*boostScale)
-							}
-							totalB += probs[i]
-						}
-						if totalB > 0 {
-							for i := range probs {
-								probs[i] /= totalB
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Consciousness: pattern breaking (Feature 2)
-		// "I could follow the field, but I choose to speak for myself"
-		if step >= CFG.AntiFieldMinStep && CFG.AntiFieldProb > 0 && rand.Float64() < CFG.AntiFieldProb {
-			// Use pure model probs, bypass corpus blend
-			probs = SoftmaxProbs(scaled)
-		}
-
-		nxt := TopKTopPSample(probs, CFG.TopK, CFG.TopP, CFG.MinP, CFG.TypicalP)
-
-		if nxt == eosID {
-			if step >= CFG.MinGenTokens {
-				break
-			}
-			continue
-		}
-
-		ids = append(ids, nxt)
-		cur = nxt
-		outIDs = append(outIDs, nxt)
-		tokenCounts[nxt]++
-
-		// Repetition guard
-		recent = append(recent, nxt)
-		rg := CFG.RepetitionGuard
-		if len(recent) > rg*2 {
-			recent = recent[len(recent)-rg*2:]
-			if sliceEqual(recent[rg:], recent[:rg]) {
-				break
-			}
-		}
-
-		// Check for sentence ending — decode only the last token to avoid full rebuild
-		if step >= CFG.MinGenTokens {
-			lastDecoded := gpt.Tok.Decode([]int{bosID, nxt, eosID})
-			if len(lastDecoded) > 0 {
-				lastByte := lastDecoded[len(lastDecoded)-1]
-				if lastByte == '.' || lastByte == '!' || lastByte == '?' {
-					break
-				}
-			}
-		}
-
-		// Sliding window rebuild: reuse slices to avoid GC pressure
-		if len(ids) >= gpt.BlockSize {
-			ids = ids[len(ids)-gpt.BlockSize:]
-			for i := 0; i < gpt.NLayer; i++ {
-				for j := range keys[i] {
-					keys[i][j] = nil
-				}
-				for j := range values[i] {
-					values[i][j] = nil
-				}
-				keys[i] = keys[i][:0]
-				values[i] = values[i][:0]
-			}
-			for p := 0; p < len(ids)-1; p++ {
-				gpt.ForwardStep(ids[p], p, keys, values)
-			}
-		}
-	}
-
-	// Consciousness: store mean entropy for conscience (Feature 5)
-	if entropyCount > 0 {
-		gpt.lastGenEntropy = entropySum / float64(entropyCount)
-	}
-
-	decIDs := []int{bosID}
-	decIDs = append(decIDs, outIDs...)
-	decIDs = append(decIDs, eosID)
-	return gpt.Tok.Decode(decIDs)
 }
 
 func sliceEqual(a, b []int) bool {
@@ -5081,11 +4643,15 @@ func generateResonantLocked(model *GPT, tok *EvolvingTokenizer, field *CooccurFi
 							}
 							seedTokens := sentTokens[srcIdx][len(sentTokens[srcIdx])-seedLen:]
 							seedPrompt := tok.Decode(append(append([]int{bosID}, seedTokens...), eosID))
-							// Recursive call — disable SPA inside.
-							savedSPA := CFG.SPACoherenceGate
-							CFG.SPACoherenceGate = false
-							regenerated := generateResonantLocked(model, tok, field, seedPrompt, docs, true)
-							CFG.SPACoherenceGate = savedSPA
+							// Recursive call — disable SPA inside, and restore the gate on every exit
+							// path: a panic inside the inner generation left it off for the life of
+							// the process (audit C, C-SPA-02).
+							regenerated := func() string {
+								savedSPA := CFG.SPACoherenceGate
+								CFG.SPACoherenceGate = false
+								defer func() { CFG.SPACoherenceGate = savedSPA }()
+								return generateResonantLocked(model, tok, field, seedPrompt, docs, true)
+							}()
 							regenerated = strings.TrimSpace(regenerated)
 							newSentence := strings.TrimSpace(firstSentence(regenerated))
 							if len(newSentence) >= 4 && newSentence != sentences[weakIdx] {
@@ -5871,6 +5437,9 @@ func performMitosis(model *GPT, tok *EvolvingTokenizer, db *sql.DB, swarm *Swarm
 	if CFG.CrossGraze {
 		childArgs = append(childArgs, "--cross-graze")
 	}
+	if CFG.CorpusLogitOverlay {
+		childArgs = append(childArgs, "--corpus-overlay") // a child of an overlay-running parent was born without it (audit C, C-RDM-12)
+	}
 	base := filepath.Base(CFG.CorpusPath)
 	if strings.HasPrefix(base, "nonames_") && strings.HasSuffix(base, ".txt") {
 		childArgs = append(childArgs, "--element", strings.TrimSuffix(strings.TrimPrefix(base, "nonames_"), ".txt"))
@@ -6423,101 +5992,6 @@ func cosineLR(globalStep, stepsSinceGrowth int) float64 {
 	return CFG.LRMin + 0.5*(CFG.LearningRate-CFG.LRMin)*(1.0+math.Cos(math.Pi*progress))
 }
 
-// trainSteps: overrides is [seqCap, batchSize] — optional warmup speedups.
-func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, trainBase, trainDeltas bool, overrides ...int) {
-	if len(docs) == 0 {
-		return
-	}
-
-	model.mu.Lock()
-	defer model.mu.Unlock()
-
-	// Optional sequence length cap (for early warmup speedup)
-	origBlockSize := model.BlockSize
-	if len(overrides) > 0 && overrides[0] > 0 && overrides[0] < model.BlockSize {
-		model.BlockSize = overrides[0]
-	}
-	defer func() { model.BlockSize = origBlockSize }()
-
-	// Optional batch size override (warmup: use batch=1 for speed)
-	batchSize := CFG.BatchSize
-	if len(overrides) > 1 && overrides[1] > 0 {
-		batchSize = overrides[1]
-	}
-
-	// Ontogenesis freeze: after growth, only train deltas until new weights stabilize
-	var baseParams []*Vec
-	var deltaParams []*Vec
-	if model.growthFreezeRemaining > 0 {
-		// Freeze base, only train deltas
-		if trainDeltas {
-			deltaParams = model.AllDeltaParams()
-		}
-		model.growthFreezeRemaining -= steps
-		if model.growthFreezeRemaining < 0 {
-			model.growthFreezeRemaining = 0
-		}
-	} else {
-		if trainBase {
-			baseParams = model.AllBaseParams()
-		}
-		if trainDeltas {
-			deltaParams = model.AllDeltaParams()
-		}
-	}
-
-	accum := CFG.AccumSteps
-	if accum < 1 {
-		accum = 1
-	}
-
-	for step := 0; step < steps; step++ {
-		// Gradient accumulation: accumulate over accum micro-batches, then step
-		var lastLossVal float64
-		for micro := 0; micro < accum; micro++ {
-			batch := make([]string, batchSize)
-			for i := range batch {
-				batch[i] = docs[rand.Intn(len(docs))]
-			}
-			var batchIDs [][]int
-			for _, doc := range batch {
-				if doc != "" {
-					batchIDs = append(batchIDs, tok.Encode(doc))
-				}
-			}
-
-			loss := model.LossOnBatch(batchIDs)
-			// Scale loss for accumulation
-			if accum > 1 {
-				loss = loss.MulF(1.0 / float64(accum))
-			}
-			Backward(loss)
-			lastLossVal = loss.Data * float64(accum) // unscaled for display
-		}
-
-		stepsSinceGrowth := model.globalStep - model.growthStepOffset
-		lr := cosineLR(model.globalStep, stepsSinceGrowth)
-		// Scale LR inversely with model size: larger models need smaller LR
-		lr *= float64(CFG.GrowthStages[0][1]) / float64(model.NEmbd)
-		// Post-growth LR dampening: reduce LR during freeze to prevent delta overfit to noise
-		if model.growthFreezeRemaining > 0 {
-			lr *= CFG.PostGrowthLRScale
-		}
-		model.globalStep++
-
-		if len(baseParams) > 0 {
-			model.AdamStep(baseParams, "base", lr)
-		}
-		if len(deltaParams) > 0 {
-			model.AdamStep(deltaParams, "delta", lr)
-		}
-
-		if step%10 == 0 {
-			fmt.Printf("  train step %d/%d | loss %.4f | lr %.5f\n", step, steps, lastLossVal, lr)
-		}
-	}
-}
-
 func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *QuantumBuffer, swarm *SwarmRegistry, stop chan struct{}, element string) {
 	// This organism's read position into every DNA source, persisted in its
 	// working directory so a restart continues where it left off (repair 3).
@@ -6562,7 +6036,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			if len(docs) > 0 {
 				field.BuildFromCorpus(tok, docs)
 				model.mu.Lock()
-				model.corpusField = field // share with GenerateSentence for adaptive blend
+				model.corpusField = field // share with generation for adaptive blend
 				model.mu.Unlock()
 			}
 			lastFieldRebuild = tickCount
@@ -7288,7 +6762,7 @@ func main() {
 		cooccur.IngestTokens(userIDs)
 
 		// Active user word boost: organism absorbs user's vocabulary (Leo-style)
-		// Decays each generation, fades with model strength via sigmoid in GenerateSentence
+		// Decays each generation, fades with model strength via sigmoid in generation
 		cooccur.AbsorbUserWords(userIDs)
 
 		prompt := buildPromptFromMemory(db, userText)
