@@ -8,7 +8,7 @@ import (
 )
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// notorch trainer — molequla's content transformer trained on notorch's C tape.
+// notorch trainer — molequla's transformer trained on notorch's C tape.
 //
 // Replaces the AML-interpreter path (aml_trainer.go): instead of running the
 // transformer as a re-parsed AML script per step on the AML core's CPU
@@ -16,21 +16,30 @@ import (
 // compiled tape (BLAS, optional CUDA), Chuck optimizer. See
 // 06_PLAN_gpu_training.md, Increment 1.
 //
-// Content model only — RoPE + MHA + SwiGLU, non-parametric RMSNorm. molequla's
-// dormant RRPRAM / hybrid heads are Increment 2. model.Base stays the canonical
-// float64 weight store; per burst it is mirrored into notorch tensors and back.
+// The tape computes the function inference runs (repair 2b, MOLEQULALOG2.md
+// 2026-09-13): wte[tok] + wpe[pos], RoPE + MHA (+ the op-33 RRPRAM blend on
+// hybrid heads), SwiGLU, non-parametric RMSNorm, both residual branches scaled
+// by residualAlpha = 1/sqrt(NLayer), every linear map applied with its delta
+// adapters (base·x + Σ α_i·A_i·B_i·x), and a cross-entropy masked to the
+// positions a document actually has. parity_test.go holds the gate: the tape
+// loss and Go's LossOnSequence agree on one sequence.
+//
+// model.Base and model.Deltas stay the canonical float64 weight store; per
+// burst they are mirrored into notorch tensors and back.
 //
 // Naming: every symbol here is nt-prefixed — molequla already has a (disabled)
-// `notorchTrainSteps` Hebbian stub; these must not collide with it.
+// `notorchTrainStep` Hebbian stub; these must not collide with it.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ntTapeNeedsReset is set after a growth event (Net2Net changed dims) so the
-// next burst wipes the positional Chuck moment slots before training — old
-// slots are meaningless once the param set changes (06_PLAN §6, audit S1).
+// ntTapeNeedsReset is set after a growth event (Net2Net changed dims, or a new
+// delta module was appended) so the next burst wipes the positional Chuck
+// moment slots before training — old slots are meaningless once the param set
+// changes (06_PLAN §6, audit S1).
 var ntTapeNeedsReset bool
 
 // ntOnGrowth signals the notorch trainer to reset its tape state before the
-// next burst. Call whenever MaybeGrowArchitecture has grown the model.
+// next burst. Call whenever MaybeGrowArchitecture has grown the model or a
+// delta module has been appended.
 func ntOnGrowth() { ntTapeNeedsReset = true }
 
 // ntOrderedParam pairs a model.Base weight with its key. The slice order is
@@ -59,6 +68,21 @@ func ntContentParams(model *GPT) []ntOrderedParam {
 	}
 	out = append(out, ntOrderedParam{"lm_head", model.Base["lm_head"]})
 	return out
+}
+
+// ntDeltaNames lists the delta-adapter keys inference applies, in a fixed
+// order: per layer {wq,wk,wv,wo,fc_g,fc_v,fc2}, then lm_head. The per-head
+// `l%d.h%d.w_pattern` adapters that AddDeltaModule also allocates are not
+// applied by applyWithDeltas (w_pattern is retired) and are not trained.
+func ntDeltaNames(model *GPT) []string {
+	out := make([]string, 0, 1+7*model.NLayer)
+	for l := 0; l < model.NLayer; l++ {
+		pfx := fmt.Sprintf("l%d.", l)
+		for _, suf := range []string{"wq", "wk", "wv", "wo", "fc_g", "fc_v", "fc2"} {
+			out = append(out, pfx+suf)
+		}
+	}
+	return append(out, "lm_head")
 }
 
 // ntFlattenMatrix copies a MatrixParam (Nout×Nin float64) into a row-major
@@ -92,29 +116,216 @@ func ntUnflattenMatrix(mp *MatrixParam, flat []float32) {
 	}
 }
 
-// ntBuildForward builds molequla's transformer on the active notorch tape and
-// returns the cross-entropy loss tape index. pIdx holds the CONTENT param tape
-// indices in ntContentParams order (wte, wpe, 7·NLayer content, lm_head).
-// wrIdx/gateCIdx/gateRIdx are the Inc2 per-layer RRPRAM tape indices
-// (registered separately, AFTER content, so content Chuck slots are untouched —
-// B1); a layer with no hybrid head has wrIdx[l] < 0. tokIdx/tgtIdx are inputs.
-func ntBuildForward(model *GPT, pIdx, wrIdx, gateCIdx, gateRIdx []int, tokIdx, tgtIdx, T, vocab int) int {
+// ntTensorFromMatrix mirrors a MatrixParam into a fresh 2-D notorch tensor.
+func ntTensorFromMatrix(mp *MatrixParam) ntTensor {
+	t := ntTensorNew2D(mp.Nout, mp.Nin)
+	ntTensorSet(t, ntFlattenMatrix(mp))
+	return t
+}
+
+// ntDeltaMirror is one delta adapter (module i, weight name) mirrored into
+// notorch tensors, with its effective alpha and, after register(), its tape
+// indices.
+type ntDeltaMirror struct {
+	module int
+	name   string
+	da     *DeltaAdapter
+	a, b   ntTensor
+	alpha  float64 // ActiveAlpha[i] · deltaAlphaScale at mirror time
+	aIdx   int
+	bIdx   int
+}
+
+// ntMirror holds one burst's notorch-side copy of the model: content weights,
+// delta adapters, and (on hybrid models) the packed RRPRAM factors with their
+// frozen gate vectors. Registration order on the tape is fixed — content, then
+// deltas, then RRPRAM — because Chuck's moment slots are positional.
+type ntMirror struct {
+	model   *GPT
+	seqLen  int
+	params  []ntOrderedParam
+	tensors []ntTensor
+	deltas  []ntDeltaMirror
+	hasRR   bool
+	wr      []ntTensor
+	gateC   []ntTensor
+	gateR   []ntTensor
+	// tape indices, valid between register() and the next ntTapeClear
+	pIdx     []int
+	wrIdx    []int
+	gateCIdx []int
+	gateRIdx []int
+}
+
+// ntNewMirror mirrors the model for a burst at sequence length seqLen.
+func ntNewMirror(model *GPT, seqLen int) *ntMirror {
+	m := &ntMirror{model: model, seqLen: seqLen, params: ntContentParams(model)}
+	m.tensors = make([]ntTensor, len(m.params))
+	for i, p := range m.params {
+		m.tensors[i] = ntTensorFromMatrix(p.mp)
+	}
+	for i, mod := range model.Deltas {
+		alpha := 1.0
+		if i < len(model.ActiveAlpha) {
+			alpha = model.ActiveAlpha[i]
+		}
+		alpha *= model.deltaAlphaScale
+		for _, name := range ntDeltaNames(model) {
+			da, ok := mod[name]
+			if !ok || da == nil || da.A == nil || da.B == nil {
+				continue
+			}
+			m.deltas = append(m.deltas, ntDeltaMirror{
+				module: i, name: name, da: da, alpha: alpha,
+				a: ntTensorFromMatrix(da.A), b: ntTensorFromMatrix(da.B),
+			})
+		}
+	}
+	m.hasRR = layerHasHybrid()
+	m.wr = make([]ntTensor, model.NLayer)
+	m.gateC = make([]ntTensor, model.NLayer)
+	m.gateR = make([]ntTensor, model.NLayer)
+	if m.hasRR {
+		for l := 0; l < model.NLayer; l++ {
+			combined := ntPackWr(model, l)
+			if combined == nil {
+				continue
+			}
+			wt := ntTensorNew(len(combined))
+			ntTensorSet(wt, combined)
+			m.wr[l] = wt
+			gc, gr := ntBuildGateVectors(model, l, seqLen)
+			gct := ntTensorNew(len(gc))
+			ntTensorSet(gct, gc)
+			grt := ntTensorNew(len(gr))
+			ntTensorSet(grt, gr)
+			m.gateC[l], m.gateR[l] = gct, grt
+		}
+	}
+	return m
+}
+
+// register puts every mirrored tensor on the active tape in the fixed order
+// and records the tape indices. Call once per step after ntTapeStart().
+func (m *ntMirror) register() {
+	m.pIdx = make([]int, len(m.tensors))
+	for i, t := range m.tensors {
+		m.pIdx[i] = ntTapeParam(t)
+	}
+	ntTapeNoDecay(m.pIdx[0]) // wte — no weight decay on embeddings
+	ntTapeNoDecay(m.pIdx[1]) // wpe — same rule for the positional table
+	for i := range m.deltas {
+		d := &m.deltas[i]
+		d.aIdx = ntTapeParam(d.a)
+		ntTapeNoDecay(d.aIdx) // low-rank factors: no weight decay (double-shrink)
+		d.bIdx = ntTapeParam(d.b)
+		ntTapeNoDecay(d.bIdx)
+	}
+	m.wrIdx = make([]int, m.model.NLayer)
+	m.gateCIdx = make([]int, m.model.NLayer)
+	m.gateRIdx = make([]int, m.model.NLayer)
+	for l := 0; l < m.model.NLayer; l++ {
+		m.wrIdx[l] = -1
+		if m.wr[l] == nil {
+			continue
+		}
+		m.wrIdx[l] = ntTapeParam(m.wr[l])
+		ntTapeNoDecay(m.wrIdx[l])
+		m.gateCIdx[l] = ntTapeParamFrozen(m.gateC[l]) // frozen → no optimizer slot
+		m.gateRIdx[l] = ntTapeParamFrozen(m.gateR[l])
+	}
+}
+
+// linear applies weight `name` (tape index wIdx) to xIdx and adds every delta
+// adapter inference would add: base·x + Σ_i α_i·A_i·(B_i·x).
+func (m *ntMirror) linear(name string, wIdx, xIdx, T int) int {
+	y := ntSeqLinear(wIdx, xIdx, T)
+	for i := range m.deltas {
+		d := &m.deltas[i]
+		if d.name != name || d.alpha == 0 {
+			continue
+		}
+		bx := ntSeqLinear(d.bIdx, xIdx, T)
+		y = ntAdd(y, ntScale(ntSeqLinear(d.aIdx, bx, T), d.alpha))
+	}
+	return y
+}
+
+// pullBack copies every trained tensor into the canonical Go-side store.
+func (m *ntMirror) pullBack() {
+	for i, p := range m.params {
+		ntTensorSyncCPU(m.tensors[i])
+		ntUnflattenMatrix(p.mp, ntTensorGet(m.tensors[i], p.mp.Nout*p.mp.Nin))
+	}
+	for i := range m.deltas {
+		d := &m.deltas[i]
+		ntTensorSyncCPU(d.a)
+		ntUnflattenMatrix(d.da.A, ntTensorGet(d.a, d.da.A.Nout*d.da.A.Nin))
+		ntTensorSyncCPU(d.b)
+		ntUnflattenMatrix(d.da.B, ntTensorGet(d.b, d.da.B.Nout*d.da.B.Nin))
+	}
+	if m.hasRR {
+		for l := 0; l < m.model.NLayer; l++ {
+			if m.wr[l] == nil {
+				continue
+			}
+			a := m.model.Base[fmt.Sprintf("l%d.wr_a", l)]
+			b := m.model.Base[fmt.Sprintf("l%d.wr_b", l)]
+			if a == nil || b == nil {
+				continue
+			}
+			ntTensorSyncCPU(m.wr[l])
+			ntUnpackWr(m.model, l, ntTensorGet(m.wr[l], a.Nout*a.Nin+b.Nout*b.Nin))
+		}
+	}
+}
+
+// free releases every mirrored tensor.
+func (m *ntMirror) free() {
+	for _, t := range m.tensors {
+		ntTensorFree(t)
+	}
+	for i := range m.deltas {
+		ntTensorFree(m.deltas[i].a)
+		ntTensorFree(m.deltas[i].b)
+	}
+	for l := range m.wr {
+		for _, t := range []ntTensor{m.wr[l], m.gateC[l], m.gateR[l]} {
+			if t != nil {
+				ntTensorFree(t)
+			}
+		}
+	}
+}
+
+// ntBuildForward builds molequla's transformer on the active notorch tape from
+// a registered mirror and returns (loss tape index, logits tape index). The
+// graph is the function ForwardStep runs: wte[tok] + wpe[pos]; per layer
+// pre-norm RMSNorm, q/k/v with deltas, RoPE on q and k, causal MHA (blended
+// with the op-33 RRPRAM head on hybrid layers), wo with deltas, residual scaled
+// by residualAlpha; pre-norm, SwiGLU with deltas, fc2 with deltas, residual
+// scaled by residualAlpha; final RMSNorm, lm_head with deltas; cross-entropy
+// masked to the positions in maskIdx (mean over the unmasked count).
+func ntBuildForward(m *ntMirror, tokIdx, tgtIdx, maskIdx, T, vocab int) (int, int) {
+	model := m.model
 	D := model.NEmbd
 	headDim := D / model.NHead
-	wte := pIdx[0]
-	wpe := pIdx[1]
-	lmHead := pIdx[len(pIdx)-1]
+	alpha := model.residualAlpha
+	wte := m.pIdx[0]
+	wpe := m.pIdx[1]
+	lmHead := m.pIdx[len(m.pIdx)-1]
 
 	h := ntSeqEmbedding(wte, wpe, tokIdx, T, D) // wte[tok] + wpe[pos], as inference does; RoPE on q/k below
 	for l := 0; l < model.NLayer; l++ {
 		b := 2 + l*7
-		wq, wk, wv, wo := pIdx[b], pIdx[b+1], pIdx[b+2], pIdx[b+3]
-		fcG, fcV, fc2 := pIdx[b+4], pIdx[b+5], pIdx[b+6]
+		pfx := fmt.Sprintf("l%d.", l)
+		wq, wk, wv, wo := m.pIdx[b], m.pIdx[b+1], m.pIdx[b+2], m.pIdx[b+3]
+		fcG, fcV, fc2 := m.pIdx[b+4], m.pIdx[b+5], m.pIdx[b+6]
 
 		hn := ntSeqRMSNorm(h, -1, T, D) // gamma -1 → non-parametric (matches molequla)
-		q := ntRope(ntSeqLinear(wq, hn, T), T, headDim)
-		k := ntRope(ntSeqLinear(wk, hn, T), T, headDim)
-		v := ntSeqLinear(wv, hn, T)
+		q := ntRope(m.linear(pfx+"wq", wq, hn, T), T, headDim)
+		k := ntRope(m.linear(pfx+"wk", wk, hn, T), T, headDim)
+		v := m.linear(pfx+"wv", wv, hn, T)
 		attn := ntMHCausalAttention(q, k, v, T, headDim)
 
 		// Inc2: low-rank RRPRAM head (Resonance form, op 33), output-level blend.
@@ -122,20 +333,20 @@ func ntBuildForward(model *GPT, pIdx, wrIdx, gateCIdx, gateRIdx []int, tokIdx, t
 		// heads (full D input, same v as content). Per-head frozen gate masks
 		// content-only heads (gateR=0) and weights hybrid heads by sigmoid(alpha):
 		//   out = gateC ⊙ content_out + gateR ⊙ rrpram_out
-		if l < len(wrIdx) && wrIdx[l] >= 0 {
-			rAttn := ntRrpramLowrankAttention(wrIdx[l], hn, v, T, D, model.NHead, headDim)
-			attn = ntAdd(ntMul(attn, gateCIdx[l]), ntMul(rAttn, gateRIdx[l]))
+		if l < len(m.wrIdx) && m.wrIdx[l] >= 0 {
+			rAttn := ntRrpramLowrankAttention(m.wrIdx[l], hn, v, T, D, model.NHead, headDim)
+			attn = ntAdd(ntMul(attn, m.gateCIdx[l]), ntMul(rAttn, m.gateRIdx[l]))
 		}
-		h = ntAdd(h, ntSeqLinear(wo, attn, T))
+		h = ntAdd(h, ntScale(m.linear(pfx+"wo", wo, attn, T), alpha))
 
 		hn = ntSeqRMSNorm(h, -1, T, D)
-		gate := ntSilu(ntSeqLinear(fcG, hn, T))
-		up := ntSeqLinear(fcV, hn, T)
-		h = ntAdd(h, ntSeqLinear(fc2, ntMul(gate, up), T))
+		gate := ntSilu(m.linear(pfx+"fc_g", fcG, hn, T))
+		up := m.linear(pfx+"fc_v", fcV, hn, T)
+		h = ntAdd(h, ntScale(m.linear(pfx+"fc2", fc2, ntMul(gate, up), T), alpha))
 	}
 	hf := ntSeqRMSNorm(h, -1, T, D)
-	logits := ntSeqLinear(lmHead, hf, T)
-	return ntSeqCrossEntropy(logits, tgtIdx, T, vocab)
+	logits := m.linear("lm_head", lmHead, hf, T)
+	return ntSeqCrossEntropyMasked(logits, tgtIdx, maskIdx, T, vocab), logits
 }
 
 // ntPackWr flattens the per-layer factors wr_a [NHead·NEmbd × R] then
@@ -206,9 +417,44 @@ func ntBuildGateVectors(model *GPT, l, T int) (gateC, gateR []float32) {
 	return gateC, gateR
 }
 
-// ntTrainCore runs `steps` training steps of molequla's content model on
-// notorch. lrFor(step) supplies the per-step learning rate. Caller holds
-// model.mu. Returns (avg loss, counted steps).
+// ntWindow fills one training window from ids starting at `start`: tokens,
+// next-token targets, and a mask that is 1 only where a real target exists.
+// Positions past the document are token 0 with mask 0, so they price nothing
+// and train nothing.
+func ntWindow(ids []int, start, T int, tok, tgt, mask []float32) {
+	for i := 0; i < T; i++ {
+		idx := start + i
+		tok[i], tgt[i], mask[i] = 0, 0, 0
+		if idx < len(ids) {
+			tok[i] = float32(ids[idx])
+		}
+		if idx+1 < len(ids) {
+			tgt[i] = float32(ids[idx+1])
+			mask[i] = 1
+		}
+	}
+}
+
+// ntPushInputs records tokens/targets/mask as tape inputs and returns their
+// indices; the tensors are released (the tape holds its own references).
+func ntPushInputs(tok, tgt, mask []float32) (tokIdx, tgtIdx, maskIdx int) {
+	tokT := ntTensorNew(len(tok))
+	ntTensorSet(tokT, tok)
+	tgtT := ntTensorNew(len(tgt))
+	ntTensorSet(tgtT, tgt)
+	maskT := ntTensorNew(len(mask))
+	ntTensorSet(maskT, mask)
+	tokIdx = ntTapeInput(tokT)
+	tgtIdx = ntTapeInput(tgtT)
+	maskIdx = ntTapeInput(maskT)
+	ntTensorFree(tokT)
+	ntTensorFree(tgtT)
+	ntTensorFree(maskT)
+	return
+}
+
+// ntTrainCore runs `steps` training steps of molequla's model on notorch.
+// lrFor(step) supplies the per-step learning rate. Caller holds model.mu.
 // Returns (avg loss, counted steps, step-loop wall ms) — the wall time is the
 // pure training cost, criterion-2 metric (06_PLAN §11.2), measured over the
 // step loop only, excluding the per-burst weight mirror in/out.
@@ -220,62 +466,11 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 	// Inc2 (B3): op-33 assumes T_r == T and the combined Wr is packed at width
 	// BlockSize, so RRPRAM-bearing bursts MUST run at T = BlockSize (this also
 	// satisfies the documented gpu_rrpram_lr T-vs-T_max stride workaround). Pin it.
-	hasRRPRAM := layerHasHybrid()
-	if hasRRPRAM {
+	if layerHasHybrid() {
 		seqLen = model.BlockSize
 	}
-	params := ntContentParams(model)
-
-	// Mirror model.Base weights into notorch tensors (created once per burst).
-	tensors := make([]ntTensor, len(params))
-	for i, p := range params {
-		t := ntTensorNew2D(p.mp.Nout, p.mp.Nin)
-		ntTensorSet(t, ntFlattenMatrix(p.mp))
-		tensors[i] = t
-	}
-	defer func() {
-		for _, t := range tensors {
-			ntTensorFree(t)
-		}
-	}()
-
-	// Inc2: per-layer combined Wr tensors (packed wr_a++wr_b) + frozen per-head
-	// gate vectors, created once per burst (the gate is frozen — alpha does not
-	// train this increment, so the vectors are constant across the burst).
-	wrTensors := make([]ntTensor, model.NLayer) // nil when a layer has no factors
-	gateCT := make([]ntTensor, model.NLayer)
-	gateRT := make([]ntTensor, model.NLayer)
-	if hasRRPRAM {
-		for l := 0; l < model.NLayer; l++ {
-			combined := ntPackWr(model, l)
-			if combined == nil {
-				continue
-			}
-			wt := ntTensorNew(len(combined))
-			ntTensorSet(wt, combined)
-			wrTensors[l] = wt
-			gc, gr := ntBuildGateVectors(model, l, seqLen)
-			gct := ntTensorNew(len(gc))
-			ntTensorSet(gct, gc)
-			grt := ntTensorNew(len(gr))
-			ntTensorSet(grt, gr)
-			gateCT[l] = gct
-			gateRT[l] = grt
-		}
-		defer func() {
-			for l := 0; l < model.NLayer; l++ {
-				if wrTensors[l] != nil {
-					ntTensorFree(wrTensors[l])
-				}
-				if gateCT[l] != nil {
-					ntTensorFree(gateCT[l])
-				}
-				if gateRT[l] != nil {
-					ntTensorFree(gateRT[l])
-				}
-			}
-		}()
-	}
+	m := ntNewMirror(model, seqLen)
+	defer m.free()
 
 	// Post-growth: wipe positional Chuck slots before the first step (S1).
 	if ntTapeNeedsReset {
@@ -286,6 +481,7 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 	guard := newNTNanGuard()
 	tokBuf := make([]float32, seqLen)
 	tgtBuf := make([]float32, seqLen)
+	maskBuf := make([]float32, seqLen)
 	var lossSum float64
 	var lossN int
 
@@ -299,56 +495,13 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		if len(ids) > seqLen+1 {
 			start = rand.Intn(len(ids) - seqLen - 1)
 		}
-		for i := 0; i < seqLen; i++ {
-			idx := start + i
-			if idx < len(ids) {
-				tokBuf[i] = float32(ids[idx])
-			} else {
-				tokBuf[i] = 0
-			}
-			if idx+1 < len(ids) {
-				tgtBuf[i] = float32(ids[idx+1])
-			} else {
-				tgtBuf[i] = 0
-			}
-		}
+		ntWindow(ids, start, seqLen, tokBuf, tgtBuf, maskBuf)
 
 		ntTapeStart()
-		// Register params in the fixed ntContentParams order (B1).
-		pIdx := make([]int, len(tensors))
-		for i, t := range tensors {
-			pIdx[i] = ntTapeParam(t)
-		}
-		ntTapeNoDecay(pIdx[0]) // wte — no weight decay on embeddings
-		ntTapeNoDecay(pIdx[1]) // wpe — same rule for the positional table
+		m.register() // fixed order every step (B1): content, deltas, RRPRAM
+		tokIdx, tgtIdx, maskIdx := ntPushInputs(tokBuf, tgtBuf, maskBuf)
 
-		// Inc2: register the combined Wr (trainable, AFTER the content params so
-		// content Chuck slots keep their identity — B1) and the frozen gate
-		// vectors (frozen → consume no param slot). wrIdx[l] < 0 → layer has none.
-		wrIdx := make([]int, model.NLayer)
-		gateCIdx := make([]int, model.NLayer)
-		gateRIdx := make([]int, model.NLayer)
-		for l := 0; l < model.NLayer; l++ {
-			wrIdx[l] = -1
-			if wrTensors[l] == nil {
-				continue
-			}
-			wrIdx[l] = ntTapeParam(wrTensors[l])
-			ntTapeNoDecay(wrIdx[l]) // low-rank factors: no weight decay (double-shrink)
-			gateCIdx[l] = ntTapeParamFrozen(gateCT[l])
-			gateRIdx[l] = ntTapeParamFrozen(gateRT[l])
-		}
-
-		tokT := ntTensorNew(seqLen)
-		ntTensorSet(tokT, tokBuf)
-		tgtT := ntTensorNew(seqLen)
-		ntTensorSet(tgtT, tgtBuf)
-		tokIdx := ntTapeInput(tokT)
-		tgtIdx := ntTapeInput(tgtT)
-		ntTensorFree(tokT)
-		ntTensorFree(tgtT)
-
-		lossIdx := ntBuildForward(model, pIdx, wrIdx, gateCIdx, gateRIdx, tokIdx, tgtIdx, seqLen, vocab)
+		lossIdx, _ := ntBuildForward(m, tokIdx, tgtIdx, maskIdx, seqLen, vocab)
 		loss := ntEntryScalar(lossIdx)
 		ntTapeBackward(lossIdx)
 		if guard.check() {
@@ -365,32 +518,53 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 	}
 	elapsedMs := float64(time.Since(t0).Microseconds()) / 1000.0
 
-	// Mirror trained weights back into the canonical model.Base store.
-	// Sync each tensor's host mirror from device first — ntx_get is a raw memcpy
-	// from t->data, which is stale after GPU training on the cuda build (no-op on CPU).
-	for i, p := range params {
-		ntTensorSyncCPU(tensors[i])
-		ntUnflattenMatrix(p.mp, ntTensorGet(tensors[i], p.mp.Nout*p.mp.Nin))
-	}
-	// Inc2: split the trained combined Wr back into the wr_a / wr_b Base matrices.
-	if hasRRPRAM {
-		for l := 0; l < model.NLayer; l++ {
-			if wrTensors[l] == nil {
-				continue
-			}
-			a := model.Base[fmt.Sprintf("l%d.wr_a", l)]
-			b := model.Base[fmt.Sprintf("l%d.wr_b", l)]
-			if a == nil || b == nil {
-				continue
-			}
-			ntTensorSyncCPU(wrTensors[l])
-			ntUnpackWr(model, l, ntTensorGet(wrTensors[l], a.Nout*a.Nin+b.Nout*b.Nin))
-		}
-	}
+	// Mirror trained weights back into the canonical model.Base / Deltas store.
+	m.pullBack()
 	if lossN > 0 {
 		return lossSum / float64(lossN), lossN, elapsedMs
 	}
 	return 0, 0, elapsedMs
+}
+
+// ntSequenceLoss builds the trainer's forward graph on the tape for one token
+// sequence (no optimizer step) and returns the mean cross-entropy over the
+// n = len(ids)-1 predicted positions — the same quantity Go inference computes
+// in LossOnSequence — plus the logits of the last predicted position, for a
+// component-wise parity check. Diagnostic: the tape is destroyed afterwards
+// so Chuck slots of a live burst are never disturbed. Caller holds model.mu
+// (or owns the model, as tests do).
+func ntSequenceLoss(model *GPT, tok *EvolvingTokenizer, ids []int) (float64, []float32) {
+	n := len(ids) - 1
+	if n > model.BlockSize {
+		n = model.BlockSize
+	}
+	if n <= 0 {
+		return 0, nil
+	}
+	T := n
+	if layerHasHybrid() {
+		T = model.BlockSize // op-33 packing pins T to BlockSize; the mask prices n
+	}
+	m := ntNewMirror(model, T)
+	defer m.free()
+	tokBuf := make([]float32, T)
+	tgtBuf := make([]float32, T)
+	maskBuf := make([]float32, T)
+	ntWindow(ids[:n+1], 0, T, tokBuf, tgtBuf, maskBuf)
+
+	ntTapeStart()
+	m.register()
+	tokIdx, tgtIdx, maskIdx := ntPushInputs(tokBuf, tgtBuf, maskBuf)
+	lossIdx, logitsIdx := ntBuildForward(m, tokIdx, tgtIdx, maskIdx, T, tok.VocabSize)
+	loss := ntEntryScalar(lossIdx)
+	V := tok.VocabSize
+	all := ntEntryData(logitsIdx, T*V)
+	var last []float32
+	if len(all) >= n*V {
+		last = append([]float32(nil), all[(n-1)*V:n*V]...)
+	}
+	ntTapeDestroy()
+	return loss, last
 }
 
 // ntBurstTrain — ecology micro-burst on the notorch path. Mirrors amlBurstTrain

@@ -481,3 +481,102 @@ not honour the forward's broadcast; `T < BlockSize` silently reinterprets the
 packed RRPRAM factors with no assertion.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 2b: the tape computes the function the mouth runs
+
+Branch `claude/phone1-repair-parity`, on top of `e1a820d` (main after #31).
+Files: `notorch_trainer.go` (restructured), `cgo_notorch.go` (two wrappers),
+`molequla.go` (eps, one call), `parity_test.go` (new).
+
+**The gate first.** `parity_test.go` holds three tests that were written
+against the old trainer and read red on it: a two-layer model trained forty
+steps on the tape, then `LossOnSequence` (Go, float64) against the tape loss
+on the same 24-token sequence, `|Δ| = 6.22e-02`; a nine-token document,
+`|Δ| = 5.91e-02`; and the delta adapter `l0.wq` after thirty steps, moved
+`0.00e+00`. On the rewritten trainer the same tests read, from the test log
+(`parity_test.go:97`, `:113`, `:149`):
+
+| gate | before | after |
+|---|---|---|
+| full window, 2 layers, 40 steps: `\|Δloss\|` | 6.22e-02 | 1.22e-07 |
+| same, last-position logits, worst `\|Δ\|` / span | — | 7.25e-07 / 5.34 |
+| nine-token document: `\|Δloss\|` | 5.91e-02 | 2.79e-07 |
+| delta `l0.wq` B, max movement over 30 steps | 0.00e+00 | 1.26e-02 |
+
+1e-7 is float32 against float64 over 24 positions; the tolerances stay at
+2e-3 absolute and 1e-3 relative so the gate goes red on any of the four gaps
+alone.
+
+**The four gaps, each at a line.** Both residual branches are scaled on the
+tape by `residualAlpha = 1/√NLayer` through `nt_scale` (notorch.c:4330), as
+`ForwardStep` scales them (molequla.go:2979, :2996); the scale sits at
+`notorch_trainer.go:340` and `:345`. Go `RMSNorm` uses eps 1e-6 in forward and
+backward (molequla.go:1034, :1046), the value `nt_seq_rmsnorm` uses
+(notorch.c:3287). A window shorter than `BlockSize` carries a `[T]` mask and
+is priced by `nt_seq_cross_entropy_masked` (notorch.c:4222), whose mean runs
+over the masked count — the same `1/n` as `LossOnSequence` — where the old
+trainer wrote token 0 into both tokens and targets past the document's end
+(`e1a820d:notorch_trainer.go:307`, `:312`) and priced them under the unmasked
+loss (`:138`). The delta adapters are on the tape: per layer `wq wk wv wo
+fc_g fc_v fc2` and `lm_head`, A and B registered as no-decay parameters after
+the content weights, applied as `base·x + Σ αᵢ·Aᵢ(Bᵢ·x)` with
+`αᵢ = ActiveAlpha[i]·deltaAlphaScale`, the arithmetic of `applyWithDeltas`
+(molequla.go:2827), and mirrored back to `model.Deltas` after every burst.
+`AddDeltaModule` now calls `ntOnGrowth()` (molequla.go:1995): a new module
+changes the registration order, and Chuck's moment slots are positional.
+`w_pattern` adapters are allocated by `AddDeltaModule` and applied by nothing;
+they are not trained.
+
+**Shape of the trainer now.** One `ntMirror` (`notorch_trainer.go:161`) holds
+the burst's notorch-side copy — content weights in the fixed `wte, wpe,
+7×layer, lm_head` order, the deltas, and on hybrid models the packed RRPRAM
+factors with their frozen gate vectors — and does three things: `register()`
+(`:210`) puts everything on the tape in the same order every step, `linear()`
+(`:241`) is the one place a weight meets its adapters, `pullBack()` returns
+the trained tensors to the Go store. `ntBuildForward` (`:309`) is the graph;
+`ntWindow` (`:424`) fills tokens, targets and mask; `ntSequenceLoss` (`:536`)
+builds the graph once without an optimizer step and returns the loss and the
+last predicted position's logits, then destroys the tape so a live burst's
+Chuck slots are never disturbed. `cgo_notorch.go` gains
+`ntSeqCrossEntropyMasked` and `ntScale`.
+
+**Suite.** 149 PASS, 0 FAIL on the committed file set (146 before this
+repair plus the three parity gates); `governor_phone.go` and its three tests
+sit uncommitted in the tree for repair 4, 152 with them.
+
+**One earth organism, 180 s, `--evolution --cross-graze`, `taskset -c 4-7`,
+on the rebuilt binary (`run5/earth.stdout`, `run.meta`):** embryo → infant →
+child, warmup complete at stage 2, checkpoint 6583926 B written, `nan` count
+0 (`grep -a -c -i nan`), threads capped to 1 by the oversubscription guard.
+No burst fired inside the window; the 600 s colony of the previous entry
+fired its first bursts later than three minutes as well.
+
+**The loss reads higher, and here is why.** Per-stage warmup losses and
+speeds, this run against earth in the 600 s colony of repair 3 (`run4`):
+
+| stage | run4 (old trainer, colony of 4) | run5 (this trainer, single) |
+|---|---|---|
+| 0 embryo, 3 bursts | 4.88 / 4.01 / 3.30 · 205 / 172 / 95 steps/s | 4.90 / 4.32 / 4.11 · 110 / 132 / 144 |
+| 1 infant | 2.31 / 2.29 / 2.15 · 29 / 29 / 34 | 3.64 / 3.22 / 3.07 · 98 / 98 / 98 |
+| 2 child | 2.33 / 2.34 / 2.07 · 10 / 10 / 9 | 3.45 / 3.15 / 3.02 · 38 / 38 / 38 |
+
+The speeds are not comparable — four organisms on four cores against one —
+and no speed claim is made here. The losses are comparable and differ by
+about one nat from the infant stage on. Measured on `nonames_earth.txt` with
+the tokenizer at birth (vocab 259): 1000 documents, mean 135.5 tokens, 500 of
+them shorter than the 96-token window, and the padding share of the old
+trainer's windows is 0.341 (temporary test, tool output, removed from the
+tree). The old loss was a mean over 96 positions of which a third were
+`0 → 0` targets the model learns in a few hundred steps; the new loss is a
+mean over the document's own positions. At the infant and child stages
+`3.07 × (1 − 0.341) = 2.02` and `3.02 × 0.659 = 1.99` sit within 0.1 of run4's
+2.15 and 2.07. The lower number was the padding, not the organism.
+
+**What this changes downstream.** Mitosis is keyed on the loss an adult
+cannot reduce (paper §9, `isSustainedOverload`); the trainer's reported loss
+is now the same quantity `LossOnSequence` measures, and it is higher than the
+numbers every threshold in `CFG` was tuned against on the pod. The
+overload thresholds are to be re-read on the colony, not adjusted blind;
+that belongs to the launch entry.
+
+— Defender (Arianna Method, phone-1)
