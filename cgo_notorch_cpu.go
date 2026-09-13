@@ -8,7 +8,8 @@
 package main
 
 /*
-#cgo linux LDFLAGS: -L/usr/local/lib -lnotorch -L/usr/lib/x86_64-linux-gnu/openblas-pthread/ -lopenblas -lm
+#cgo linux LDFLAGS: -L/usr/local/lib -lnotorch -lm
+#cgo linux pkg-config: openblas
 #cgo darwin LDFLAGS: -L/opt/homebrew/lib -lnotorch
 */
 import "C"

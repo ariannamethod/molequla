@@ -9,8 +9,9 @@
 package main
 
 /*
-#cgo linux CFLAGS: -DUSE_CUDA -I/usr/local/cuda/include
-#cgo linux LDFLAGS: -L/usr/local/lib -lnotorch_gpu -L/usr/local/cuda/lib64 -lcudart -lcublas -lstdc++ -L/usr/lib/x86_64-linux-gnu/openblas-pthread/ -lopenblas -lm
+#cgo linux CFLAGS: -DUSE_CUDA -I/usr/local/cuda/include -I${SRCDIR}/modules/gpu
+#cgo linux LDFLAGS: -L/usr/local/lib -lnotorch_gpu -L/usr/local/cuda/lib64 -lcudart -lcublas -lstdc++ -lm
+#cgo linux pkg-config: openblas
 #include <notorch.h>
 
 // notorch_cuda.h pulls in the CUDA runtime headers, which the cgo C
