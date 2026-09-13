@@ -187,50 +187,33 @@ fail:
 
 /* One k=3 pad-1 convolution over a [Cin][Lin] channel-major signal.
  *
- * ggml lowers conv_1d to im2col followed by mul_mat, and the im2col tensor is
- * built as F16 (ggml.c, ggml_conv_1d passes GGML_TYPE_F16), so both operands of
- * that product are half precision. Rounding the columns here reproduces it; the
- * dot itself accumulates in f32 on both sides.
+ * The convolution itself is notorch's. ggml lowers conv_1d to im2col followed by
+ * mul_mat and builds the im2col tensor as F16 (ggml.c, ggml_conv_1d passes
+ * GGML_TYPE_F16), so both operands of that product are half precision — which is
+ * why the call is nt_conv1d_f16cols and not nt_conv1d: the columns round where
+ * ggml rounds and the dot accumulates in f32 on both sides.
  *
- * The product is nt_blas_mmT: columns [Lout, Cin*3] against the weight [Cout,
- * Cin*3], which is the same GEMM ggml issues, only with the weight already f32. */
+ * What is left in this function is the model file's storage format. A whisper .bin
+ * may hold the conv weight as F16 and it has to be f32 before the product; that is
+ * a ggml_bin concern, and notorch's op takes the weight it is given. */
 static int conv1d(float *out, const float *in, int Cin, int Lin, int Lout,
                   const ears_mat *W, const float *bias, int stride) {
-    const int K = N_CONV_K, Cout = W->out, kin = Cin * K;
-    float *col = (float *) malloc((size_t) Lout * kin * sizeof(float));
-    float *wf  = NULL;
-    if (!col) return -1;
+    const int K = N_CONV_K, Cout = W->out;
+    /* The geometry the caller asked for must be the one pad-1 actually produces,
+     * or the buffers downstream are the wrong length. */
+    if ((Lin + 2 - K) / stride + 1 != Lout) return -1;
 
-    for (int o = 0; o < Lout; o++) {
-        float *dst = col + (size_t) o * kin;
-        for (int c = 0; c < Cin; c++)
-            for (int k = 0; k < K; k++) {
-                const int t = o * stride - 1 + k;          /* pad-half = 1 */
-                const float v = (t >= 0 && t < Lin) ? in[(size_t) c * Lin + t] : 0.0f;
-                dst[c * K + k] = ears_f16(v);
-            }
-    }
-
+    float *wf = NULL;
     if (W->f16) {
-        wf = (float *) malloc((size_t) Cout * kin * sizeof(float));
-        if (!wf) { free(col); return -1; }
-        gb_f16_to_f32((const uint16_t *) W->data, wf, (int64_t) Cout * kin);
+        wf = (float *) malloc((size_t) Cout * Cin * K * sizeof(float));
+        if (!wf) return -1;
+        gb_f16_to_f32((const uint16_t *) W->data, wf, (int64_t) Cout * Cin * K);
     }
     const float *wsrc = W->f16 ? wf : (const float *) W->data;
 
-    /* tmp[Lout][Cout], then transposed into the [Cout][Lout] ggml conv layout */
-    float *tmp = (float *) malloc((size_t) Lout * Cout * sizeof(float));
-    if (!tmp) { free(col); free(wf); return -1; }
-    nt_blas_mmT(tmp, col, wsrc, Lout, kin, Cout);
-
-    for (int c = 0; c < Cout; c++) {
-        float *dst = out + (size_t) c * Lout;
-        const float bc = bias ? bias[c] : 0.0f;
-        for (int o = 0; o < Lout; o++) dst[o] = tmp[(size_t) o * Cout + c] + bc;
-    }
-
-    free(tmp); free(col); free(wf);
-    return 0;
+    const int rc = nt_conv1d_f16cols(out, in, wsrc, bias, Cin, Lin, Cout, K, stride, 1);
+    free(wf);
+    return rc;
 }
 
 /* ── encoder ──────────────────────────────────────────────────────────────── */

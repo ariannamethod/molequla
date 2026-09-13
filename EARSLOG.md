@@ -270,3 +270,66 @@ four to bank a speed win that the gates do not test is the wrong order. It is th
 first thing to do next.
 
 — Defender (Arianna Method, phone-1)
+
+---
+
+## 2026-09-13 — the two primitives this port had to invent go upstream into notorch
+
+`mel.c` and the `conv1d` in `encoder.c` were written here for one reason: notorch
+had neither. There is no fft, stft, hann or mel symbol in `notorch.h`, and
+`nt_conv2d` covers images while nothing covered a signal. Both are now notorch's —
+`nt_conv1d` / `nt_conv1d_f16cols` beside `nt_conv2d`, and `nt_hann_window` /
+`nt_stft` / `nt_logmel` in a new AUDIO OPS section — and this repo calls them.
+
+`mel.c` keeps the wav reader and whisper's constants (16 kHz, n_fft 400, hop 160, a
+30 s padded window) and is otherwise one call. `ears_mel` is now `nt_mel`, so no
+call site changed. `conv1d` in `encoder.c` keeps only the f16 weight
+dequantisation, which is a `ggml_bin` concern, and hands the rest to
+`nt_conv1d_f16cols`. `nnops.c` is untouched: `ears_linear`, `ears_layernorm`,
+`ears_gelu`, `ears_mha` and `ears_f16` are forward-only buffer ops and notorch's
+`nt_layernorm` / `nt_gelu` are tape entries taking tape indices, so nothing there
+was replaced by this move.
+
+### The switch changed no number anywhere
+
+Dumps taken before the switch and after it, same binary paths, `taskset -c 4-7`:
+
+    log-mel, all 80 x n_len values
+      jfk.wav             byte-identical
+      ambient_8s.wav      byte-identical
+      speech_air_14s.wav  byte-identical
+    encoder post-convolution activations [1500 384], jfk/tiny
+      vs the pre-switch conv1d            byte-identical
+
+The conv one was not free. The hand-written version built `[Lout, Cin*3]` columns,
+called `nt_blas_mmT` and transposed the product back; `nt_conv1d` builds
+`[Cin*3, Lout]` and issues `nt_blas_mm`, landing `[Cout, Lout]` directly. A
+different GEMM call can reorder a k-accumulation and move the last bit. Here it
+does not — measured, not assumed.
+
+All four gates, cores 4-7, unchanged from the pre-switch run:
+
+    gate_mel        328000 values  max|d| = 0.000e+00   PASS
+    gate_encoder    576000 values  max|d| = 4.861e-02   PASS (gated 1e-1)
+    gate_transcript 6 of 6 rows equal token for token
+    gate_speed      jfk/tiny 0:02.74 (0:02.73 before), jfk/base 0:05.83 (0:05.46)
+
+### The finding worth keeping: `-std` decides whether this port is exact
+
+The first build after the switch was *not* identical — 1.550e-05 on jfk, 2.646e-05
+on ambient, 1.395e-05 on speech_air. The port was faithful line for line, and
+neither that nor `-march` was the cause. Compiling this repo's own unmodified
+`mel.c` under `-std=gnu11` instead of `-std=c11` reproduces notorch's output
+exactly. GCC 13.3 contracts multiply-adds into FMAs under `gnu11` and not under
+`c11`, an FMA does not round like a multiply and an add, and notorch builds with
+`-std=gnu11` while this repo builds with `-std=c11`. Fixed upstream by disabling
+contraction on the four functions where it changes the answer.
+
+`gate_mel` would not have caught it: its tolerance is 1e-4 and the drift is
+1.5e-05. What proves the front end exact is the printed `max|d| = 0.000e+00`, not
+the PASS beside it. Tightening that tolerance to 0 is tempting and is not done
+here — the oracle is whisper.cpp, built with flags this repo does not control, and
+a gate that breaks when someone rebuilds the oracle is a worse gate. Worth a
+decision rather than a silent edit.
+
+— Defender (Arianna Method, phone-1)

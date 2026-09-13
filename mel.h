@@ -1,15 +1,17 @@
 /* mel.h — log-mel spectrogram front end.
  *
- * The one block of the forward path notorch does not cover: there is no fft, stft,
- * hann or mel symbol in notorch.h or notorch_vision.h, so this is written from
- * scratch. It decides parity — every later stage consumes its output — so the
- * arithmetic here follows `whisper.cpp:3046-3240` step for step, including the
- * choice of a real-input Cooley-Tukey recursion falling back to a naive DFT at odd
- * lengths and the 400-entry sin/cos table both of them index.
+ * The transform is no longer here. Window, real FFT, power spectrum, filter-bank
+ * matmul, log10, clamp and normalise now live in notorch as `nt_logmel`
+ * (notorch.h, AUDIO OPS) — they were written in this file first because notorch
+ * had no fft, stft, hann or mel symbol at all, and that was the only block of the
+ * forward path it did not cover. They were moved upstream unchanged, so what used
+ * to be measured here is now measured there: bit-identical to
+ * `whisper_pcm_to_mel`, max|d| = 0.
  *
- * 16 kHz mono, n_fft 400, hop 160, periodic Hann, 80 mel bins from the filter bank
- * stored in the model file, log10 with a 1e-10 floor, clamp to (global max - 8),
- * then (x + 4) / 4.
+ * What stays is this file's own business. `ears_mel_compute` fixes whisper's
+ * constants — 16 kHz, n_fft 400, hop 160, a 30 s padded window — because those
+ * describe this model and not a spectrogram. `ears_read_wav` stays because notorch
+ * has no audio I/O and should not grow one to read a RIFF header.
  *
  * Layout is mel-major, data[j * n_len + i] for bin j and frame i — the layout
  * whisper.cpp's encoder reads, so a window is a contiguous stride per bin.
@@ -18,12 +20,10 @@
 #ifndef EARS_MEL_H
 #define EARS_MEL_H
 
-typedef struct {
-    int    n_mel;      /* 80 */
-    int    n_len;      /* frames over the 30 s-padded signal */
-    int    n_len_org;  /* frames that carry real audio */
-    float *data;       /* [n_mel][n_len] */
-} ears_mel;
+#include <ariannamethod/notorch.h>
+
+/* n_mel, n_len, n_len_org, data — notorch's, under this engine's name. */
+typedef nt_mel ears_mel;
 
 /* pcm: n_samples mono f32 in [-1, 1] at 16 kHz.
  * filters: [n_mel][n_fft_bins] from the model file (80 x 201).
