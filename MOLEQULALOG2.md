@@ -1660,3 +1660,102 @@ windows, and it has not yet been measured against a session that overran its
 cap into a senses slot.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the senses move into the tree, and the ear becomes ours
+
+Oleg's decision tonight: the organs live inside molequla, in one folder
+`senses/`, and neither gets a repository of its own. The eye was a gitignored
+reference clone in `reffs/ocelli`; the ears were a separate checkout at
+`~/arianna/ears` on branch `claude/notorch-primitives`. Both are in the tree
+now, and for the first time the recognizer molequla runs is molequla's own.
+
+**Moved with their commits, not copied.** `git mv` was never an option for the
+eye: `reffs/` is ignored whole (`.gitignore:106`, `/reffs/`) and
+`git ls-files reffs` returned nothing, so there was no history in this
+repository to move. Both organs came in by `git subtree add` instead, from the
+local checkouts — ocelli's eleven commits up to `c4fe095`, ears' two up to
+`047a141`, each reachable as the second parent of its merge (`84fb401^2`,
+`d17ff2b^2`). What did not come in: neither engine binary and no weights.
+ocelli's own `.gitignore` already covers `ocelli` and `models/`, ears' covers
+`ears`, and the one thing those patterns missed — the absolute symlink
+`reffs/ocelli/models -> /data/data/com.termux/files/home/models/ocelli`, which
+`models/` does not match because it is a symlink and not a directory — is not
+recreated. It is not needed: `SENSES_EYE_MODEL` and `SENSES_EYE_MMPROJ` reach
+the wrapper as `EYE_MODEL` / `EYE_MMPROJ`, which `eye` has always honoured
+(`senses/ocelli/eye:16-17`), and `/senses/ocelli/models` plus
+`/senses/ears/models` are ignored so it cannot come back by accident.
+
+**Both build from the new path.** `cd senses/ocelli && make` → 7.9 s,
+`./ocelli` 285056 B. `cd senses/ears && make` → 1.7 s. The eye on one frame from
+the live run directory, read-only, q6_k decoder with the q8_0 projector and one
+global frame: `A bathroom with a shower curtain, a light above the shower, and a
+small trash can.` — 12.8 s wall on cores 4-7, prompt 84 tok at 58.4 tok/s, gen
+19 tok at 4.0 tok/s. (That is the balcony the diary already corrected above; the
+wording is unchanged by the move, which is the point of running it.)
+
+**The ears' Makefile pointed at a directory that does not exist here.**
+`WHISPER ?= $(HOME)/arianna/whisper.cpp` and `REF ?= $(HOME)/arianna/ears-reference`
+were written in a shell where `$HOME` was the phone's tree; inside this chroot
+`$HOME` is `/root`, and every gate would have looked for the oracle there. They
+are now derived from the Makefile's own path — three levels up from `senses/ears`
+is the directory that holds molequla, `whisper.cpp` and `ears-reference` side by
+side — and `make -n test-transcript` resolves them to
+`/data/data/com.termux/files/home/arianna/whisper.cpp` and
+`.../ears-reference` with nothing passed on the command line. `senses/ears/README.md`
+now says plainly that `make` needs only notorch and OpenBLAS while `make test`
+needs both of those checkouts.
+
+**The ear in `senses.sh` is `senses/ears/ears`.** Default weights
+`~/models/ears/ggml-tiny.bin`, copied from whisper.cpp's own downloads and
+md5-identical to them, mirrored on Hugging Face at `ataeff/molequla` under
+`ears/`. whisper-cli stays behind the same two variables, `SENSES_ASR` and
+`SENSES_ASR_MODEL`, which is what the old comment in that file promised; the two
+take their arguments differently (`ears` positionally, `whisper-cli` through
+`-m` and `-f`), so the command line switches on the binary's basename, with
+`SENSES_ASR_KIND` to force it. No `--json` and no `-q` was added to `ears.c`:
+both engines already put the transcript and nothing else on stdout — ears keeps
+its `no_speech` / `avg_logprob` line per window on stderr — so what was needed
+was the right argument order, not a new output mode, and an unused flag is worse
+than none.
+
+**Gates.** `senses/ears` from its new location, defaults only,
+`make test-transcript`: all six rows equal token for token against whisper.cpp
+under pure greedy — jfk/tiny 26 tokens, speech_air_14s/tiny 27, ambient_8s/tiny
+0, jfk/base 27, speech_air_14s/base 28, ambient_8s/base 0 — 2m28.877s wall on
+cores 0-3. Go: 184 pass, 2 skipped, 0 fail
+(`CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false ./...`, 4.841 s);
+the two skips are `TestCheckpointMemoryProfile` and `TestStage4SavePeak`, which
+want `MOLEQULA_CKPT_MEASURE` and `MOLEQULA_HEAVY=1`. That count is inherited,
+not earned — `git diff --stat origin/main -- '*.go'` is empty, this branch adds
+no Go file and no Go test. `bash phone1/schedule_test.sh`: 36 pass, 0 fail.
+`go build -a` 47.9 s, and `go list ./...` still names exactly two packages,
+`molequla` and `modules/gpu` — `senses/` holds no `.go` file, so cgo never
+reaches the C in it.
+
+**The ear, live, on a scratch field.** One `senses.sh ears` pass with
+`MOLEQULA_RUN` pointed at a scratch copy so the colony's `dna/output/` was not
+touched, while `jfk.wav` played out of the phone's own speaker over
+`termux-media-player` and the microphone recorded twelve seconds of the room:
+
+    [senses] pass ears at 2026-09-13T23:08:47Z: cpu 4-7, MemAvailable 2769 MB
+    [senses] sound/gen_1789340949_1.txt (140 B)
+    ears=rc0,22s,speechyes,frags1
+
+and in the fragment:
+
+    [ears mic 2026-09-13T23:09:09Z] And so my fellow Americans, as not what you
+    are country can do for you and what you can do for your country.
+
+Not the clean transcript — the same air-and-speaker degradation the reference
+wav `speech_air_14s` carries, arriving through the same room. That is what the
+organ is for: what the phone actually heard, not what the file says.
+
+**Left, named.** `reffs/ocelli` is still on disk in the main checkout. It is
+ignored and nothing points at it any more, so it is a stale clone rather than a
+second copy of a tracked path; removing it is a hand movement outside this
+branch. `~/arianna/ears` is left in place deliberately — the subtree took its
+history, and it goes after the merge, not before. The eye's watermark probe
+(`senses/ocelli/OCELLILOG.md`, 14 frames) was not re-run: it is a hand-run gate
+over a frame set that is not in the tree, and nothing in the engine changed.
+
+— Defender (Arianna Method, phone-1)

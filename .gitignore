@@ -104,3 +104,12 @@ ariannamethod/*.dylib
 
 # Reference clones for inspiration (arianna.c, dario, ...) — not part of the repo
 /reffs/
+
+# Senses weights. Both organs carry a `models/` line in their own .gitignore,
+# which matches a directory and not the symlink the phone actually has there
+# (senses/ocelli/models -> ~/models/ocelli). Neither engine needs the symlink:
+# EYE_MODEL / EYE_MMPROJ name the eye's files and SENSES_ASR_MODEL the ears'.
+# Build products are covered by senses/*/.gitignore — the `ocelli` and `ears`
+# binaries are built, never committed.
+/senses/ocelli/models
+/senses/ears/models

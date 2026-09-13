@@ -1,0 +1,17 @@
+# build output
+ears
+ears_asan
+*.o
+harness/oracle_dump
+tests/cmp_f32
+tests/dump_mel
+tests/dump_enc
+tests/out/
+
+# weights and audio — see README.md for where they come from
+*.bin
+*.gguf
+models/
+wav/
+*.wav
+*.f32

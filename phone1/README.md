@@ -107,24 +107,35 @@ the fragment is what the eye believed, and the organisms eat beliefs. The
 correction, when it comes, comes from the other senses and from time
 (ROADMAP item 10), not from a filter in this script.
 
-The eye is `reffs/ocelli/eye`, the pure-C SmolVLM2-500M engine, on the q6_k Yent
+The eye is `senses/ocelli/eye`, the pure-C SmolVLM2-500M engine, on the q6_k Yent
 decoder with one global frame (`SMOLVLM_NOSPLIT=1`): 14-16 s and a peak of
-1020 MB per frame on this phone, measured with `/usr/bin/time -v`. Nothing in
-this repo links against it — `SENSES_EYE` is the one variable that names the
-wrapper. The camera's 4080×3060 jpeg is scaled to a 1024 px longest edge before
+1020 MB per frame on this phone, measured with `/usr/bin/time -v`. It lives in
+the tree now (`senses/README.md`) but nothing links against it — it is a separate
+process with its own notorch, and `SENSES_EYE` is the one variable that names the
+wrapper. Its weights are not in the tree either: `SENSES_EYE_MODEL` and
+`SENSES_EYE_MMPROJ` are passed to the wrapper as `EYE_MODEL` / `EYE_MMPROJ` and
+point into `~/models/ocelli`. The camera's 4080×3060 jpeg is scaled to a 1024 px longest edge before
 the engine sees it, because the engine's first act is to resize to 2048 and a
 12 MP frame would be decoded into 150 MB of float on the way. Below 1300 MB of
 MemAvailable the eye does not open at all and the pass says so
 (`eye=…,skip-mem:1204`).
 
-The ears are whisper.cpp `tiny` for now — `SENSES_ASR` and `SENSES_ASR_MODEL`
-are two variables so the native `ears` on notorch replaces it without touching
-anything else — at `-t 4 -l auto -nth 0.6 -sns`. Room noise does not become a
-sentence: `base` once spent 185 s on eight seconds of ambience and emitted
-`[Motor]` (`~/arianna/ears-reference/REFERENCE.md`), so bracketed tags are
-stripped and what is left must still be eight characters with a letter in it
-before a fragment is written. A quiet twelve seconds produces nothing and costs
-about 20 s.
+The ears are `senses/ears/ears`, molequla's own recognizer — whisper on notorch,
+in C, gated token for token against whisper.cpp on six rows
+(`senses/ears/EARSLOG.md`) — on the `tiny` weights at `~/models/ears/`, run as
+`-l auto -t 4 --no-speech-thold 0.6`. `SENSES_ASR` and `SENSES_ASR_MODEL` are
+still the two variables, and pointing `SENSES_ASR` at whisper.cpp's `whisper-cli`
+puts the old path back: the command line switches with the binary's name, since
+`ears` takes its model and wav positionally and `whisper-cli` through `-m` and
+`-f` (`SENSES_ASR_KIND` forces the choice when the binary is named something
+else). Room noise does not become a sentence: `ears` drops a whole window on its
+own no-speech probability and prints nothing, and on top of that bracketed tags
+are stripped — `base` under whisper.cpp once spent 185 s on eight seconds of
+ambience and emitted `[Motor]` (`~/arianna/ears-reference/REFERENCE.md`) — and
+what is left must still be eight characters with a letter in it before a fragment
+is written. A quiet twelve seconds produces nothing. A twelve-second pass that
+does hear something costs about 22 s end to end on cores 4-7 (measured
+2026-09-13: `ears=rc0,22s,speechyes,frags1`).
 
 Place is `termux-location` (network first, satellites if that fails), then two
 keyless APIs over `curl` and `jq`: open-meteo for temperature, humidity, wind,
