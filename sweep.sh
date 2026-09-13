@@ -22,7 +22,7 @@ run_cell() {
         (
             cd "$cd/work_$e"
             # shellcheck disable=SC2086
-            nohup ./molequla_cgo $flags --corpus "nonames_$e.txt" --db memory.sqlite3 --ckpt molequla_ckpt.json --element "$e" --evolution > train.log 2>&1 &
+            nohup ./molequla_cgo $flags --element "$e" --evolution > train.log 2>&1 &
             echo $! > org.pid
         )
     done
@@ -34,7 +34,7 @@ run_cell() {
         local l="$cd/work_$e/train.log"
         local lines=$(wc -l < "$l" 2>/dev/null || echo 0)
         local dna=$(grep -c "dna" "$l" 2>/dev/null || echo 0)
-        local spa=$(grep -c "\[spa-gate\]" "$l" 2>/dev/null || echo 0)
+        local spa=$(grep -c "^\[spa\]" "$l" 2>/dev/null || echo 0)
         local mit=$(grep -cE "mitosis|spawning" "$l" 2>/dev/null || echo 0)
         local stage=$(grep -oE "stage=[0-9]+" "$l" | tail -1 || echo "stage=?")
         echo "$label/$e: lines=$lines dna=$dna spa-gate=$spa mitosis=$mit last=$stage"

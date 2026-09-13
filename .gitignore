@@ -94,6 +94,8 @@ molequla_new
 *.o
 *.dylib
 ariannamethod/*.o
+modules/gpu/*.o
+modules/gpu/*.a
 ariannamethod/*.so
 ariannamethod/*.dylib
 

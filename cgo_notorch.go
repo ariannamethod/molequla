@@ -3,7 +3,8 @@ package main
 /*
 #cgo CFLAGS: -I/usr/local/include/ariannamethod -O2
 #cgo darwin CFLAGS: -I/opt/homebrew/include
-#cgo linux CFLAGS: -DUSE_BLAS -I/usr/include/x86_64-linux-gnu/openblas-pthread/
+#cgo linux CFLAGS: -DUSE_BLAS
+#cgo linux pkg-config: openblas
 #include <notorch.h>
 #include <string.h>
 
@@ -49,7 +50,7 @@ import "unsafe"
 // ntTensor is an opaque handle to a notorch nt_tensor.
 type ntTensor = *C.nt_tensor
 
-func ntTensorNew(length int) ntTensor       { return C.nt_tensor_new(C.int(length)) }
+func ntTensorNew(length int) ntTensor       { return C.nt_tensor_new(C.size_t(length)) }
 func ntTensorNew2D(rows, cols int) ntTensor { return C.nt_tensor_new2d(C.int(rows), C.int(cols)) }
 func ntTensorFree(t ntTensor)               { C.nt_tensor_free(t) }
 
