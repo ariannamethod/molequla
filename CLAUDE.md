@@ -25,9 +25,11 @@ work; check it once more before push. No blind pull, no destructive reset.
 - `README.md` is the face and the spec. It says what molequla *is*. It never
   becomes a worklog, and it never lags the code: if reality drifts from the
   README, fix the code or update the spec deliberately.
-- `PROJECT_LOG.md` is the first book of the engineering log: Phase A (GPU),
+- `PROJECT_LOG.md` was the first book of the engineering log: Phase A (GPU),
   Phase B (graze), Phase C (ecology), the §9 mitosis run, the cascade governor.
-  History; append there only to close a thread it opened.
+  It left the tree on 2026-09-13 (`8203d5d`) and lives in git history:
+  `git show 8203d5d^:PROJECT_LOG.md`. Nothing is appended there any more;
+  README references to it are being moved to the log below.
 - `MOLEQULALOG2.md` is the living diary, opened when molequla landed on phone-1.
   Every session that changes anything appends a dated section, signed by the
   node, with what was built and how it was verified. Numbers come from
@@ -52,8 +54,8 @@ tokenizer equal to inference, script pushed — and started on Oleg's word.
 ```sh
 CGO_ENABLED=1 go build -a -o molequla_cgo .    # -a is mandatory: without it Go
                                                 # reuses stale compiled C
-go test ./...                                   # last recorded: 140 green
-                                                # (PROJECT_LOG.md, 2026-06-29)
+go test ./...                                   # last recorded: 156 green
+                                                # (MOLEQULALOG2.md, 2026-09-13)
 bash tests/test_all.sh                          # all four cores + AML + BLAS
 ```
 
