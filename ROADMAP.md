@@ -40,13 +40,36 @@ is long — an organism lives for months of sessions, not for one uptime.
    old one and are not to be turned blind).
 2. **Voice sweep on adults.** temperature × top_k × at least four prompts on a
    stage-4 checkpoint before any verdict on coherence.
-3. **The eye as the fifth DNA source.** `ocelli` (SmolVLM2-500M, Yent eye LoRA
-   v2, weights at `huggingface.co/ataeff/molequla`) describes a camera frame;
-   the sentence enters the corpus for every age and cross-graze only at
+3. **The eye as the fifth DNA source, inside the session.** `ocelli`
+   (SmolVLM2-500M, Yent eye LoRA v2, six GGUFs at
+   `huggingface.co/ataeff/molequla/tree/main/ocelli`) describes a camera frame
+   in one sentence. Today it is `reffs/ocelli/eye <image>` by hand, and the
+   organism has the slot but not the switch: `CFG.DNAExtraSources` (nil by
+   default, "world joins here when the eye writes") has no CLI flag, and no
+   script takes a frame. To land: `phone1/eye.sh` — a frame every N minutes
+   through Termux (`termux-camera-photo -c 0`), `eye`, one line appended to
+   `dna/output/world/`; a `--dna-extra-sources world` flag; the scheduler starts
+   the eye beside the witness on the little cores for the length of the session;
+   the eye's own peak (951-988 MB for 11-13 s per frame) counted in the byte
+   gate. The sentence enters the corpus for every age and cross-graze only at
    `fade = 1` / stage ≥ teen. Age is `global_step`, already a column in mesh.db.
 4. **Other VLMs for the same organ.** Alternative eyes measured on the phone
    with the same table (tok/s, wall, peak RSS, one global frame) and stored in
    sibling folders of the weights repo.
+7. **Ears — whisper on notorch, parity with ggerganov** (Oleg, 2026-09-13: "if
+   there is sight there must be hearing"). whisper.cpp is not on the phone yet;
+   it comes in as the reference, and an `ears` organ in C on notorch is written
+   the way `ocelli` was for SmolVLM, with one gate: the same wav gives the same
+   transcript as whisper.cpp on tiny/base weights. Input from the microphone
+   (`termux-microphone-record`) into `dna/output/sound/` as a sixth source.
+   Not only speech: a plain sound-event detector in C ahead of the model turns
+   a bang, a door, a voice into one line even when no words are said; a model
+   that names sounds, not just words, is the ideal and comes later.
+8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
+   but the mycelium speaking. First step costs nothing — the witness's line
+   through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
+   and re-enabled with `pm enable com.google.android.tts`); the real step is a
+   TTS on notorch, its own port.
 5. **loragrad as immune filter.** The gradient verdict (PASS / WEAKEN / FREEZE /
    SCAR / DARK / SILENCE) applied to an eaten DNA fragment inside the organism,
    between `dnaRead` and the burst; not in the witness. Own repair after the
