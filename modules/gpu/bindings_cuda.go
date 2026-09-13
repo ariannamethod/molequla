@@ -1,6 +1,6 @@
 //go:build linux && cuda
 
-package main
+package gpu
 
 /*
 #include "ariannamethod_cuda.h"
@@ -16,10 +16,12 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════════
 // GPU CGO bindings — Linux only.
 //
-// Wraps the gpu_* primitives from ariannamethod_cuda.h (linked via cgo_aml.go's
-// `-DUSE_CUDA -lcudart -lcublas` directives). On macOS / non-linux these
-// symbols are not available; gpu_bindings_stub.go provides matching no-op
-// signatures so the rest of molequla compiles identically on any host.
+// Wraps the gpu_* primitives from ariannamethod_cuda.h, which sits beside this
+// file in modules/gpu; the `-DUSE_CUDA -I${SRCDIR} -lcudart -lcublas`
+// directives that make it visible are in notorch_cuda.go and apply to the whole
+// package. On macOS / non-linux these symbols are not available; stub.go
+// provides the same exported API as no-ops so the rest of molequla compiles
+// identically on any host.
 //
 // Memory model: gpu_alloc returns a device pointer (opaque to Go). Treat as
 // unsafe.Pointer. The pointer is valid until gpu_free or gpu_shutdown.
@@ -28,13 +30,13 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // gpuInitialized tracks whether gpu_init() returned 0 successfully. Avoids
-// repeated init attempts. Set atomically; gpuReady reads it.
+// repeated init attempts. Set atomically; Ready reads it.
 var gpuInitialized atomic.Bool
 
-// gpuInit initializes the CUDA runtime + cuBLAS handle. Returns 0 on success,
+// Init initializes the CUDA runtime + cuBLAS handle. Returns 0 on success,
 // non-zero if no CUDA hardware / driver mismatch / cuBLAS create failed.
 // Idempotent: subsequent calls are no-ops once successful.
-func gpuInit() int {
+func Init() int {
 	if gpuInitialized.Load() {
 		return 0
 	}
@@ -45,17 +47,17 @@ func gpuInit() int {
 	return rc
 }
 
-// gpuShutdown frees the weight cache and destroys the cuBLAS handle. Safe to
+// Shutdown frees the weight cache and destroys the cuBLAS handle. Safe to
 // call even if init never succeeded.
-func gpuShutdown() {
+func Shutdown() {
 	if gpuInitialized.Load() {
 		C.gpu_shutdown()
 		gpuInitialized.Store(false)
 	}
 }
 
-// gpuReady reports whether the CUDA backend is live and usable.
-func gpuReady() bool {
+// Ready reports whether the CUDA backend is live and usable.
+func Ready() bool {
 	return gpuInitialized.Load()
 }
 
@@ -139,16 +141,16 @@ func gpuRMSNorm(dOut, dIn unsafe.Pointer, T, D int) {
 	C.gpu_rmsnorm((*C.float)(dOut), (*C.float)(dIn), C.int(T), C.int(D))
 }
 
-// gpuCacheWeight uploads h_data under `name` and returns the cache slot index
-// (or -1 on failure). Subsequent gpuGetWeight(name) returns the same device
-// pointer until gpuMarkAllDirty + re-upload.
-func gpuCacheWeight(name string, h []float32) int {
+// CacheWeight uploads h under `name` and reports whether it took a cache slot.
+// Subsequent gpuGetWeight(name) returns the same device pointer until
+// gpuMarkAllDirty + re-upload.
+func CacheWeight(name string, h []float32) bool {
 	if !gpuInitialized.Load() || len(h) == 0 {
-		return -1
+		return false
 	}
 	cn := C.CString(name)
 	defer C.free(unsafe.Pointer(cn))
-	return int(C.gpu_cache_weight(cn, (*C.float)(unsafe.Pointer(&h[0])), C.int(len(h))))
+	return int(C.gpu_cache_weight(cn, (*C.float)(unsafe.Pointer(&h[0])), C.int(len(h)))) >= 0
 }
 
 // gpuGetWeight returns (device pointer, length) for a previously cached
