@@ -332,3 +332,42 @@ and `am_harmonic_*` symbols already linked into the binary through
 `cgo_aml.go` with zero Go callers. (8) README brought to the code.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 1 landed in notorch: a frozen parameter no longer eats a slot
+
+The first item of the repair order is a notorch change, not a molequla one,
+and it went through notorch's own discipline: branch `claude/frozen-slot`
+from canon `1f5473a`, commit `42ff2f3`, pushed, merge on Oleg's word. The
+entry in that repository's NOTORCHLOG carries the mechanism; the short form
+is that `nt_tape_entry` now records the optimizer slot it owns (`-1` for
+entries registered through `nt_tape_param_frozen()` and for non-params), and
+the five loops that address moments — the two diagonal steps,
+`nt_tape_chuck_step`, `nt_tape_accum_grads`, `nt_tape_apply_accum` — plus the
+CUDA norm batch read that field instead of counting parameters as they pass.
+The gate `frozen_param_keeps_chuck_slots` reads red on the unfixed tree
+(49 passed, 1 failed: "W2 after a frozen param is updated") and green after
+(50/50); `make test` all passed; `test_rrpram_broadcast` 0 fails; strict
+`-Werror` clean. All on this phone.
+
+What it means for molequla: `notorch_trainer.go:333-334` freezes two RRPRAM
+gates per layer through `nt_tape_param_frozen`, so from the child stage on the
+low-rank factors registered after each gate were stepping on a neighbour's
+moments and the deepest ones were never stepped. Every §9 number was produced
+with that loop; the archive is not rewritten, this entry is the correction.
+
+Installed here: `make install PREFIX=/usr/local` → `/usr/local/lib/libnotorch.a`
+2026-09-13 01:30, 204008 B (the previous, 2026-08-10, was 139402 B), header
+carries `slot`. Note for the next node: the Makefile's default PREFIX is
+`/opt/homebrew`, and a bare `make install` in this chroot created a stray
+737 KB tree there; it is not used by anything and is left for Oleg's word.
+
+molequla rebuilt against it: `go build -a -buildvcs=false` rc=0, 9407304 B;
+`go test -v ./...` 141 PASS, 0 FAIL. One earth organism for 180 s on cpu4-7:
+embryo → infant → child, warmup `avg loss` 4.90 → 3.23 (embryo), 2.21 → 2.15
+(infant), 2.41 → 2.04 (child) at 45-46 steps/s, 170 ticks, 175 DNA writes,
+0 NaN. Three minutes cannot show the training-quality effect of the fix; that
+needs a colony to adult on both libraries, and it is not claimed here. The
+organism's stdout carries NUL bytes from tokenizer probes, so it must be read
+with `grep -a`, as the §9 climb logs already required.
+
+— Defender (Arianna Method, phone-1)
