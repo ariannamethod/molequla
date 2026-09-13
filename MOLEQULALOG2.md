@@ -1519,4 +1519,137 @@ is free to open a second one; the table is then missing on whichever connection
 the keeper's goroutine draws. It is the fixture, not the keeper, and it wants a
 shared cache or a single pinned connection.
 
+## 2026-09-13 — the senses get their own schedule, and the organisms are told to eat what they leave
+
+The colony runs six hours a day and sleeps eighteen. Everything the phone could
+notice in between was, until tonight, noticed by nobody. `phone1/senses.sh` is
+one pass of three organs that runs on its own slots and exits: a frame from each
+camera through the eye, twelve seconds of microphone through whisper.cpp, one
+fix of where the phone is and what the sky is doing. What each organ produces
+is written as `gen_<unix>_<seq>.txt` into `$MOLEQULA_RUN/dna/output/world/`,
+`sound/` and `place/` — the names `dnaFragOrder` parses and `dnaListNew`
+orders — one fragment per sentence, each behind a bracketed header that reads
+as ordinary text to whatever eats it. The sequence number is a counter in
+`senses/seq` that only ever grows, so two fragments written in the same second
+still have an order; the pair `(unix, seq)` is exactly what `dnaNewer` compares.
+
+**The three fragments of the 22:18:11Z pass, verbatim.**
+
+    [eye cam0 2026-09-13T22:18:27Z] A close-up view shows a keyboard with
+    white keys and a dark background, with no text visible.
+    [eye cam1 2026-09-13T22:18:46Z] A bathroom with a shower curtain hanging,
+    a person's hand reaching out, and a light fixture above.
+    [place 2026-09-13T22:19:24Z] The phone is at <neighbourhood>, Be’er-Sheva,
+    Israel (fix accurate to 14 m). Local time 2026-09-14T01:15 (Asia/Jerusalem),
+    22.5 °C, humidity 97%, wind 2.1 km/h, fog. Sunrise 2026-09-14T06:24, sunset
+    2026-09-14T18:48. And it has not moved more than 50 m since the last pass
+    (2 m from it).
+
+The cam1 sentence is the front camera hallucinating in the dark — the phone was
+lying on a table and the lens saw almost nothing. That is the shape of the noise
+this organ produces and it is left in the record rather than filtered out: the
+eye reports what it believes, and an organism eating the DNA field is eating a
+belief either way. An earlier pass the same minute, on a lit kitchen table,
+produced «A blurry kitchen table shows a green bowl, a spoon, and a plate, with
+a blurry background that looks like a kitchen counter» — the same engine, and
+right.
+
+and the line the pass left in `senses/senses.log`:
+
+    2026-09-13T22:19:24Z pass=all cpu=4-7 mem_mb=2896->2898
+      eye=rc0,28s,rss1020mb,frames2,frags2 ears=rc0,30s,speechno,frags0
+      place=rc0,7s,movedno,frags1 frags=3 total=73s
+
+**The eye.** `reffs/ocelli/eye` on the q6_k Yent decoder with one global frame
+(`SMOLVLM_NOSPLIT=1`), both cameras every pass: 28-31 s for the pair, peak RSS
+1044312 kB from `/usr/bin/time -v` — 1020 MB. Two frames because one of them is
+usually in the dark and a pass that takes both still sees something. The mmproj
+was measured both ways on the same 768×1024 frame, cpu4-7, byte-identical text
+(«A blurry kitchen table shows a green bowl, a glass, and a plate, with a
+person's head in the background»): q8_0 mmproj 18.68 s / 1044312 kB, f16 mmproj
+21.90 s / 951296 kB. The quantized projector is 3.2 s faster and 93 MB heavier
+than the f16 one, which is the opposite of what its file size (108782176 B
+against 199467616 B) suggests; it is recorded, not explained, and both are one
+environment variable. The camera's own frame is 4080×3060 and 3.7 MB; it is
+scaled to a 1024 px longest edge first, because `vision.c:55-66` resizes the
+longest edge to `LONGEST` = 2048 (`vision.c:18`) before anything else and a
+12 MP frame would be decoded
+into 150 MB of float on the way to a 512×512 global view. Below 1300 MB of
+MemAvailable the eye does not open and the pass says so — forced once with
+`SENSES_EYE_MIN_MB=99000`, which logged `eye=rc0,0s,rss0mb,frames0,frags0,skip-mem:2922`
+and wrote nothing.
+
+**The ears**, whisper.cpp `tiny` at `-t 4 -l auto -nth 0.6 -sns`, twelve seconds
+of audio: about 20 s of wall in a quiet room and no fragment at all, which is
+the point — `base` once spent 185 s on eight seconds of ambience and emitted
+`[Motor]` (`~/arianna/ears-reference/REFERENCE.md`). Bracketed tags are stripped
+and what remains must still be eight characters with a letter in it. Proven the
+other way at 22:20:47Z by playing `ears-reference/wav/jfk.wav` through the
+phone's own speaker into its own microphone while the pass recorded:
+
+    [ears mic 2026-09-13T22:21:08Z] And so my fellow Americans ask not what
+    your country can do for you.
+
+21 s wall, `ears=rc0,21s,speechyes,frags1`. The same twelve seconds of silence
+measures -44.1 dB mean with `ffmpeg -af volumedetect`, so the empty passes are
+an empty room, not a broken microphone. `SENSES_ASR` and `SENSES_ASR_MODEL` are
+two variables and nothing else knows the recognizer's name, so the native
+`ears` on notorch replaces it in one line.
+
+**Place** is `termux-location` (network, 13 m here; satellites only if that
+fails), open-meteo for temperature, humidity, wind, the WMO code as a word and
+today's sunrise and sunset, and nominatim reverse at zoom 14 with a User-Agent
+and `accept-language=en` — both keyless, `curl` and `jq` only, about 5-7 s
+together. The previous fix lives in `senses/place.last` and a haversine in awk
+decides whether the phone moved more than 50 m.
+
+**Slot kinds.** `schedule.conf` grows `SENSES_SLOTS="01:00 03:00 07:00 09:00
+11:00 15:00 17:00 19:00 23:00"`, `SENSES_CMD` and `SENSES_TIMEOUT=600` — ten
+times the 73 s a full pass measured, for the day the network hangs. The times
+are the gaps between the colony windows (04-06, 12-14, 20-22 UTC) with an hour
+of clearance on either side. `next_any` returns the nearest slot of either kind
+with its kind and gives a tie to the colony; `in_colony_window` is the predicate
+that keeps a senses pass out of a session, testing both the current day's
+occurrence of each colony slot and the previous day's, because a long session
+runs past midnight. At run time a senses slot is refused twice over — by the
+configured window and by `live_names`, since a manual `launch.sh` obeys
+neither — and logged as `reason=skipped-colony-window` or
+`skipped-colony-alive`. Every line in `schedule.log` now carries `kind=`.
+Senses slots are configuration, not a built-in default: with `SENSES_SLOTS`
+empty this is the colony scheduler it was before, which is also why the
+twenty-one existing cases still measure colony arithmetic unchanged.
+
+**The flag.** `--dna-extra-sources world,sound,place` sets `CFG.DNAExtraSources`
+in `parseCLIArgs` (`molequla.go:6267`), following `--max-organisms` from repair
+9, and `launch.sh` passes it and creates the three directories. One flag feeds
+two paths: `dnaRead` appends the fragments to the organism's corpus, and
+`NewCrossField` takes its sibling list from the same `dnaSources()`
+(`cross_graze.go:60`), so the senses also reach the logit overlay. Without it
+the directories exist and nobody reads them.
+
+**Gates, each shown red once.** Go: 182 tests green (178 before), four new in
+`dna_extra_sources_test.go` driving the real `parseCLIArgs` — the flag reaches
+`dnaSources`, spacing and empty names between the commas are tolerated, an
+absent flag changes nothing, and a fragment dropped into `dna/output/world/` is
+what `dnaListNew` hands the organism. Red as `CFG.DNAExtraSources = [], want
+three entries` and `dnaListNew saw 0 fragments in world, want 1 (sources: [air
+water fire])` when the parsed value is dropped on the floor. Bash: 36 cases in
+`schedule_test.sh` (21 before), fifteen new — eight on `next --epoch` and
+`next --kind` across interleaved lists, the tie, and an empty senses list;
+seven on `in-window`. Red three ways: `next_any` always preferring the colony
+took four interleaving cases down; dropping the previous day from
+`in_colony_window` failed `yesterday's session reaches into today: outside,
+want inside`; making the window open strictly after its slot failed `the colony
+start itself`.
+
+**Left, named.** The running daemon (pid 19016) is still the one started from
+the main checkout before any of this, so it keeps taking colony-only slots; the
+new conf was parsed and read back from the worktree (`schedule.sh status`,
+`next: 2026-09-13T23:00:00Z kind=senses, cap 600s`) but the daemon is not
+restarted and the binary in `$MOLEQULA_RUN` predates the flag — both wait for
+the merge. The eye's 1020 MB is the largest single allocation the phone makes
+outside a colony session; it is fenced by MemAvailable and by the colony
+windows, and it has not yet been measured against a session that overran its
+cap into a senses slot.
+
 — Defender (Arianna Method, phone-1)
