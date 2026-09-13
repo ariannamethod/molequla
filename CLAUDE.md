@@ -101,7 +101,7 @@ A56): more cores is not faster, the slowest core class sets the pace.
 - Put Python on an inference or organism-core path. The four cores are
   Python-free by design; the orchestration tier above them is being moved to
   Go, and on the phones no Python runs at all.
-- Let the vendored `modules/gpu/notorch.{c,h}` drift silently. It is a copy
+- Let the vendored `modules/gpu/csrc/notorch.{c,h}` drift silently. It is a copy
   of the canon (`github.com/ariannamethod/notorch`), the source of the GPU
   library on CUDA hosts only — the CPU build links the system `libnotorch`;
   when you sync it, name the molequla-specific delta in the log instead of
