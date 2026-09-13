@@ -839,3 +839,101 @@ keys on the loss path.
 `PROJECT_LOG.md` references in README go with repair 8.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 7: the mycelium is a witness, in Go, and the Python tier leaves
+
+Branch `claude/phone1-repair-witness`, two commits. Files: `witness.go`,
+`witness_cgo.go`, `witness_test.go` (new, 6 tests), `molequla.go` (flags,
+`global_step`, heartbeat), `governor_phone.go` / `_test.go` (the keeper
+carries the step), `README.md` (§Mycelium, file table); then the removal
+of `mycelium.py`, `ariannamethod/{__init__,method,sentinel}.py`,
+`requirements.txt`, `ariannamethod/Makefile`, and `tests/test_all.sh` cut
+to build and smoke.
+
+**What the audit found (C §2-3), in one line each.** `mycelium.py` read
+`gamma_direction` and `gamma_magnitude`, columns no Go core creates, and
+swallowed the `no such column` into an empty field, so every real run
+reported "no organisms alive" and wrote a constant `field_steering` row
+(C-MYC-01). Its effectiveness signals compared a snapshot with itself inside
+one tick (C-MYC-02). Without `libaml.so` its "Python fallback" was a
+hardcoded `sustain` (C-MYC-03). The `field_steering` row had one reader,
+`molequla.rs`, which degrades to its own temperature schedule when the table
+is absent (§3). The integration suite built its own mesh schema with numpy
+and was green against a shape the ecology never produced.
+
+**The witness.** A mode of the organism binary: `molequla --witness
+[--witness-interval s] [--once]`, run as a fifth process from a directory
+beside the organisms' so `../dna/output` is the same tree. Inputs are the two
+public traces and only what the Go cores write: `mesh.db / organisms` (the
+ten columns plus `global_step`, added here with a migration and written by
+every heartbeat — the organism's age in training steps, for the witness and
+for gates), read with the governor's 60 s window through a connection opened
+`query_only`; the DNA field by name and size every fifth tick. Compute goes
+through the C engine already linked by `cgo_aml.go` — `am_method_push_organism`,
+`am_method_field_entropy` / `_syntropy`, `am_harmonic_push_*`,
+`am_harmonic_forward` — behind one mutex, since `HN` and `M` are file-static
+(`witness_cgo.go`). `am_method_step` is not bound: it executes AML statements
+and advances field physics, and a witness does not steer; its ladder is
+re-stated in Go (`witnessDecide`, `witnessTrend`) without the coherence rung.
+Field coherence and organism resonance are not computed, because no core
+writes a gamma vector — reporting a constant was the old bug. Every delta is
+across ticks. Outputs are outward only: a line per tick on stdout, a JSON
+record per tick in `witness.jsonl`; `--once` prints one snapshot. A schema
+the witness cannot read is printed every tick as a finding.
+
+**Gates (`witness_test.go`).** `TestWitnessReadsWhatGoWrites` — the mesh is
+created by `SwarmRegistry.Register` itself, two organisms heartbeat, the
+witness reads stage / params / entropy / syntropy / element / `global_step`
+back exactly, a hibernated one leaves the field, and an `UPDATE` through the
+witness's handle is an error. `TestWitnessSchemaMismatchIsAnError` — a table
+without `syntropy` / `global_step` is an error, not an empty field.
+`TestWitnessDeltasAreAcrossTicks` — H 1.0 → 1.4 gives arousal 0.8 on the
+second tick and 0 on an unchanged third; one organism of three appearing
+gives novelty 1/3. `TestWitnessLadderAndTrend` — `am_method_step`'s numbers.
+`TestWitnessHarmonicsMatchTheDFT` — a 16-sample history `1 + sin(2π·3t/16)`
+through the C forward: every harmonic within 1e-4 of the float64 formula,
+dominant k = 2 at amplitude 0.5, confidence 0.475. `TestWitnessNeverWritesBack`
+— six ticks over a live mesh and a DNA directory: no table appears, no
+`field_steering`, the fragment's size and mtime are unchanged, nothing
+deleted, and the scan saw the file and the `wrote` event. One older gate
+went red on the new column — the keeper test's fixture built a narrower
+`organisms` table than the real schema, and the heartbeat `UPDATE` failed
+silently — fixed at the fixture; the audit's lesson, applied to our own
+test. Suite: 166 PASS, 0 FAIL.
+
+**Colony of four plus the witness, 600 s, interval 2 s (`run10_witness`,
+`witness.jsonl`, 300 ticks).** For the first 84 ticks (168 s) the witness
+printed, every tick, `mesh schema: no such column: global_step` — the mesh on
+this phone was created by earlier binaries and organisms migrate it only when
+they register, after their initial warmup; the finding path did what it is
+for. Tick 85: water registered (`organisms=1 … water:s0/0k/0.00/0`); tick 86:
+air; from tick 96 all four; 205 ticks with the full colony. All four were seen
+crossing to stage 3 at ticks 140-143 (`n_params` 268k → 1367k); `global_step`
+climbed 0 → 2032. Field entropy went 0 → 2.401 (organisms report 0 until
+their first entropy sample); actions over the ticks with organisms: ground
+151, explore 33, dampen 17, sustain 15; the alert `stuck in dampen loop`
+fired at ticks 147-149, right after the stage-3 jump lifted H from 0.632 to
+2.401 (trend −0.766, −0.425, −0.213). Eight DNA events (`air wrote
+gen_1789314045_3.txt`, `water wrote …`, …) with per-writer counts
+(`water=21f/103K` at tick 121). NaN 0 in all four organisms. Nothing was
+written by the witness; the organisms did not notice it.
+
+**The Python tier leaves (second commit).** `mycelium.py` (1660 lines),
+`ariannamethod/method.py` (527), `sentinel.py` (356), `__init__.py`,
+`requirements.txt` (numpy) and `ariannamethod/Makefile`, whose only product
+`libaml.so` served the ctypes bindings (the Go binary compiles
+`ariannamethod.c` through cgo and links the system `libnotorch`).
+`tests/test_all.sh` keeps sections 1-2 (four builds, element smoke tests)
+and drops 3-6, Python and ctypes throughout (METHOD / HarmonicNet / notorch
+benchmarks, numpy-built mesh fixtures); the C smoke test checks the SQLite
+header instead of counting tables through python3. Nothing in the tree runs
+Python. `standalone-py/molequla.py` stays as the historical single-file
+origin, wired to nothing.
+
+**Left.** The old benchmarks (μs per `am_method_step`, per
+`am_harmonic_forward`, notorch BLAS step) had no recorded numbers in the
+tree; if wanted they return as Go benchmarks in repair 8. The Rust core's
+`field_steering` reader is now a reader of nothing; it degrades correctly
+and is one `if let Ok` branch to remove.
+
+— Defender (Arianna Method, phone-1)

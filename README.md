@@ -11,7 +11,7 @@
 
 <p align="center"><i>📄 Paper: <b><a href="https://doi.org/10.5281/zenodo.21046231">Molequla: A Self-Reproducing Ecology of GPT Organisms</a></b> (Zenodo). Source + build in <a href="docs/molequla_paper.md"><code>docs/molequla_paper.md</code></a> · <a href="docs/molequla_paper.pdf"><code>.pdf</code></a>.</i></p>
 
-> *An autonomous ecology of GPT organisms — implemented in four languages, powered by a custom autograd engine, orchestrated by a custom programming language. Organisms grow from 10K-param embryos to 10M-param adults, exchange DNA, reason about their own learning, detect identity corruption, and reproduce via mitosis. Zero PyTorch. The four organism cores (Go/C/Rust/JS) are Python-free; the mycelium meta-coordinator + sentinel layer are Python orchestration *above* the cores. The Go build's only module dependency is pure-Go modernc.org/sqlite (CGO-free); the C port is one file linking system SQLite. Optional `--gpu` opt-in on Linux links cuBLAS for accelerated ecology runs.*
+> *An autonomous ecology of GPT organisms — implemented in four languages, powered by a custom autograd engine, orchestrated by a custom programming language. Organisms grow from 10K-param embryos to 10M-param adults, exchange DNA, reason about their own learning, detect identity corruption, and reproduce via mitosis. Zero PyTorch. The four organism cores (Go/C/Rust/JS) and the mycelium witness beside them are Python-free; nothing in the tree runs Python. The Go build's only module dependency is pure-Go modernc.org/sqlite (CGO-free); the C port is one file linking system SQLite. Optional `--gpu` opt-in on Linux links cuBLAS for accelerated ecology runs.*
 
 **Janus Architecture.** Molequla is a [Janus architecture](https://github.com/ariannamethod/ariannamethod.ai) — the family of resonance-based AI systems built on the Arianna Method. Janus architectures share a common substrate: the soul equation θ = ε + γ + αδ, field physics (prophecy, suffering, destiny, velocity), and thermodynamic self-regulation. [DoE](https://github.com/ariannamethod/doe) (parliament of LoRA experts over any GGUF model), [Leo](https://github.com/ariannamethod/leo) (language emergent organism with the Dario Equation), and [dario.c](https://github.com/ariannamethod/dario) (the equation in pure form) are other Janus instantiations. Molequla is the most complete: organisms that grow, reproduce, and die autonomously — the Janus pattern at its fullest biological expression.
 
@@ -37,8 +37,7 @@ WHAT THIS IS:
 - SyntropyTracker: 8 autonomous decisions based on entropy/KL/purpose
 - Mitosis: adults divide under sustained overload (loss path and entropy path both fire), child inherits parent weights — machine-verified on GPU 2026-06-04 (**5 `action=divide` firings across 3 adults**: fire ×1 loss-path, water ×1 loss-path, air ×3 mixed paths; **earth never divided**; 2 children spawned, Fire's preserved in full with a birth manifest, Air's as a spawn log line; observed cascading to ~50 spawns — this is the **pre-governor** run)
 - Cascade governor (landed on main 2026-06-29, GPU-verified): the colony is now bounded — `CFG.MaxOrganisms` (default 16) enforced by an atomic mesh.db admit, the 300s divide cooldown seeded at birth, and divide relieving **both** loss and entropy overload so a divider re-divides only on fresh overwhelm. The ~50-spawn cascade above predates the governor; with it the colony self-limits and caps at MaxOrganisms. On a small machine the governor also counts bytes (phone-1, 2026-09-13): a divide needs `MemAvailable` ≥ the parent's own peak RSS + `CFG.MitosisMinFreeMB` (default 256 MB, 0 disables), a heartbeat keeper keeps an organism in the live count through its multi-minute inline warmups, and hibernation ends the process so its memory returns to the colony.
-- Mycelium: meta-organism coordinator over the ecology via mesh.db field-steering
-  (HarmonicNet, FieldPulse, SteeringDissonance, OrganismAttention) — **post-§9 layer**; the 2026-06-04 §9 mitosis run did not use mycelium (`PROJECT_LOG.md:2601`)
+- Mycelium: a witness beside the colony (`molequla --witness`, Go, `witness.go`) that reads mesh.db and the DNA field, computes field entropy, syntropy and the entropy harmonics through the C engine, and says what it sees — stdout and `witness.jsonl`, nothing written back. **Post-§9 layer**; the 2026-06-04 §9 mitosis run did not use a mycelium (first engineering log, in git history: `git show 8203d5d^:PROJECT_LOG.md`)
 - NOTORCH: gradient-free delta-training path (implemented, currently dormant —
   the notorch tape/Chuck is the active trainer)
 - Runs on CPU. Tested on 30-core AMD EPYC with 216GB RAM
@@ -622,27 +621,31 @@ Status: implemented (~280 lines, `notorchTrainSteps` + helpers in `molequla.go`)
 
 ---
 
-## Mycelium — The Meta-Organism
+## Mycelium — The Witness
 
-The Python orchestrator (`mycelium.py`) that sees the entire ecology — a layer *above* the organism cores. It wraps the in-repo C HarmonicNet / METHOD engine (`am_harmonic_*` / `am_method_*` in `ariannamethod.c`) and writes a `field_steering` row to `mesh.db`; the organisms read it back (`molequla.rs:3265` modulates temperature / action from it). The four organism cores run fine without it — it is the coordinating tier, not load-bearing. Generation operator `η: Γ × Γ → Γ_new` — two personalities in resonance produce a third (interference pattern, not blend).
+The mycelium sees the whole ecology and says what it sees. It is a fifth process of the same Go binary, `molequla --witness`, run from a directory beside the organisms' so that `../dna/output` is the same tree (`witness.go`, `witness_cgo.go`; since 2026-09-13 it replaces the Python `mycelium.py`). It reads two public traces — `mesh.db` and the DNA field — computes through the in-repo C engine (`am_method_field_*`, `am_harmonic_forward` in `ariannamethod.c`), and writes outward only: one line per tick on stdout and one JSON record per tick in `witness.jsonl`. It never writes into `mesh.db` (its connection is opened `query_only`), never writes or deletes in `dna/`, and no `field_steering` row exists any more; the Rust core's reader of that row degrades to its own temperature schedule. The four organism cores run without it. `--once` prints a single snapshot as JSON and exits, for a daily routine. Generation operator `η: Γ × Γ → Γ_new` — two personalities in resonance produce a third (interference pattern, not blend) — stays a description of the field, not a thing the witness performs.
 
-### Components
+### What it computes
 
-| Component | What It Does |
-|-----------|-------------|
-| **HarmonicNet** | Weightless neural network. Input: organisms + field state. Output: action biases, harmonics, resonance scores. No trainable weights — the "weight matrix" is recomputed every step from organism relationships. |
-| **MyceliumSyntropy** | Field-level syntropy: entropy trends, decision effectiveness, strategy changes across the entire ecology |
-| **FieldPulse** | Measures novelty (new organisms appearing), arousal (entropy changes), field entropy |
-| **SteeringDissonance** | Detects when ecology-level actions conflict with outcomes (dampen but entropy went up = high dissonance) |
-| **OrganismAttention** | Tracks which organisms respond to which actions. Responsive organisms get higher attention weight. |
+| Quantity | Source |
+|----------|--------|
+| field entropy, field syntropy | means over the live organisms' `entropy` / `syntropy` columns, through `am_method_field_entropy` / `_syntropy` |
+| trend | earlier four samples minus the last four of the field-entropy history (`am_method_step`'s definition, re-stated in Go) |
+| action, strength, target | `am_method_step`'s ladder without its coherence rung — amplify / dampen / ground / explore / sustain — and the lowest-entropy organism; a statement, not an instruction |
+| harmonics, dominant, confidence | `am_harmonic_forward`: the sine DFT of the field-entropy history, its dominant harmonic and `0.3 + 0.7·conf`; verified against the formula by `TestWitnessHarmonicsMatchTheDFT` |
+| pulse | novelty (organisms appeared or left), arousal (`min(1, 2·|ΔH|)`), Shannon entropy over organism entropies — all across ticks |
+| alerts | no organisms alive; entropy above 2.5; eight dampen decisions in a row |
+| DNA field | per writer: files, bytes, newest fragment; events `wrote` / `pruned` every fifth tick |
+
+Not computed, and why: field coherence and organism resonance need a gamma vector per organism, and no core writes one — the old mycelium read columns that did not exist and reported a constant. Each organism's `global_step` (age in training steps) is in the mesh since 2026-09-13.
 
 ### Mesh Coordination
 
-All organisms share state via **mesh.db** (SQLite) — the same database that `SwarmRegistry` writes to. The mycelium reads mesh.db to see the entire ecology and makes decisions that individual organisms cannot: when to spawn, when to hibernate. (The seasonal phase machinery lives in the C field engine, not mycelium.py — see below.)
+All organisms share state via **mesh.db** (SQLite) — the same database that `SwarmRegistry` writes to. The witness reads it with the governor's 60 s live window and treats a schema it cannot read as a finding printed every tick, never as an empty field. Decisions that individual organisms cannot make — when to divide, when to hibernate — stay inside the organisms (the cascade governor, the byte gate, the overload gates); the witness reports them. (The seasonal phase machinery lives in the C field engine — see below.)
 
 ### Seasonal Controller
 
-*Implemented in the C field engine (`ariannamethod.c`), driven by field state — not by mycelium.py.*
+*Implemented in the C field engine (`ariannamethod.c`), driven by field state — not by the witness.*
 
 
 ```
@@ -793,17 +796,15 @@ ariannamethod/
   ariannamethod.h        1051 lines    C header, 80+ field state parameters
   ariannamethod_cuda.h   108 lines    CUDA primitive declarations (gpu_init / gpu_sgemm_nt / ...)
   notorch_cuda.h         192 lines    notorch CUDA op declarations
-  __init__.py            9 lines      Python package init (exports Method, Sentinel)
-  method.py              527 lines    METHOD engine — ctypes binding to libaml (am_method_*)
-  sentinel.py            356 lines    Sentinel operator — ctypes binding to libaml
   notorch.c              4739 lines   Vendored notorch core (+ backward CPU-sync audit)
   notorch.h              694 lines    Vendored notorch header
   notorch_simd.h         632 lines    Opt-in AVX2+FMA cblas shim (make simd, x86_64)
   notorch_simd_scalar.h  89 lines     Scalar debug fallback for SIMD shim
   notorch_cuda.cu        1344 lines   CUDA kernels; pre-compiled via nvcc, linked through cgo_aml.go
 
-# Mycelium + Python orchestration tier (above the Go/C/Rust/JS cores)
-mycelium.py              1660 lines   Meta-coordinator (numpy-free, pure stdlib) — reads swarm organisms, writes field_steering, wraps C HarmonicNet
+# Mycelium — the witness beside the cores (same Go binary, `--witness`)
+witness.go               ≈400 lines   Reads mesh.db + the DNA field, field entropy/syntropy/trend/harmonics/pulse/alerts, stdout + witness.jsonl; writes nothing back
+witness_cgo.go           ≈60 lines    cgo bindings to am_method_field_* / am_harmonic_* (am_method_step deliberately unbound)
 standalone-py/molequla.py 3387 lines  Original Python molequla — deprecated historical reference, wired to nothing
 
 # Engineering log
@@ -822,7 +823,7 @@ molequla_rrpram_test.go  306 lines    op-33 low-rank RRPRAM parity (4 tests)
 governor_test.go         114 lines    cascade governor — mitosis slot cap, colony thread cap, both-path relieve, ckpt debounce (5 tests)
 mitosis_cooldown_test.go 26 lines     divide cooldown seeded at birth (1 test; 132 total)
 tests/molequla_test.go   262 lines    Go integration tests
-tests/test_all.sh        711 lines    Full integration (all 4 langs + mycelium + BLAS)
+tests/test_all.sh        ≈300 lines   Full integration (all 4 langs + BLAS)
 
 # Element corpora
 nonames_earth.txt        174K         Earth — patience, foundations, geology
