@@ -742,3 +742,100 @@ mirror that repair 3 removed; README:41, :439, :686, :748, :810 cite
 `PROJECT_LOG.md`, which left the tree in `8203d5d`.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 6: the voice hears its siblings under the overlay, and the overlay fades
+
+Branch `claude/phone1-repair-graze`, on top of `4f2e78a` (main after #34).
+Files: `molequla.go` (`overlayStep`, the generation step), `metaweights_overlay.go`
+(fade, coefficient slide, penalty sign), `cross_graze.go` (cursor),
+`graze_overlay_test.go` (new, 4 tests), `README.md` (§cross-graze).
+
+**The configuration this is about.** The colony is launched with
+`--corpus-overlay` and `--cross-graze`, and every organism is warmed within
+minutes. Audit C read the generation step in exactly that state and found the
+cross-organism channel gone and the overlay leaving in one step.
+
+**C-OVL-01 (P0) — the boost went where nothing read it.** With the flag on,
+sampling reads `overlaidLogits`, a detached copy of the model's logits; on a
+warmed organism the old step cleared `overlayActive` and then sent the
+sibling boost to `logits.Data`. The per-step overlay is now one function,
+`overlayStep` (molequla.go:4554), which returns the slice sampling will read
+— the model's own slice when the overlay is off or faded, a copy otherwise —
+and cross-graze is applied to that slice without a branch (:4734). Gate:
+`TestCrossGrazeReachesSamplingWhenOverlayOnAndWarmed` — a 16-dim organism
+with `lm_head` scaled until mean |logit| is past the fade band, the flag on,
+a sibling whose last token is the byte `z` (absent from every test document)
+with a boost of 1e6; the answer must contain `z`. With the old target put
+back for one run it generated `eeeeee`.
+
+**C-OVL-02 (P1) — a fade where there was a cliff.** Past mean |logit| 1.0 the
+overlay, its repetition penalty, the greedy bootstrap and the hard top-15
+mask all vanished between one token and the next. Now: `overlayFadeProgress`
+(metaweights_overlay.go:53) is 0 up to the threshold and 1 at threshold +
+`metaFadeWidth` (1.0, :47), linear between; `overlayStep` blends
+`raw + weight·(overlaid − raw)` with `weight = 1 − progress` (:4575); the
+coefficient bundle slides from the weightless to the trained values along
+the same ramp (`lerpCoeffs`, :65, applied at :250), so the trained bundle
+the code always documented finally binds, as a waypoint; the repetition
+penalty runs whenever the overlay runs and fades with it (:4572). Greedy
+bootstrap and the hard top-15 mask stay discrete on the untrained regime —
+they are sampling policy, not logits. Gate:
+`TestOverlayFadesInsteadOfSwitchingOff` — the same raw logits scaled to
+mean |logit| 0.999 and 1.001 must come out of `overlayStep` within 5 % of
+the stack the overlay adds just below the threshold, the overlay must be
+present there, and at 2.5 the output must equal the input exactly. The gate
+first caught the penalty switching off: a step of 2.494 logits against a
+stack of 2.007. After the penalty joined the fade: stack 3.257, step 0.0131.
+
+**C-OVL-04 (P1) — a penalty that rewarded repetition.** The penalty
+multiplied by 0.5 (and blocked successors by 0.2) unconditionally; after the
+overlay's unigram damping (−2.0 on rare tokens) a repeated token with a
+negative logit was moved toward zero, up the ranking. It now halves positive
+logits and leaves negative ones where they are (:464, :475). Gate:
+`TestRepetitionPenaltyNeverRewardsRepetition`.
+
+**C-OVL-05 (P1) — both corpus paths off.** The prob-space corpus blend was
+skipped on the flag, so a warmed organism with the overlay on had neither
+overlay nor blend. The blend's alpha is now scaled by `1 − overlayWeight`
+(:4900): overlay only while untrained, blend as with the flag off once
+faded, both in proportion between.
+
+**Audit A, P1-3 — the pasture is read by cursor.** `cross_graze.go` kept a
+map of seen file names and wiped it past 2048 entries, after which the next
+refresh re-read every file in the tree under the model lock; with an embryo
+emitting ~1.4 fragments/s that was minutes, not hours. It now keeps one
+cursor per sibling (`Last`, :49) in the numeric `<unix>,<step>` order
+`dnaRead` uses, reads only what `dnaListNew` returns past it (:93), and
+does no stat and no mtime sort. Gate: `TestCrossFieldCursorReadsOnlyNew`
+(step 10 after step 2, no re-read on an empty refresh).
+
+**Suite:** 160 PASS, 0 FAIL.
+
+**Voice, one sample per prompt.** The six DNA probes through the REPL on the
+same warmed earth checkpoint from `run9` (stage 2, 64-dim, vocab 643; mean
+|logit| on the probes 6.5-8.3, fade 1.0, so the overlay itself is silent on
+this organism and what changes is the boost and the blend), previous binary
+against this one, `--element earth --cross-graze --corpus-overlay`:
+
+| probe | previous | this |
+|---|---|---|
+| What do you feel? | a and — and h under?? | What is a mason standing? |
+| Tell me about yourself. | to a ace to re a, a b thesing wall a po. | A mineral. A river c. A: What is the six of the land is sunligh. |
+| What is truth? | is is g at de rock? | What is a geys p expression. |
+| Speak. | What What   h   h | What is the earth' two is paration. |
+| What do you remember? | the is — the c not re thatticic theiao pis of is stists. | What is the rock, leaches that flo. |
+| What matters? | of b h the the comp.e or and d b or. | What is the lesson of. rests is a quartz, a caves concept stand the long, and the rock bene. |
+
+One sample each at the default temperature; no verdict on the voice from
+this table. The sweep (temperature × top-k × prompts) belongs to the launch
+entry, on adults.
+
+**Stated, not changed (C-OVL-06).** The entropy the overload gate reads,
+`ComputeModelEntropy`, applies cross-graze and not the overlay. It is
+defined on the transformer plus the colony, and stays so; the §9 result
+keys on the loss path.
+
+**Left.** C-OVL-03 (six `CFG.Meta*` knobs that nothing reads) and the
+`PROJECT_LOG.md` references in README go with repair 8.
+
+— Defender (Arianna Method, phone-1)

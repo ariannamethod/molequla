@@ -4523,6 +4523,61 @@ func GenerateResonant(model *GPT, tok *EvolvingTokenizer, field *CooccurField, p
 	return generateResonantLocked(model, tok, field, prompt, docs, useModel)
 }
 
+// meanAbsLogit is the transformer-magnitude measure the overlay gates on:
+// mean |logit| over the vocabulary (postgpt_q.c:1355-1356 `tmag`).
+func meanAbsLogit(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	var s float64
+	for _, x := range v {
+		if x < 0 {
+			s -= x
+		} else {
+			s += x
+		}
+	}
+	return s / float64(len(v))
+}
+
+// overlayStep applies the Q-style metaweights overlay for one generation step
+// and returns the logits sampling reads. With the overlay off (flag, no field,
+// or faded out) it returns the model's own slice, so anything applied to it
+// afterwards — cross-graze — is what gets sampled. With it on it returns a
+// copy carrying the overlay scaled by `weight`: 1 while the transformer is
+// untrained (mean |logit| ≤ metaTFGateThreshold), falling linearly to 0 across
+// metaFadeWidth. Repair 6 (MOLEQULALOG2.md, 2026-09-13) replaced the step at
+// the threshold — the full additive stack, tens of logits, vanishing between
+// one token and the next — with this fade. `untrained` is the bootstrap regime
+// (greedy first tokens, hard top-15 mask, repetition penalty), a sampling
+// policy that stays discrete on purpose.
+func overlayStep(raw []float64, ids []int, field *CooccurField, model *GPT, prophecyField []float64, scratch *OverlayScratch) (overlaid []float64, prophecy []float64, untrained bool, weight float64) {
+	if !CFG.CorpusLogitOverlay || field == nil || len(ids) < 1 {
+		return raw, prophecyField, false, 0
+	}
+	// Measured on the raw model output: the overlay gates transformer logits
+	// toward zero when untrained, so the measure must precede it.
+	tmag := meanAbsLogit(raw)
+	untrained = tmag <= metaTFGateThreshold
+	weight = 1 - overlayFadeProgress(tmag)
+	if weight <= 0 {
+		return raw, prophecyField, false, 0
+	}
+	overlaid = make([]float64, len(raw))
+	copy(overlaid, raw)
+	overlaid, prophecy = MetaweightsOverlay(overlaid, ids, field, model, prophecyField, scratch)
+	// The repetition penalty edits logits, so it belongs to the faded stack:
+	// applied whenever the overlay runs and scaled out with it, not switched
+	// off at the threshold (the step the fade gate caught first).
+	MetaweightsRepetitionPenalty(overlaid, ids)
+	if weight < 1 {
+		for i := range overlaid {
+			overlaid[i] = raw[i] + weight*(overlaid[i]-raw[i])
+		}
+	}
+	return overlaid, prophecy, untrained, weight
+}
+
 // generateResonantLocked is the body of GenerateResonant. The caller MUST already
 // hold model.mu. Split out so the SPA reseed path (which runs while the lock is
 // held) can recurse without re-locking the non-reentrant model.mu — the recursive
@@ -4649,69 +4704,34 @@ func generateResonantLocked(model *GPT, tok *EvolvingTokenizer, field *CooccurFi
 		// choose coeffs → raw probability terms → unigram damping.
 		// Followed by repetition penalty (postgpt.c:960-967 form: *= 0.5 for
 		// every distinct token in the last 12).
-		overlaidLogits := logits.Data
-		overlayActive := CFG.CorpusLogitOverlay && field != nil && len(ids) >= 1
-		// Detect untrained regime via average |logit|. Mirror postgpt_q.c:1355-1356
-		// (`tmag>0.1 → has_tf`). Below threshold = transformer silent, overlay
-		// drives generation — early tokens must use greedy argmax (postgpt_q.c:1416-1418)
-		// to lock onto a coherent trajectory before any sampling noise enters.
-		untrainedRegime := false
-		if overlayActive {
-			overlaidLogits = make([]float64, len(logits.Data))
-			copy(overlaidLogits, logits.Data)
-			// Measure on raw logits BEFORE overlay applies (overlay also gates
-			// transformer logits to zero when untrained, so this measurement
-			// has to happen on the model output).
-			var tmag float64
-			for _, v := range logits.Data {
-				if v < 0 {
-					tmag -= v
-				} else {
-					tmag += v
-				}
-			}
-			if len(logits.Data) > 0 {
-				tmag /= float64(len(logits.Data))
-			}
-			// Untrained iff smooth transformer gate is below half — tg < 0.5
-			// corresponds to mean|logit| < 1.25 (Q's clamp((mag-0.5)/1.5,0,1)).
-			// Postgpt_q.c uses binary `tmag>0.1` but expects raw (unseeded) wte;
-			// seeded embeddings push mag to ~0.25, so 0.1 too low here. 1.0 keeps
-			// the bootstrap window open until real gradient training lifts mag.
-			untrainedRegime = tmag <= 1.0
-			// Overlay self-disables on warmed organisms (mag > 1.0). On a
-			// 16-dim BPE embryo, warmed transformer logits already carry
-			// word-level signal; overlapping that with overlay's c_bg=5 *
-			// bigram_prob on a subword vocab pulls top-K toward subword
-			// fragments (suffix tokens, punctuation) and the chain stays
-			// at subword level — repeated sweep cells 2/3 v2/v3/v4
-			// reproduced this with «,iieriying the isa?yenanan?» style
-			// output at infant stage. Zero-training overlay (cell 4) keeps
-			// working because the transformer is silent there and the
-			// metaweight chain runs cleanly. Sigmoid-blend refactor
-			// (postgpt.c:949-952 style) is the proper fix, deferred.
-			if untrainedRegime {
-				overlaidLogits, prophecyField = MetaweightsOverlay(overlaidLogits, ids, field, model, prophecyField, overlayScratch)
-				MetaweightsRepetitionPenalty(overlaidLogits, ids)
-			} else {
-				overlayActive = false
-			}
-		}
+		// Untrained regime (mean |logit| ≤ 1.0, postgpt_q.c:1355-1356 `tmag>0.1
+		// → has_tf`, raised to 1.0 because seeded embeddings lift mag to ~0.25):
+		// the transformer is silent and the overlay drives generation — early
+		// tokens must use greedy argmax (postgpt_q.c:1416-1418) to lock onto a
+		// coherent trajectory before sampling noise enters. Past 1.0 the overlay
+		// fades over metaFadeWidth instead of switching off: on a 16-dim BPE
+		// embryo a full-strength overlay on warmed logits pulled top-K toward
+		// subword fragments («,iieriying the isa?yenanan?», sweep cells 2/3
+		// v2-v4), and switching it off in one step cost tens of logits between
+		// two tokens (audit C, C-OVL-02). overlayWeight is that fade.
+		var overlaidLogits []float64
+		var untrainedRegime bool
+		var overlayWeight float64
+		overlaidLogits, prophecyField, untrainedRegime, overlayWeight = overlayStep(logits.Data, ids, field, model, prophecyField, overlayScratch)
+		overlayActive := overlayWeight > 0
 
 		// Cross-organism logit injection (cross_graze.go). Adds a rank-decay
 		// boost to sibling organisms' recent emitted token ids on top of the
 		// overlay'd logits. Dario's interf_signal_chunk pattern with
 		// «слова, метрики и проч» from peers instead of docs. No-op when
-		// model.crossField is nil (no --cross-graze or no --element). Hook
-		// runs on overlaidLogits if overlay is on, else on logits.Data — so
-		// the boost composes regardless of overlay regime. MaybeRefresh was
-		// hoisted to GenerateResonant entry; per-step we only Apply.
+		// model.crossField is nil (no --cross-graze or no --element). Always
+		// applied to overlaidLogits — the slice sampling reads, whether it is
+		// the overlay copy or an alias of logits.Data (audit C, C-OVL-01: the
+		// boost once went to logits.Data on a warmed organism with the overlay
+		// on, and nothing downstream read it). MaybeRefresh was hoisted to
+		// GenerateResonant entry; per-step we only Apply.
 		if model.crossField != nil {
-			target := overlaidLogits
-			if !overlayActive {
-				target = logits.Data
-			}
-			model.crossField.Apply(target, CFG.CrossGrazeCoef, CFG.CrossGrazeTopN)
+			model.crossField.Apply(overlaidLogits, CFG.CrossGrazeCoef, CFG.CrossGrazeTopN)
 		}
 
 		// Q-style untrained-regime early-step greedy: postgpt_q.c:1416-1418 —
@@ -4871,11 +4891,15 @@ func generateResonantLocked(model *GPT, tok *EvolvingTokenizer, field *CooccurFi
 		tokenAlpha := 1.0 / (1.0 + math.Exp(-CFG.CorpusFadeK*(CFG.CorpusFadeThreshold-entropy)))
 
 		// Corpus blend: skip entirely when tokenAlpha >= 0.99 (pure model mode)
-		// or when CFG.CorpusLogitOverlay is on — the Q-style pre-softmax overlay
-		// already applied raw-prob corpus signal; double-blending in prob space
+		// or while the Q-style pre-softmax overlay is in force — it already
+		// applied raw-prob corpus signal; double-blending in prob space
 		// distorts the distribution. Postgpt / Q use one overlay path only.
+		// As the overlay fades (overlayWeight → 0) the blend takes over at the
+		// same rate, so a warmed organism with the flag on keeps its corpus
+		// path (audit C, C-OVL-05: gated on the flag, both paths were off).
+		tokenAlpha = 1.0 - (1.0-tokenAlpha)*(1.0-overlayWeight)
 		var blended []float64
-		if tokenAlpha >= 0.99 || field == nil || CFG.CorpusLogitOverlay {
+		if tokenAlpha >= 0.99 || field == nil {
 			blended = modelProbs
 		} else {
 			corpusCounts := make([]float64, tok.VocabSize)

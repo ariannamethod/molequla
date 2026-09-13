@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,12 +20,13 @@ import (
 //
 // Here the «doc» is **the sibling organism's recent emission stream**. Per
 // Oleg 2026-05-14 PM: «как в дарио только вместо доков, слова, метрики
-// и проч». Each organism reads its peers' recent DNA fragments (already
-// mirrored to ../dna/seen/<sibling>/ by dnaRead, commit e5c1685),
-// tokenizes them, keeps a rolling per-sibling buffer, and during its own
-// generation adds a rank-decay logit boost to the token ids the siblings
-// just emitted. The host organism's voice gets pulled toward what its
-// peers are saying RIGHT NOW, not just what the corpus contains.
+// и проч». Each organism reads its peers' recent DNA fragments straight from
+// the field they are written to (../dna/output/<sibling>/, the same tree
+// dnaRead eats from; repair 3), tokenizes them, keeps a rolling per-sibling
+// buffer, and during its own generation adds a rank-decay logit boost to the
+// token ids the siblings just emitted. The host organism's voice gets pulled
+// toward what its peers are saying RIGHT NOW, not just what the corpus
+// contains.
 //
 // Direct cross-pollination at the logit level. Mid-emission, not after-burst.
 // The «metrics» half (sibling entropy / syntropy / loss) is wired via the
@@ -39,16 +39,15 @@ import (
 // ScanInterval). Apply pushes a coef-scaled rank-decay boost into the
 // caller's overlaidLogits before sampling.
 type CrossField struct {
-	SelfElement  string                            // own element label
-	PastureBase  string                            // ../dna/output relative to organism CWD (repair 3)
-	Siblings     []string                          // every DNA source this organism reads
-	Recent       map[string][]int                  // sibling → ring buffer of recent token ids
-	RecentCap    int                               // per-sibling buffer size
-	LastScan     time.Time                         // throttle FS reads
-	ScanInterval time.Duration                     // min gap between rescans
-	SeenFiles    map[string]bool                   // dedup of ingested gen_*.txt files
-	SeenCap      int                               // hard cap on SeenFiles before purging oldest sibling/* prefix
-	MetricBoost  func(sibling string) float64      // optional per-sibling coef multiplier
+	SelfElement  string                       // own element label
+	PastureBase  string                       // ../dna/output relative to organism CWD (repair 3)
+	Siblings     []string                     // every DNA source this organism reads
+	Recent       map[string][]int             // sibling → ring buffer of recent token ids
+	RecentCap    int                          // per-sibling buffer size
+	LastScan     time.Time                    // throttle FS reads
+	ScanInterval time.Duration                // min gap between rescans
+	Last         map[string]string            // sibling → last fragment ingested (repair 6: a cursor, like dnaRead's)
+	MetricBoost  func(sibling string) float64 // optional per-sibling coef multiplier
 	mu           sync.Mutex
 }
 
@@ -66,14 +65,17 @@ func NewCrossField(element, pastureBase string) *CrossField {
 		Recent:       make(map[string][]int, len(sibs)),
 		RecentCap:    64,
 		ScanInterval: 30 * time.Second,
-		SeenFiles:    make(map[string]bool, 256),
-		SeenCap:      2048, // ~8h × 3 siblings × ~1 emission/min keeps under bound
+		Last:         make(map[string]string, len(sibs)),
 	}
 }
 
-// MaybeRefresh walks PastureBase/<sibling>/gen_*.txt for files not yet
-// ingested, tokenizes their text, appends to per-sibling ring buffer.
-// Throttled by ScanInterval — calling every token step would be O(FS) hot.
+// MaybeRefresh walks PastureBase/<sibling>/ for fragments newer than the one
+// last ingested from that sibling — the same numeric <unix>,<step> order and
+// the same dnaListNew that dnaRead uses — tokenizes them and appends to the
+// per-sibling ring buffer. A cursor per sibling replaces the dedup map of
+// seen names that was wiped when it grew past 2048 entries and then re-read
+// every file in the tree under the model lock (audit A, P1-3). Throttled by
+// ScanInterval — calling every token step would be O(FS) hot.
 func (c *CrossField) MaybeRefresh(tok *EvolvingTokenizer) {
 	if c == nil || tok == nil {
 		return
@@ -88,37 +90,12 @@ func (c *CrossField) MaybeRefresh(tok *EvolvingTokenizer) {
 	eosID, hasEos := tok.Stoi[tok.EOS]
 	for _, sib := range c.Siblings {
 		dir := filepath.Join(c.PastureBase, sib)
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		type fileMtime struct {
-			name  string
-			mtime time.Time
-		}
-		files := make([]fileMtime, 0, len(entries))
-		for _, e := range entries {
-			n := e.Name()
-			if !strings.HasPrefix(n, "gen_") || !strings.HasSuffix(n, ".txt") {
-				continue
-			}
-			info, err := e.Info()
+		for _, name := range dnaListNew(dir, c.Last[sib]) {
+			data, err := os.ReadFile(filepath.Join(dir, name))
 			if err != nil {
 				continue
 			}
-			files = append(files, fileMtime{n, info.ModTime()})
-		}
-		sort.Slice(files, func(i, j int) bool { return files[i].mtime.Before(files[j].mtime) })
-		for _, f := range files {
-			key := sib + "/" + f.name
-			if c.SeenFiles[key] {
-				continue
-			}
-			c.SeenFiles[key] = true
-			data, err := os.ReadFile(filepath.Join(dir, f.name))
-			if err != nil {
-				continue
-			}
+			c.Last[sib] = name
 			text := strings.TrimSpace(string(data))
 			if text == "" {
 				continue
@@ -136,13 +113,6 @@ func (c *CrossField) MaybeRefresh(tok *EvolvingTokenizer) {
 				c.Recent[sib] = c.Recent[sib][len(c.Recent[sib])-c.RecentCap:]
 			}
 		}
-	}
-	// Hard cap on SeenFiles dedup map — wipe to empty when over SeenCap.
-	// Loses dedup state across the rebuild, so a few duplicate ingestions
-	// possible right after wipe; acceptable vs unbounded growth over 24h+
-	// runs (Opus audit P1, 2026-05-14).
-	if c.SeenCap > 0 && len(c.SeenFiles) > c.SeenCap {
-		c.SeenFiles = make(map[string]bool, c.SeenCap/2)
 	}
 }
 
