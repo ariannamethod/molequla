@@ -36,7 +36,7 @@ WHAT THIS IS:
 - Corpus field: 4-gram co-occurrence physics, self-enrichment loop
 - SyntropyTracker: 8 autonomous decisions based on entropy/KL/purpose
 - Mitosis: adults divide under sustained overload (loss path and entropy path both fire), child inherits parent weights — machine-verified on GPU 2026-06-04 (**5 `action=divide` firings across 3 adults**: fire ×1 loss-path, water ×1 loss-path, air ×3 mixed paths; **earth never divided**; 2 children spawned, Fire's preserved in full with a birth manifest, Air's as a spawn log line; observed cascading to ~50 spawns — this is the **pre-governor** run)
-- Cascade governor (landed on main 2026-06-29, GPU-verified): the colony is now bounded — `CFG.MaxOrganisms` (default 16) enforced by an atomic mesh.db admit, the 300s divide cooldown seeded at birth, and divide relieving **both** loss and entropy overload so a divider re-divides only on fresh overwhelm. The ~50-spawn cascade above predates the governor; with it the colony self-limits and caps at MaxOrganisms.
+- Cascade governor (landed on main 2026-06-29, GPU-verified): the colony is now bounded — `CFG.MaxOrganisms` (default 16) enforced by an atomic mesh.db admit, the 300s divide cooldown seeded at birth, and divide relieving **both** loss and entropy overload so a divider re-divides only on fresh overwhelm. The ~50-spawn cascade above predates the governor; with it the colony self-limits and caps at MaxOrganisms. On a small machine the governor also counts bytes (phone-1, 2026-09-13): a divide needs `MemAvailable` ≥ the parent's own peak RSS + `CFG.MitosisMinFreeMB` (default 256 MB, 0 disables), a heartbeat keeper keeps an organism in the live count through its multi-minute inline warmups, and hibernation ends the process so its memory returns to the colony.
 - Mycelium: meta-organism coordinator over the ecology via mesh.db field-steering
   (HarmonicNet, FieldPulse, SteeringDissonance, OrganismAttention) — **post-§9 layer**; the 2026-06-04 §9 mitosis run did not use mycelium (`PROJECT_LOG.md:2601`)
 - NOTORCH: gradient-free delta-training path (implemented, currently dormant —
@@ -662,7 +662,7 @@ Earth (patience, structure), Air (freedom, change), Water (flow, depth), Fire (t
 
 - **SwarmRegistry** (`mesh.db`): SQLite database tracking all living organisms — element, PID, status, stage, n_params, syntropy, entropy
 - **Training lock**: Atomic check-and-acquire via SQL prevents multiple organisms from training simultaneously. Cooperative scheduling — they take turns
-- **Hibernation**: When an organism is stale and a peer is thriving, it saves state and sleeps. Resources freed for the living
+- **Hibernation**: When an organism is stale and a peer is thriving, it saves state, marks itself sleeping in mesh.db and exits the process. Resources freed for the living
 - **Child birth**: `birth.json` with inherited `burst_history` — the child gets its parent's meta-learning experience (syntracker lineage). It doesn't start from zero wisdom
 
 ### Mitosis

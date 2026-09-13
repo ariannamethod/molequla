@@ -580,3 +580,89 @@ overload thresholds are to be re-read on the colony, not adjusted blind;
 that belongs to the launch entry.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 4: the governor counts bytes, hears a warming organism, and lets a sleeper go
+
+Branch `claude/phone1-repair-governor`, on top of `9292822` (main after 2b).
+Files: `governor_phone.go` (new), `governor_phone_test.go` (new, 5 tests),
+`molequla.go` (registry, config, mitosis branch, main), `README.md` (§governor,
+§hibernation).
+
+**What the audit named.** The cascade governor counts heads
+(`CFG.MaxOrganisms`) and counts them by heartbeat freshness (`AcquireMitosisSlot`,
+live window 60 s, molequla.go:5576). On a phone three things broke that: no
+byte budget at all; the post-growth warmup runs inline inside the tick loop and
+blocks the heartbeat for minutes; and a hibernated organism kept its process
+and its weights in RAM, because `main` parked on a signal it never received.
+
+**The mechanism, shown failing first.** Colony of four on the repair-2b binary,
+600 s, `taskset -c 4-7`, `--evolution --cross-graze`, `run7_old`, with a probe
+reading every organism's `last_heartbeat` from `mesh.db` every 10 s
+(`samples.log`, `hb_analyze.sh`):
+
+| organism | registered at | samples after | max heartbeat age | samples older than 60 s |
+|---|---|---|---|---|
+| earth | 191 s | 41 | 267 s | 30 |
+| air | 171 s | 43 | 293 s | 25 |
+| water | 211 s | 39 | 299 s | 28 |
+| fire | 201 s | 40 | 317 s | 29 |
+
+Two causes, both in the samples. The stage-3 inline warmup: 480 steps at
+1.7-1.9 steps/s, 258414 ms for water and 274966 ms for fire
+(`run7_old/water.stdout:80`, `fire.stdout:79`), during which the row in
+`mesh.db` does not move. And an earlier gap the audit did not name: between
+registration and the tick loop's first heartbeat (every 10 ticks, and the
+first ticks carry bursts and DNA generation) earth waited 144 s, water 92 s,
+fire 83 s, air 26 s — three of four were outside the live window before any
+warmup. For most of their registered life the colony cap counted these
+organisms as dead.
+
+**The three pieces.** `governor_phone.go`: `parseProcKB` reads a `kB` field
+from `/proc` text; `memGateDecision(free, peak, floor)` is the byte gate as
+arithmetic — a child needs the parent's own peak RSS (`VmHWM`,
+`/proc/self/status`) plus `floor` MB for the rest of the machine, `floor <= 0`
+disables, unknown memory opens; `mitosisMemGateOpen` applies it to the live
+machine; `beatKeeper` repeats the last reported heartbeat on its own clock and
+`Stop()` silences it for good; `waitEvolution` returns on a signal (closing
+`stop`) or when the trainer loop ends. In `molequla.go`: `SwarmRegistry` gains
+the keeper (`StartKeeper` :5483, `StopKeeper` :5492), `Heartbeat` records into
+it (:5634), `MarkHibernating` silences it before the row changes (:5670); the
+mitosis branch checks the byte gate before `AcquireMitosisSlot` and logs a
+refusal with both numbers (:6667); `CFG.MitosisMinFreeMB` (:234, default 256
+at :364); `main` closes `done` when the trainer returns (:7159), starts the
+keeper at 20 s against the 60 s window (:7169), seeds it with the current
+stage and parameter count at once (:7176) — the fix for the 144 s gap above —
+and evolution mode waits on the signal or on `done` (:7185), so a hibernated
+organism ends its process and its memory returns to the colony.
+
+**The fix, shown working.** Same colony, same probe, on the repaired binary
+(`run8_new`):
+
+| organism | registered at | samples after | max heartbeat age | samples older than 60 s |
+|---|---|---|---|---|
+| earth | 181 s | 42 | 15 s | 0 |
+| air | 181 s | 42 | 17 s | 0 |
+| water | 181 s | 42 | 17 s | 0 |
+| fire | 211 s | 39 | 20 s | 0 |
+
+earth, air and water ran their stage-3 inline warmup inside this window —
+244565 ms, 299626 ms, 254783 ms (`run8_new/{earth,air,water}.stdout`) — and
+their heartbeat age never passed 20 s. NaN count 0 in all eight organisms of
+both colonies.
+
+**What the colony did not exercise.** No organism reached adult in 600 s, so
+no divide was attempted and the byte gate never fired live; its gates are the
+pure test (`TestMemGateDecision`: 1000 MB free against 300 + 256 opens, 500
+closes, equality opens) and the on-host test (`TestMemGateOnThisHost`: a floor
+of four times the free memory closes it; this host read 2119 MB free, test
+process peak 7 MB). Hibernation did not fire either; `waitEvolution` is gated
+by `TestWaitEvolutionEndsWhenTrainerExits`. `TestBeatKeeperRefreshesMeshWithoutTicks`
+goes red if the keeper beats before it has state, if it stops repeating, or if
+it writes a sleeping organism back as alive. Suite: 154 PASS, 0 FAIL.
+
+**Deferred.** Replacing an overwhelmed adult with its child instead of adding
+a process needs a live inter-organism channel; the head cap and the byte gate
+bound the colony until then. The 256 MB floor is a tunable, not a measurement;
+the child's cost is measured at runtime from the parent's own peak.
+
+— Defender (Arianna Method, phone-1)

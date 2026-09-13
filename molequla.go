@@ -231,6 +231,7 @@ type Config struct {
 	OverloadLossEps        float64 `json:"overload_loss_eps"`         // adult mitosis: loss-delta floor; meanDelta > -eps = bursts not reducing loss
 	OverloadLossWindow     int     `json:"overload_loss_window"`      // adult mitosis: # recent bursts for lossOverload (decoupled from SyntropyWindow: adult bursts are ~17min apart, so 8 would take ~2.3h; entropy is per-tick, loss is per-burst)
 	MaxOrganisms           int     `json:"max_organisms"`             // cascade governor: hard ceiling on live colony size, checked before divide (0 = uncapped). The per-process 300s cooldown cannot bound a multi-process lineage; this is the OOM/SIGKILL backstop.
+	MitosisMinFreeMB       int     `json:"mitosis_min_free_mb"`       // byte gate before divide (repair 4): MemAvailable must be >= this floor + the parent's own peak RSS (VmHWM), the measured cost of the child it spawns. 0 disables.
 	CheckpointMinInterval  float64 `json:"checkpoint_min_interval"`   // write-storm throttle: min seconds between DEFAULT-path (periodic) full-model JSON checkpoints (0 = no throttle). Explicit-path saves (mitosis parent ckpt) are never throttled.
 
 	// consciousness: per-token dissonance feedback
@@ -360,6 +361,7 @@ var CFG = Config{
 	OverloadLossEps:        0.05, // loss-delta within ±0.05 of zero = not improving
 	OverloadLossWindow:     3,    // 3 sustained high-loss adult bursts = overwhelmed (burst cadence ~17min at adult; 8 would take ~2.3h)
 	MaxOrganisms:           16,   // cascade cap: ≤16 live organisms (each is a full trainer process). Tunable; 0 disables.
+	MitosisMinFreeMB:       256,  // headroom left to the machine after a child the size of the parent's peak RSS is added. Tunable; 0 disables.
 	CheckpointMinInterval:  30.0, // throttle periodic full-model checkpoints to ≤1/30s (coalesces the growth/burst storm). Tunable; 0 disables. Mitosis ckpt (explicit path) bypasses.
 
 	// consciousness defaults
@@ -5471,7 +5473,23 @@ type SwarmRegistry struct {
 	Element    string // earth, air, water, fire
 	PidFile    string
 	MeshDB     *sql.DB
+	keeper     *beatKeeper // repeats the last heartbeat on its own clock (repair 4)
 }
+
+// StartKeeper launches the heartbeat keeper: from now until stop closes, the
+// last state passed to Heartbeat is re-sent every interval, so the organism
+// stays in the live count while the tick loop is inside a multi-minute
+// inline warmup after growth (governor_phone.go).
+func (sr *SwarmRegistry) StartKeeper(stop <-chan struct{}, interval time.Duration) {
+	if sr.keeper == nil {
+		sr.keeper = newBeatKeeper(sr)
+	}
+	go sr.keeper.Run(stop, interval)
+}
+
+// StopKeeper silences the keeper for good; MarkHibernating calls it so a
+// sleeping organism is never written back as alive.
+func (sr *SwarmRegistry) StopKeeper() { sr.keeper.Stop() }
 
 // NewSwarmRegistry creates a new SwarmRegistry with the given organism ID and element.
 func NewSwarmRegistry(organismID, element string) *SwarmRegistry {
@@ -5613,6 +5631,7 @@ func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64
 	sr.MeshDB.Exec(
 		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive' WHERE id=?",
 		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, sr.OrganismID)
+	sr.keeper.Set(stage, nParams, syntropy, entropy) // nil-safe; the keeper repeats this state
 }
 
 // DiscoverPeers finds other living organisms.
@@ -5648,6 +5667,7 @@ func (sr *SwarmRegistry) DiscoverPeers(timeoutSeconds float64) []map[string]inte
 
 // MarkHibernating marks this organism as sleeping in mesh.db.
 func (sr *SwarmRegistry) MarkHibernating() {
+	sr.StopKeeper() // before the row changes, so no late beat resurrects it
 	if sr.MeshDB != nil {
 		sr.MeshDB.Exec("UPDATE organisms SET status='sleeping' WHERE id=?", sr.OrganismID)
 	}
@@ -6642,8 +6662,13 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 			// Ecology: mitosis / hibernation
 			if swarm != nil && action == "divide" {
-				// (audit C3) atomic admit: serialized + count-capped across processes
-				if !swarm.AcquireMitosisSlot(CFG.MaxOrganisms) {
+				// (repair 4) byte gate: the child costs the parent's own peak RSS;
+				// the machine keeps MitosisMinFreeMB on top of that or no division.
+				if open, freeMB, needMB := mitosisMemGateOpen(int64(CFG.MitosisMinFreeMB)); !open {
+					fmt.Printf("[ecology] MITOSIS refused — %d MB available, a child needs %d MB (own peak RSS + %d MB floor)\n",
+						freeMB, needMB, CFG.MitosisMinFreeMB)
+				} else if !swarm.AcquireMitosisSlot(CFG.MaxOrganisms) {
+					// (audit C3) atomic admit: serialized + count-capped across processes
 					fmt.Printf("[ecology] MITOSIS refused — colony at cap (%d) or a sibling is dividing\n", CFG.MaxOrganisms)
 				} else {
 					fmt.Println("[ecology] MITOSIS triggered — organism overloaded, spawning child")
@@ -7126,18 +7151,39 @@ func main() {
 	// Quantum buffer for smart training triggers
 	qbuf := NewQuantumBuffer()
 
-	// Start background trainer
+	// Start background trainer. done closes when its loop returns — on
+	// hibernation — so evolution mode ends the process with it (repair 4).
 	stop := make(chan struct{})
-	go backgroundTrainer(db, model, tok, qbuf, swarm, stop, element)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		backgroundTrainer(db, model, tok, qbuf, swarm, stop, element)
+	}()
+	// Heartbeat keeper: the tick loop reports state every 10 ticks, the keeper
+	// repeats it every 20 s (live window is 60 s, AcquireMitosisSlot) across
+	// the inline post-growth warmups that block the loop for minutes. Seeded
+	// now with the current state: the first ten ticks carry bursts and DNA
+	// generation and took 144 s on the old binary (run7_old, earth), so a
+	// keeper that waits for the tick loop's first report is silent exactly
+	// when the new organism drops out of the live count.
+	swarm.StartKeeper(stop, 20*time.Second)
+	model.mu.Lock()
+	seedStage, seedParams := model.CurrentGrowthStage(), 0
+	for _, m := range model.Base {
+		seedParams += m.Nout * m.Nin
+	}
+	model.mu.Unlock()
+	swarm.Heartbeat(seedStage, seedParams, 0, 0)
 
 	if evolution {
 		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")
-		// In evolution mode: no REPL, just let background trainer run forever
+		// In evolution mode: no REPL; run until a signal or until the trainer
+		// loop ends on its own (hibernation), which frees this organism's
+		// memory to the colony instead of parking it forever.
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		close(stop)
-		fmt.Println("\n[evolution] Organism shutting down gracefully.")
+		why := waitEvolution(sigCh, done, stop)
+		fmt.Printf("\n[evolution] Organism shutting down gracefully (%s).\n", why)
 		return
 	}
 
