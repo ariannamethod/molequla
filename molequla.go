@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -129,7 +130,7 @@ type Config struct {
 	Trainer string `json:"trainer"`
 
 	// UseGPU routes per-matrix Matvec calls through cuBLAS sgemm on Linux
-	// builds (see gpu_bindings_linux.go + gpu_forward.go). Inference-only:
+	// builds (see gpu_bridge.go and modules/gpu/). Inference-only:
 	// gradEnabled gates training back to the CPU/BLAS path. Default off — same
 	// binary runs unchanged on macOS / non-CUDA hosts; on a CUDA pod the
 	// --gpu flag plus a successful gpu_init() enables the fast path.
@@ -3707,8 +3708,10 @@ const shutdownDrain = 10 * time.Second
 // debounced periodic path, and a shutdown that lands within CheckpointMinInterval
 // of the last burst save would be silently dropped — which is the whole failure
 // this repairs. A session that ends every time by SIGTERM (capped runs) keeps its
-// progress only here.
-func saveOnShutdown(model *GPT, tok *EvolvingTokenizer, why string) {
+// progress only here. `phase` names the loop that was interrupted — "evolution"
+// for the tick loop, "init" for the bootstrap climb (repair 10) — so the log
+// line says which of the two saved.
+func saveOnShutdown(phase string, model *GPT, tok *EvolvingTokenizer, why string) {
 	path := CFG.CkptPath
 	if path == "" {
 		path = "molequla_ckpt.json"
@@ -3717,10 +3720,283 @@ func saveOnShutdown(model *GPT, tok *EvolvingTokenizer, why string) {
 	err := SaveCheckpoint(model, tok, path)
 	model.mu.Unlock()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[evolution] checkpoint NOT saved on %s: %v\n", why, err)
+		fmt.Fprintf(os.Stderr, "[%s] checkpoint NOT saved on %s: %v\n", phase, why, err)
 		return
 	}
-	fmt.Printf("[evolution] checkpoint saved on %s\n", why)
+	fmt.Printf("[%s] checkpoint saved on %s\n", phase, why)
+}
+
+// checkpointStream is what readCheckpointStream produces: the same fields
+// CheckpointData describes, except that the weights arrive already built into
+// their final *MatrixParam / DeltaModule form. Nothing here holds a second copy
+// of a matrix.
+type checkpointStream struct {
+	Cfg                 json.RawMessage
+	Tokenizer           TokenizerJSON
+	Base                map[string]*MatrixParam
+	Alpha               []float64
+	Deltas              []DeltaModule
+	InitEmbedSnapshot   [][]float64
+	GlobalStep          int
+	GrowthStepOffset    int
+	LastWarmupStage     *int
+	CorpusIngestedTotal int
+}
+
+// readCheckpointStream walks the checkpoint document token by token (repair 10).
+// The old path was one json.Decoder.Decode into a CheckpointData, which paid for
+// the weights three times over: the decoder buffered the whole document (105.6
+// MB for the stage-4 organism in molequla-run/earth), the CheckpointData held
+// every matrix again as [][]float64, and deserializeMatrixParam then built the
+// *Vec rows from that — measured at +368 MB of high-water mark in repair 9,
+// against a save path that by then cost +0. Here the decoder's buffer compacts
+// down to the largest single value it is asked for, which is one row, and each
+// row is handed straight to NewVecWithGrad without an intermediate copy.
+//
+// Field order is not assumed and unknown keys are skipped, so a checkpoint
+// written by the C / Rust / JS cores still loads. A truncated file ends the
+// token stream with io.ErrUnexpectedEOF, which comes back as an error from
+// whichever Token()/Decode() call reached the end — never a panic.
+func readCheckpointStream(r io.Reader) (*checkpointStream, error) {
+	dec := json.NewDecoder(bufio.NewReaderSize(r, 1<<16))
+	ck := &checkpointStream{Base: make(map[string]*MatrixParam)}
+	if err := expectDelim(dec, '{'); err != nil {
+		return nil, err
+	}
+	for dec.More() {
+		key, err := expectKey(dec)
+		if err != nil {
+			return nil, err
+		}
+		switch key {
+		case "cfg":
+			err = dec.Decode(&ck.Cfg)
+		case "tokenizer":
+			err = dec.Decode(&ck.Tokenizer)
+		case "base":
+			err = decodeMatrixMap(dec, ck.Base)
+		case "alpha":
+			err = dec.Decode(&ck.Alpha)
+		case "deltas":
+			ck.Deltas, err = decodeDeltaModules(dec)
+		case "init_embed_snapshot":
+			ck.InitEmbedSnapshot, err = decodeFloatRows(dec)
+		case "global_step":
+			err = dec.Decode(&ck.GlobalStep)
+		case "growth_step_offset":
+			err = dec.Decode(&ck.GrowthStepOffset)
+		case "last_warmup_stage":
+			err = dec.Decode(&ck.LastWarmupStage)
+		case "corpus_ingested_total":
+			err = dec.Decode(&ck.CorpusIngestedTotal)
+		default:
+			var skip json.RawMessage
+			err = dec.Decode(&skip)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("checkpoint field %q: %w", key, err)
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return nil, err
+	}
+	return ck, nil
+}
+
+// expectDelim consumes one token and insists it is the given delimiter.
+func expectDelim(dec *json.Decoder, want json.Delim) error {
+	t, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if d, ok := t.(json.Delim); !ok || d != want {
+		return fmt.Errorf("checkpoint: expected %q, got %v", want, t)
+	}
+	return nil
+}
+
+// expectKey consumes one token and insists it is an object key.
+func expectKey(dec *json.Decoder) (string, error) {
+	t, err := dec.Token()
+	if err != nil {
+		return "", err
+	}
+	s, ok := t.(string)
+	if !ok {
+		return "", fmt.Errorf("checkpoint: expected an object key, got %v", t)
+	}
+	return s, nil
+}
+
+// decodeMatrixParam reads one matrix — the rows writeMatrixParamJSON emits —
+// into its final storage. The shapes it must reproduce are exactly what
+// deserializeMatrixParam produced from the same JSON: a null or empty matrix is
+// an empty MatrixParam, a null row is an empty row, and Nin comes from row 0.
+func decodeMatrixParam(dec *json.Decoder) (*MatrixParam, error) {
+	t, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if t == nil { // JSON null — the old path decoded it to a nil [][]float64
+		return &MatrixParam{}, nil
+	}
+	if d, ok := t.(json.Delim); !ok || d != '[' {
+		return nil, fmt.Errorf("checkpoint: a matrix must be an array, got %v", t)
+	}
+	mp := &MatrixParam{}
+	for dec.More() {
+		var row []float64
+		if err := dec.Decode(&row); err != nil {
+			return nil, err
+		}
+		if row == nil {
+			row = []float64{}
+		}
+		if len(mp.Rows) == 0 {
+			mp.Nin = len(row)
+		}
+		mp.Rows = append(mp.Rows, NewVecWithGrad(row)) // loaded params always need grad
+	}
+	if err := expectDelim(dec, ']'); err != nil {
+		return nil, err
+	}
+	if len(mp.Rows) == 0 {
+		return &MatrixParam{}, nil
+	}
+	mp.Nout = len(mp.Rows)
+	return mp, nil
+}
+
+// decodeMatrixMap reads the "base" object, matrix by matrix, into dst.
+func decodeMatrixMap(dec *json.Decoder, dst map[string]*MatrixParam) error {
+	t, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if t == nil {
+		return nil
+	}
+	if d, ok := t.(json.Delim); !ok || d != '{' {
+		return fmt.Errorf("checkpoint: base must be an object, got %v", t)
+	}
+	for dec.More() {
+		name, err := expectKey(dec)
+		if err != nil {
+			return err
+		}
+		mp, err := decodeMatrixParam(dec)
+		if err != nil {
+			return fmt.Errorf("base[%q]: %w", name, err)
+		}
+		dst[name] = mp
+	}
+	return expectDelim(dec, '}')
+}
+
+// decodeFloatRows reads an array of float rows (init_embed_snapshot) one row at
+// a time, so the snapshot never exists twice.
+func decodeFloatRows(dec *json.Decoder) ([][]float64, error) {
+	t, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if d, ok := t.(json.Delim); !ok || d != '[' {
+		return nil, fmt.Errorf("checkpoint: expected an array of rows, got %v", t)
+	}
+	var rows [][]float64
+	for dec.More() {
+		var row []float64
+		if err := dec.Decode(&row); err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	return rows, expectDelim(dec, ']')
+}
+
+// decodeDeltaModules reads the "deltas" array into live DeltaModules.
+func decodeDeltaModules(dec *json.Decoder) ([]DeltaModule, error) {
+	t, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if d, ok := t.(json.Delim); !ok || d != '[' {
+		return nil, fmt.Errorf("checkpoint: deltas must be an array, got %v", t)
+	}
+	var mods []DeltaModule
+	for dec.More() {
+		mod, err := decodeDeltaModule(dec)
+		if err != nil {
+			return nil, fmt.Errorf("deltas[%d]: %w", len(mods), err)
+		}
+		mods = append(mods, mod)
+	}
+	return mods, expectDelim(dec, ']')
+}
+
+func decodeDeltaModule(dec *json.Decoder) (DeltaModule, error) {
+	t, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	mod := make(DeltaModule)
+	if t == nil { // the old path built an empty module for a null element
+		return mod, nil
+	}
+	if d, ok := t.(json.Delim); !ok || d != '{' {
+		return nil, fmt.Errorf("a delta module must be an object, got %v", t)
+	}
+	for dec.More() {
+		name, err := expectKey(dec)
+		if err != nil {
+			return nil, err
+		}
+		da, err := decodeDeltaAdapter(dec)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", name, err)
+		}
+		mod[name] = da
+	}
+	return mod, expectDelim(dec, '}')
+}
+
+func decodeDeltaAdapter(dec *json.Decoder) (*DeltaAdapter, error) {
+	da := &DeltaAdapter{A: &MatrixParam{}, B: &MatrixParam{}}
+	t, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if t == nil { // a null adapter is the DeltaJSON zero value: two empty matrices
+		return da, nil
+	}
+	if d, ok := t.(json.Delim); !ok || d != '{' {
+		return nil, fmt.Errorf("a delta adapter must be an object, got %v", t)
+	}
+	for dec.More() {
+		name, err := expectKey(dec)
+		if err != nil {
+			return nil, err
+		}
+		switch name {
+		case "A":
+			da.A, err = decodeMatrixParam(dec)
+		case "B":
+			da.B, err = decodeMatrixParam(dec)
+		default:
+			var skip json.RawMessage
+			err = dec.Decode(&skip)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", name, err)
+		}
+	}
+	return da, expectDelim(dec, '}')
 }
 
 func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error) {
@@ -3733,8 +4009,8 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 	}
 	defer f.Close()
 
-	var ckpt CheckpointData
-	if err := json.NewDecoder(f).Decode(&ckpt); err != nil {
+	ckpt, err := readCheckpointStream(f)
+	if err != nil {
 		return nil, nil, err
 	}
 
@@ -3792,28 +4068,15 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 
 	// Restore model
 	model := NewGPT(tok)
-	model.Base = make(map[string]*MatrixParam)
-	for k, v := range ckpt.Base {
-		model.Base[k] = deserializeMatrixParam(v)
-	}
+	// The matrices were built row by row during the walk; nothing is copied here.
+	model.Base = ckpt.Base
 	// Re-establish embedding tie after deserialization (JSON breaks pointer identity)
 	if CFG.TieEmbeddings {
 		model.Base["lm_head"] = model.Base["wte"]
 	}
 
-	model.Deltas = nil
 	model.ActiveAlpha = ckpt.Alpha
-	for _, modData := range ckpt.Deltas {
-		mod := make(DeltaModule)
-		for name, dj := range modData {
-			da := &DeltaAdapter{
-				A: deserializeMatrixParam(dj.A),
-				B: deserializeMatrixParam(dj.B),
-			}
-			mod[name] = da
-		}
-		model.Deltas = append(model.Deltas, mod)
-	}
+	model.Deltas = ckpt.Deltas
 
 	if len(model.Deltas) == 0 {
 		model.AddDeltaModule(1.0)
@@ -6243,7 +6506,7 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 			// Route inference Matvec through cuBLAS sgemm. Linux-only at
 			// runtime (gpuReady() returns false elsewhere). Training stays
 			// CPU/BLAS — autograd graph requires host tensors. See
-			// gpu_bindings_linux.go + gpu_forward.go.
+			// gpu_bridge.go and modules/gpu/.
 			CFG.UseGPU = true
 		} else if os.Args[i] == "--witness" {
 			// The mycelium as a witness (witness.go): a fifth process that
@@ -6759,6 +7022,26 @@ func main() {
 		os.Exit(runWitness(witnessInterval, witnessOnce))
 	}
 
+	// (repair 10) Arm the shutdown before anything trains. The handler used to
+	// be installed only once the evolution loop was reached, which is after the
+	// bootstrap climb: a fresh embryo SIGTERM'd during its first warmup — the
+	// longest unattended stretch a capped colony session has — died with an
+	// empty CkptPath and the whole climb was repeated on the next launch.
+	// Evolution mode only: in the REPL, Ctrl+C must still end the process the
+	// way it always has, and the bootstrap there pauses for the user anyway.
+	shutdown := make(chan struct{})
+	if evolution {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			// The step loops read this every step; closing `shutdown` alone
+			// would wait for a warmup to finish holding model.mu.
+			trainAbort.Store(true)
+			close(shutdown)
+		}()
+	}
+
 	// GPU init: attempted only when --gpu (CFG.UseGPU) requested. Silent
 	// fallback if init fails — gpuReady() stays false and the Matvec
 	// dispatcher continues to use the CPU/BLAS path. Linux only at runtime
@@ -6949,6 +7232,16 @@ func main() {
 				ntWarmupTrain(model, tok, docs, earlySteps, 8)   // very short seqs, batch=1
 				ntWarmupTrain(model, tok, docs, midSteps, 16)    // short seqs, batch=1
 				ntWarmupTrain(model, tok, docs, lateSteps, 32)   // medium seqs, batch=1
+				// (repair 10) A bootstrap warmup cut short by a signal is not a
+				// warmup done — same rule as the tick loop's warmup: leaving
+				// lastWarmupStage behind would make the next launch walk into
+				// the stage untrained. The steps taken so far are real (the
+				// tape mirrors them back every step), so they are written out
+				// on the explicit path, which the debouncer cannot drop.
+				if trainAborting() {
+					saveOnShutdown("init", model, tok, "signal")
+					return
+				}
 				model.lastWarmupStage = stage
 				SaveCheckpoint(model, tok, "")
 			} else {
@@ -7091,10 +7384,11 @@ func main() {
 		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")
 		// In evolution mode: no REPL; run until a signal or until the trainer
 		// loop ends on its own (hibernation), which frees this organism's
-		// memory to the colony instead of parking it forever.
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		why := waitEvolution(sigCh, done, stop)
+		// memory to the colony instead of parking it forever. The signal was
+		// already armed before the bootstrap climb (repair 10); `shutdown` is
+		// closed by that handler, so a signal that arrived during the climb is
+		// still here waiting.
+		why := waitEvolution(shutdown, done, stop)
 		fmt.Printf("\n[evolution] Organism shutting down gracefully (%s).\n", why)
 		// The signal closed `stop`, but a tick loop inside a post-growth warmup
 		// answers it only minutes later. Give it a short, bounded chance to reach
@@ -7107,7 +7401,7 @@ func main() {
 			case <-time.After(shutdownDrain):
 			}
 		}
-		saveOnShutdown(model, tok, why)
+		saveOnShutdown("evolution", model, tok, why)
 		return
 	}
 
