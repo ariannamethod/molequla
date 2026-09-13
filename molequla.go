@@ -1828,6 +1828,8 @@ type GPT struct {
 	lastSurprise             float64   // self-prediction error on last prompt
 	surpriseBaseline         float64   // EMA of surprise over time
 	lastGenEntropy           float64   // mean entropy of last generation (for conscience)
+	lastGenMag               float64   // mean |logit| of the raw model output at the first step of the last generation
+	lastOverlayWeight        float64   // overlay weight at that same step: 1 untrained, 0 once the fade is done
 
 	layerKeys []layerKeySet // pre-computed string keys per layer
 
@@ -4279,7 +4281,19 @@ func generateResonantLocked(model *GPT, tok *EvolvingTokenizer, field *CooccurFi
 		var overlaidLogits []float64
 		var untrainedRegime bool
 		var overlayWeight float64
+		// The transformer magnitude of the first step, taken on the raw logits
+		// before the overlay touches them, and the overlay weight that magnitude
+		// buys: the two numbers that say whether a fragment is the organism
+		// speaking or the corpus speaking through it. Read by dnaWrite under
+		// model.mu after the generation returns. First step only — no per-token
+		// cost.
+		if step == 0 {
+			model.lastGenMag = meanAbsLogit(logits.Data)
+		}
 		overlaidLogits, prophecyField, untrainedRegime, overlayWeight = overlayStep(logits.Data, ids, field, model, prophecyField, overlayScratch)
+		if step == 0 {
+			model.lastOverlayWeight = overlayWeight
+		}
 		overlayActive := overlayWeight > 0
 
 		// Cross-organism logit injection (cross_graze.go). Adds a rank-decay
@@ -5535,7 +5549,19 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	os.MkdirAll(dir, 0755)
 	fname := filepath.Join(dir, fmt.Sprintf("gen_%d_%d.txt", time.Now().Unix(), step))
 	os.WriteFile(fname, []byte(frag+"\n"), 0644)
-	fmt.Printf("[dna] %s wrote %d bytes to ecology\n", element, len(frag))
+	// gen is how much of the fragment the organism actually said; mag and fade
+	// are the state the overlay was in when it said it (fade=1.00: the overlay
+	// is gone and the speech is the transformer's own). GenerateResonant took
+	// model.mu itself and has released it, so the read takes its own lock.
+	gen := len(strings.TrimSpace(answer))
+	var mag, fade float64
+	if model != nil {
+		model.mu.Lock()
+		mag = model.lastGenMag
+		fade = 1 - model.lastOverlayWeight
+		model.mu.Unlock()
+	}
+	fmt.Printf("[dna] %s wrote %d bytes to ecology | gen=%d mag=%.2f fade=%.2f\n", element, len(frag), gen, mag, fade)
 	// The writer is the only one that deletes: readers keep cursors (repair 3).
 	dnaPruneOwn(element, time.Duration(CFG.DNARetainSeconds*float64(time.Second)), CFG.DNARetainFiles)
 }
