@@ -40,8 +40,8 @@ import (
 // caller's overlaidLogits before sampling.
 type CrossField struct {
 	SelfElement  string                            // own element label
-	PastureBase  string                            // ../dna/seen relative to organism CWD
-	Siblings     []string                          // other elements
+	PastureBase  string                            // ../dna/output relative to organism CWD (repair 3)
+	Siblings     []string                          // every DNA source this organism reads
 	Recent       map[string][]int                  // sibling → ring buffer of recent token ids
 	RecentCap    int                               // per-sibling buffer size
 	LastScan     time.Time                         // throttle FS reads
@@ -53,17 +53,12 @@ type CrossField struct {
 }
 
 // NewCrossField constructs a CrossField for the given own element. Siblings
-// are the standard four-element ecology minus self. PastureBase is typically
-// "../dna/seen" relative to the organism's workdir (matches dnaRead mirror
-// path molequla.go:5410).
+// are every DNA source this organism reads (dnaSources: the other elements
+// plus CFG.DNAExtraSources). PastureBase is "../dna/output" relative to the
+// organism's workdir — the same tree dnaRead eats from, since readers no
+// longer mirror fragments into a seen/ tree (repair 3).
 func NewCrossField(element, pastureBase string) *CrossField {
-	all := []string{"earth", "air", "water", "fire"}
-	sibs := make([]string, 0, len(all)-1)
-	for _, e := range all {
-		if e != element {
-			sibs = append(sibs, e)
-		}
-	}
+	sibs := dnaSources(element)
 	return &CrossField{
 		SelfElement:  element,
 		PastureBase:  pastureBase,

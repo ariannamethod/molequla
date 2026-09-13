@@ -63,6 +63,19 @@ type Config struct {
 	// corpus text toward this size, so fragments carry real substance
 	// instead of a child model's ~9-byte degenerate generation.
 	DNAFragmentTargetBytes int `json:"dna_fragment_target_bytes"`
+	// DNAExtraSources — read-only directories under ../dna/output beside the
+	// four elements (e.g. "world", written by the eye). Food, not organisms.
+	DNAExtraSources []string `json:"dna_extra_sources"`
+	// DNAMaxReadsPerTick — dnaRead eats at most this many new fragments per
+	// tick, so an organism that fell behind catches up over ticks instead of
+	// swallowing a backlog in one.
+	DNAMaxReadsPerTick int `json:"dna_max_reads_per_tick"`
+	// DNARetainSeconds — the writer prunes its own fragments older than this;
+	// readers never delete (see dna_field.go).
+	DNARetainSeconds float64 `json:"dna_retain_seconds"`
+	// TickJitterSeconds — random extra sleep per tick so sibling processes do
+	// not scan the DNA tree in lockstep.
+	TickJitterSeconds float64 `json:"tick_jitter_seconds"`
 
 	// model
 	TieEmbeddings bool `json:"tie_embeddings"`
@@ -253,6 +266,10 @@ var CFG = Config{
 	MinNewChars:          480,
 	DNAMinFragmentBytes:  5, // unified DNA emit+consume gate (Fix A)
 	DNAFragmentTargetBytes: 5000, // dnaWrite pads fragments toward this (Fix B; 200→600→5000 2026-06-03: per-tick cost grows with model size so ingestion/tick must too — real corpus text, not seeding; corpus FILE capped at MaxCorpusLines so field-rebuild stays bounded while the monotonic ingest clock climbs fast)
+	DNAExtraSources:      nil,  // "world" joins here when the eye writes
+	DNAMaxReadsPerTick:   8,    // repair 3: catch up over ticks, not in one
+	DNARetainSeconds:     1800, // repair 3: the writer prunes its own fragments after 30 min
+	TickJitterSeconds:    0.05, // repair 3: de-phase sibling scans
 	TieEmbeddings:        true,
 	NLayer:               1,
 	NEmbd:                16,
@@ -5876,62 +5893,69 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	fname := filepath.Join(dir, fmt.Sprintf("gen_%d_%d.txt", time.Now().Unix(), step))
 	os.WriteFile(fname, []byte(frag+"\n"), 0644)
 	fmt.Printf("[dna] %s wrote %d bytes to ecology\n", element, len(frag))
+	// The writer is the only one that deletes: readers keep cursors (repair 3).
+	dnaPruneOwn(element, time.Duration(CFG.DNARetainSeconds*float64(time.Second)))
 }
 
-// dnaRead consumes text from other organisms' output directories, returns bytes added.
-func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *EvolvingTokenizer) int {
+// dnaRead eats fragments from every source this organism reads (the other
+// elements plus CFG.DNAExtraSources), newer than its cursor, at most
+// CFG.DNAMaxReadsPerTick per call. Fragments are never removed here; the
+// cursor is advanced and persisted instead. Returns bytes added to the corpus.
+func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *EvolvingTokenizer, cur *dnaCursor) int {
 	if element == "" {
 		return 0
 	}
+	if cur == nil {
+		cur = &dnaCursor{Last: map[string]string{}}
+	}
 	added := 0
+	reads := 0
+	limit := CFG.DNAMaxReadsPerTick
+	if limit <= 0 {
+		limit = 1 << 30
+	}
 	var consumed []string
+	moved := false
 
-	for _, e := range dnaElements {
-		if e == element {
-			continue // don't eat own output
+	for _, src := range dnaSources(element) {
+		if reads >= limit {
+			break
 		}
-		dir := filepath.Join("../dna/output", e)
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
-				continue
+		dir := filepath.Join("../dna/output", src)
+		for _, name := range dnaListNew(dir, cur.Last[src]) {
+			if reads >= limit {
+				break
 			}
-			fpath := filepath.Join(dir, entry.Name())
+			fpath := filepath.Join(dir, name)
 			data, err := os.ReadFile(fpath)
 			if err != nil {
 				continue
 			}
+			reads++
 			text := strings.TrimSpace(string(data))
 			if len(text) < CFG.DNAMinFragmentBytes {
-				os.Remove(fpath)
+				cur.Last[src] = name // too short to be food; step past it, do not delete
+				moved = true
 				continue
 			}
-			// Mirror DNA fragment to ../dna/seen/<element>/ before consume.
-			// Paper-cycle artifact: organism-to-organism DNA exchange would
-			// otherwise be deleted-on-consume; we preserve the full stream
-			// so Body can compare actual emission content across cells.
-			// Added 2026-05-14 (Singularity strike — Oleg «фикси если видишь
-			// проблему»; lost DNA content was the gap).
-			seenDir := filepath.Join("../dna/seen", e)
-			os.MkdirAll(seenDir, 0755)
-			os.WriteFile(filepath.Join(seenDir, entry.Name()), data, 0644)
 			// Append to own corpus — the organism eats another's words
 			f, err := os.OpenFile(corpusPath, os.O_APPEND|os.O_WRONLY, 0644)
-			if err == nil {
-				f.WriteString(text + "\n")
-				f.Close()
-				added += len(text)
-				consumed = append(consumed, fmt.Sprintf("%s/%s", e, entry.Name()))
-				// FIX: feed quantum buffer with real DNA text for training bursts
-				if qbuf != nil && tok != nil {
-					qbuf.Feed(text, tok)
-				}
-				os.Remove(fpath) // consumed — only after successful append
+			if err != nil {
+				continue
 			}
+			f.WriteString(text + "\n")
+			f.Close()
+			added += len(text)
+			consumed = append(consumed, fmt.Sprintf("%s/%s", src, name))
+			if qbuf != nil && tok != nil {
+				qbuf.Feed(text, tok)
+			}
+			cur.Last[src] = name // advanced only after a successful append
+			moved = true
 		}
+	}
+	if moved {
+		cur.save()
 	}
 	if added > 0 {
 		fmt.Printf("[dna] %s consumed %d bytes from %d files: %v\n",
@@ -6409,6 +6433,9 @@ func trainSteps(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, tr
 }
 
 func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *QuantumBuffer, swarm *SwarmRegistry, stop chan struct{}, element string) {
+	// This organism's read position into every DNA source, persisted in its
+	// working directory so a restart continues where it left off (repair 3).
+	dnaCur := loadDNACursor(dnaCursorFile)
 	// And lo, asynchronous training shall occur, because sleeping is for humans.
 	syntracker := NewSyntropyTracker()
 	field := NewCooccurField()
@@ -6639,7 +6666,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// Write: generate and share with ecology
 			dnaWrite(element, model, tok, field, docs, tickCount)
 			// Read: consume other organisms' output → corpus grows → ontogenesis unlocks
-			if consumed := dnaRead(element, CFG.CorpusPath, qbuf, tok); consumed > 0 {
+			if consumed := dnaRead(element, CFG.CorpusPath, qbuf, tok, dnaCur); consumed > 0 {
 				// Monotonic growth clock — every byte ever ingested counts.
 				model.mu.Lock()
 				model.corpusIngestedTotal += consumed
@@ -6693,7 +6720,9 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			syntracker.SwarmInfo = &SwarmPeerInfo{Peers: peers}
 		}
 
-		time.Sleep(time.Duration(CFG.TrainTickSeconds * float64(time.Second)))
+		// Jitter de-phases sibling processes so they do not scan the DNA tree
+		// in lockstep (repair 3).
+		time.Sleep(time.Duration((CFG.TrainTickSeconds + rand.Float64()*CFG.TickJitterSeconds) * float64(time.Second)))
 	}
 }
 
@@ -7064,7 +7093,7 @@ func main() {
 	// e5c1685). Active only when --cross-graze AND --element are set; the
 	// hook in GenerateResonant is a no-op when crossField is nil.
 	if CFG.CrossGraze && element != "" {
-		model.crossField = NewCrossField(element, "../dna/seen")
+		model.crossField = NewCrossField(element, "../dna/output") // readers no longer mirror to seen/ (repair 3)
 		fmt.Fprintf(os.Stderr, "[graze] %s cross-organism injection enabled (coef=%.2f topN=%d)\n",
 			element, CFG.CrossGrazeCoef, CFG.CrossGrazeTopN)
 	}

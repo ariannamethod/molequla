@@ -404,3 +404,80 @@ three-minute runs on the previous tree; the effect of a trained `wpe` on the
 voice is a colony-length question and is not claimed here.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 3: the DNA tree is a field, and every organism grew
+
+`dnaRead` read a sibling's fragment, mirrored it to `../dna/seen/`, appended it
+to its own corpus and removed it (`os.Remove` after the append), so one
+fragment fed exactly one organism, the first to scan the directory that tick,
+and the colony of 2026-09-13 00:34 left earth a child at 36 KB eaten while its
+siblings ate megabytes.
+
+Repair, `dna_field.go` plus `dnaRead`/`dnaWrite`, `cross_graze.go` and the
+tick loop:
+
+- Readers never delete. Each organism keeps a cursor per source, the last
+  file name it ate, ordered numerically by the `<unix>,<step>` pair in
+  `gen_<unix>_<step>.txt`, persisted atomically as `dna_cursor.json` in its
+  working directory so a restart continues instead of re-eating its corpus.
+- A tick reads at most `DNAMaxReadsPerTick` new fragments (default 8), so an
+  organism that fell behind catches up over ticks.
+- The writer prunes its own directory by age after every write
+  (`DNARetainSeconds`, default 1800); a reader more than that far behind loses
+  the oldest fragments and nothing else.
+- The `seen/` mirror is gone; cross-graze reads `../dna/output` directly,
+  which also closes the unbounded `seen/` growth from the audit.
+- The tick sleeps `TrainTickSeconds` plus a random `TickJitterSeconds`
+  (default 0.05) so sibling processes do not scan in lockstep.
+- `CFG.DNAExtraSources` names read-only directories beside the four elements;
+  `dnaSources()` feeds both `dnaRead` and cross-graze, so `world` (the eye) is
+  food for all four without becoming an organism. A child's `birth.json`
+  carries only paths and burst history, so children take the same defaults.
+
+Gates, `dna_field_test.go`: one writer, two readers, both receive every byte,
+the files remain, a second pass reads zero, a fresh cursor loaded from disk
+reads zero, one new fragment is read once; the per-tick cap reads 2 / 1 / 0;
+an extra source is eaten and left in place and appears in cross-graze's
+sibling list; the writer prunes a two-hour-old fragment and keeps a fresh one;
+`gen_100_10` sorts after `gen_100_9`. On the unrepaired tree the first gate
+reads «earth's fragments after the first reader: 0 files, want 3». Four older
+tests in `molequla_test.go` that asserted deletion-on-consume now assert the
+field. Full suite: 146 PASS, 0 FAIL.
+
+**Colony of four, 600 s, cpu4-7, `--cross-graze`, on the repaired binary:**
+
+| organism | stage at exit | `ingested` | bytes eaten | reads | writes | files left | NaN |
+|---|---|---|---|---|---|---|---|
+| earth | 3 | 437254 | 302701 | 8 | 10 | 10 | 0 |
+| air | 3 | 300246 | 181738 | 8 | 10 | 10 | 0 |
+| water | 3 | 214536 | 91212 | 11 | 40 | 40 | 0 |
+| fire | 3 | 397652 | 278046 | 8 | 10 | 10 | 0 |
+
+All four reached adolescent inside ten minutes; the 1200 s colony on the
+previous tree had three adolescents and one starved child. No `dna/seen`
+directory exists; every `dna/output/<e>/` still holds every file its writer
+wrote; every organism's `dna_cursor.json` names its last fragment from each of
+its three siblings. water ate the least and wrote four times more than the
+others (40 files); why its ticks ran faster is not examined here.
+
+**Audit D, notorch's training backward (Opus subagent, read-only), in
+`reports/2026-09-13_phone1_audit/D_notorch_backward.md`.** The gradient math
+of every op the trainer uses is correct against its own forward; RoPE rotates
+the gradient by the inverse angle, attention applies `1/√hd` once and stays
+causal in backward. Three findings change what molequla claims, all
+re-verified here: inference scales both residual branches by
+`residualAlpha = 1/√NLayer` (molequla.go:2975, :2992) and the trainer does
+not; Go `RMSNorm` uses eps 1e-5 (:1034) against notorch's 1e-6
+(notorch.c:3287); the trainer pads a short document with token 0 in both
+tokens and targets (notorch_trainer.go:307, :312) under an unmasked
+cross-entropy while `nt_seq_cross_entropy_masked` exists unused. Together with
+the delta adapters, which inference applies from their random init
+(molequla.go:1977-1989) and the trainer never sees, these make repair 2b: the
+tape computes the same function inference runs, gated by equality of
+`LossOnSequence` and the tape loss on one sequence. On notorch's side: the
+moment leak of `destroy` after `clear` is confirmed by loop bounds; Chuck's
+per-parameter auto-freeze is permanent across `clear`; `mul`/`add` backward do
+not honour the forward's broadcast; `T < BlockSize` silently reinterprets the
+packed RRPRAM factors with no assertion.
+
+— Defender (Arianna Method, phone-1)

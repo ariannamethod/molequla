@@ -643,7 +643,8 @@ func TestDnaReadWriteFilesystem(t *testing.T) {
 	// dnaRead looks for ../dna/output/{elem}/ relative to cwd
 	tok := NewEvolvingTokenizer([]string{"test"})
 	qb := NewQuantumBuffer()
-	added := dnaRead("earth", corpusPath, qb, tok)
+	cur := loadDNACursor(filepath.Join(workDir, dnaCursorFile))
+	added := dnaRead("earth", corpusPath, qb, tok, cur)
 
 	if added <= 0 {
 		t.Errorf("dnaRead should have consumed air's DNA, got added=%d", added)
@@ -655,10 +656,14 @@ func TestDnaReadWriteFilesystem(t *testing.T) {
 		t.Error("corpus should have grown after dnaRead")
 	}
 
-	// Verify consumed files are deleted
+	// Repair 3: the field is not a queue — consumed files stay for the other
+	// readers; this reader's cursor keeps it from eating them twice.
 	entries, _ := os.ReadDir(airDir)
-	if len(entries) != 0 {
-		t.Errorf("consumed files should be deleted, but %d remain", len(entries))
+	if len(entries) != 2 {
+		t.Errorf("consumed files must remain for other readers, but %d of 2 remain", len(entries))
+	}
+	if again := dnaRead("earth", corpusPath, qb, tok, cur); again != 0 {
+		t.Errorf("second dnaRead re-ate %d bytes, want 0", again)
 	}
 }
 
@@ -682,7 +687,7 @@ func TestDnaReadSkipsSelf(t *testing.T) {
 	// Earth should NOT consume its own DNA
 	tok := NewEvolvingTokenizer([]string{"test"})
 	qb := NewQuantumBuffer()
-	added := dnaRead("earth", corpusPath, qb, tok)
+	added := dnaRead("earth", corpusPath, qb, tok, nil)
 	if added != 0 {
 		t.Errorf("earth should not consume its own DNA, got added=%d", added)
 	}
@@ -712,22 +717,27 @@ func TestDnaReadSkipsShortFiles(t *testing.T) {
 
 	tok := NewEvolvingTokenizer([]string{"test"})
 	qb := NewQuantumBuffer()
-	added := dnaRead("earth", corpusPath, qb, tok)
+	cur := loadDNACursor(filepath.Join(workDir, dnaCursorFile))
+	added := dnaRead("earth", corpusPath, qb, tok, cur)
 	if added != 0 {
 		t.Errorf("files shorter than DNAMinFragmentBytes should be skipped, got added=%d", added)
 	}
 
-	// Short file should be deleted (cleaned up)
+	// Repair 3: readers never delete; the short file is stepped past by the
+	// cursor and left for the writer's own pruning.
 	entries, _ := os.ReadDir(airDir)
-	if len(entries) != 0 {
-		t.Errorf("short DNA file should be deleted, got %d files", len(entries))
+	if len(entries) != 1 {
+		t.Errorf("short DNA file must be left in place for the writer to prune, got %d files", len(entries))
+	}
+	if cur.Last["air"] != "gen_1_0.txt" {
+		t.Errorf("cursor should have stepped past the short file, got %q", cur.Last["air"])
 	}
 }
 
 func TestDnaReadEmptyElement(t *testing.T) {
 	tok := NewEvolvingTokenizer([]string{"test"})
 	qb := NewQuantumBuffer()
-	added := dnaRead("", "/dev/null", qb, tok)
+	added := dnaRead("", "/dev/null", qb, tok, nil)
 	if added != 0 {
 		t.Errorf("empty element should return 0, got %d", added)
 	}
