@@ -51,7 +51,7 @@ start() {
     (
         cd "$dir" || exit 1
         setsid nohup bash -c 'echo $$ > "$1"; shift; exec "$@"' _ "$pidf" "$@" \
-            > "$name.stdout" 2> "$name.stderr" < /dev/null &
+            >> "$name.stdout" 2>> "$name.stderr" < /dev/null &
     )
     local i=0 pid=""
     while [ $i -lt 40 ]; do
