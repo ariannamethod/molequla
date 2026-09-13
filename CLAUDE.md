@@ -37,6 +37,11 @@ work; check it once more before push. No blind pull, no destructive reset.
   retyped from memory. A bug fix, a faster kernel, a measurement are log
   entries; a new organ, a new trainer, an architecture shift also earn README
   space. When in doubt it is a log entry.
+- `ROADMAP.md` is the third book: what comes next and in what order, as dated
+  entries that move between *in flight*, *next*, *later* and *closed*. The
+  diary records what happened; the roadmap records what was agreed to happen.
+  An item leaves it with the commit that closed it. It also states how the
+  colony is run — capped sessions on a schedule, never a permanent process.
 
 ## Every claim is a measurement or it is not made
 
