@@ -371,3 +371,36 @@ organism's stdout carries NUL bytes from tokenizer probes, so it must be read
 with `grep -a`, as the §9 climb logs already required.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — repair 2: the trainer learns the positional table the mouth uses
+
+Inference adds a learned positional embedding to every token,
+`wte[tok] + wpe[pos]` (`ForwardStep`, molequla.go:2851), and applies RoPE to
+q and k on top of it (:2908, :2913). The notorch trainer registered `wte`,
+the seven per-layer matrices and `lm_head`, and omitted `wpe` on purpose
+("the trainer uses RoPE for position", notorch_trainer.go:46-47), passing
+`-1` as the `wpe` index into `nt_seq_embedding`. The AML trainer registers and
+trains `wpe` (aml_trainer.go:20, :29). So on the default trainer every
+organism was trained without the positional table and then spoke through it
+at its 0.08 random init, and `--trainer aml` changed the objective.
+
+Repair: `wpe` is the second content parameter, after `wte`
+(`ntContentParams`), registered with `nt_tape_no_decay` like `wte`, passed
+into `nt_seq_embedding`; the per-layer index base moves from `1 + 7l` to
+`2 + 7l`. The registration order is still fixed and byte-identical across
+bursts, which is what the positional Chuck slots require.
+
+Gate: `notorch_trainer_test.go`, `TestNotorchTrainerTrainsWpe` — a
+content-only organism, thirty steps, max-abs change of `wte` and `wpe`
+against a 1e-5 bar that separates a gradient step from the float64↔float32
+mirror quantization. On the unrepaired tree: `wpe barely moved (0.00e+00)`
+while `wte` moved. After: 142 PASS, 0 FAIL, including `TestRRPRAMForward`,
+`TestRRPRAMContentParityNoHybrid`, `TestRRPRAMOp33Parity` and
+`TestRRPRAMGrowth` on the shifted indices. One earth organism for 180 s on
+cpu4-7 on the new binary: embryo → infant → child, warmup `avg loss`
+4.88 → 3.34, 2.46 → 2.23, 2.42 → 2.02 at 43-45 steps/s, 180 ticks, 180 DNA
+writes, 0 NaN, 0 panic. Loss values sit inside the spread of the two earlier
+three-minute runs on the previous tree; the effect of a trained `wpe` on the
+voice is a colony-length question and is not claimed here.
+
+— Defender (Arianna Method, phone-1)
