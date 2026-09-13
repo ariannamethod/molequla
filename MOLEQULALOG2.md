@@ -1036,3 +1036,50 @@ benchmarks return as Go benchmarks only if wanted. `standalone-py/molequla.py`
 stays as the historical origin.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-13 — the emission line says how much is the organism's own speech
+
+A DNA fragment is the organism's answer followed by corpus lines padded toward
+`CFG.DNAFragmentTargetBytes`, and until now the log said only how many bytes
+left the organism: `[dna] earth wrote 5025 bytes to ecology`. Byte count alone
+cannot tell a fragment the organism spoke from a fragment the corpus spoke for
+it, and the padding guarantees the total sits near the target either way. The
+line now carries the measurement: `[dna] %s wrote %d bytes to ecology | gen=%d
+mag=%.2f fade=%.2f`, where `gen` is the trimmed length of `answer` in bytes,
+`mag` is the mean |logit| of the raw model output at the first generated step,
+and `fade` is `1 - overlayWeight` at that same step — `fade=1.00` means the
+corpus overlay is gone and what was said is the transformer's own. The `wrote N
+bytes` prefix is untouched; scripts that grep it keep working.
+
+Two fields carry the numbers: `lastGenMag` and `lastOverlayWeight` on `GPT`,
+beside `lastGenEntropy` and set the same way — inside `generateResonantLocked`,
+under the caller's `model.mu`, at `step == 0` only, `meanAbsLogit(logits.Data)`
+before `overlayStep` and the weight `overlayStep` returns. No per-token cost.
+`dnaWrite` reads them with its own `Lock`/`Unlock` after `GenerateResonant`
+returns, since that function takes `model.mu` itself.
+
+**The gate** (`dna_emission_test.go`, `TestDNAEmissionFieldsFollowTheOverlayFade`).
+On the 16-dim embryo of `grazeTestModel` with the overlay on and four generated
+tokens: `mag 0.263`, `weight 1.000`, fade 0.00 — the overlay is what speaks.
+Scaling every `lm_head` row by 400, the pattern of
+`TestCrossGrazeReachesSamplingWhenOverlayOnAndWarmed`, and generating again:
+`mag > 2`, `weight == 0`, fade 1.00. Broken on purpose — the two `step == 0`
+assignments made unreachable — the gate goes red with `lastGenMag = 0 after a
+generation`. Suite: 167 PASS, 0 FAIL (`go test -count=1 -buildvcs=false ./...`,
+CGO + OpenBLAS, `taskset -c 4-7`).
+
+**Live, 150 s, one organism** (`--organism-id earth --element earth --evolution
+--cross-graze --corpus-overlay`, `taskset -c 4-7`, binary built with `-a`):
+
+    [dna] earth wrote 5025 bytes to ecology | gen=148 mag=8.40 fade=1.00
+    [dna] earth wrote 5048 bytes to ecology | gen=0 mag=8.04 fade=1.00
+    [dna] earth wrote 5051 bytes to ecology | gen=0 mag=7.78 fade=1.00
+    [dna] earth wrote 5056 bytes to ecology | gen=64 mag=8.72 fade=1.00
+    [dna] earth wrote 5206 bytes to ecology | gen=0 mag=5.91 fade=1.00
+
+NaN 0. The five fragments are within 4 % of each other in total bytes and the
+organism's share of them is 148, 0, 0, 64, 0 — three of the five are corpus
+alone, with the transformer warm (mag 5.9-8.7) and the overlay long gone. That
+is the thing the old line could not show.
+
+— Defender (Arianna Method, phone-1)
