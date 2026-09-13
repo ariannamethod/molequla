@@ -4,8 +4,19 @@
 # everything is down afterwards, writes one line about the session into
 # $MOLEQULA_RUN/schedule.log, and sleeps to the next slot.
 #
+# Two kinds of slot share one clock. A colony slot runs the organisms for
+# SCHEDULE_DUR; a senses slot runs phone1/senses.sh — camera, microphone,
+# place — for at most SENSES_TIMEOUT, so that fragments keep arriving in the
+# DNA field while the organisms are down. The senses never run inside a colony
+# window: memory is the phone's scarcest thing and the eye alone holds a
+# gigabyte. Senses slots are configuration, not a built-in default: with
+# SENSES_SLOTS empty this is the colony scheduler it always was.
+#
 # Usage: schedule.sh start|stop|status|next
 #        schedule.sh next --epoch          — the next slot as an epoch, for tests
+#        schedule.sh next --kind           — colony | senses, for tests
+#        schedule.sh in-window <HH:MM|epoch> — is that moment inside a colony
+#                                              window (exit 0) or not (exit 1)
 #        MOLEQULA_SCHED_NOW=<epoch>        — pretend it is that moment (tests)
 # Configuration: phone1/schedule.conf, or SCHEDULE_CONF=<file>, or the same
 # names in the environment, which win over the file.
@@ -28,6 +39,9 @@ env_grace="${SCHEDULE_GRACE:-}"
 env_sample="${SCHEDULE_SAMPLE:-}"
 env_catchup="${SCHEDULE_CATCHUP:-}"
 env_oom="${SCHEDULE_OOM_ADJ:-}"
+env_senses_slots="${SENSES_SLOTS:-}"
+env_senses_cmd="${SENSES_CMD:-}"
+env_senses_timeout="${SENSES_TIMEOUT:-}"
 
 SCHEDULE_SLOTS="04:00 12:00 20:00"
 SCHEDULE_DUR=7200
@@ -35,6 +49,9 @@ SCHEDULE_GRACE=90
 SCHEDULE_SAMPLE=30
 SCHEDULE_CATCHUP=1800
 SCHEDULE_OOM_ADJ=500
+SENSES_SLOTS=""
+SENSES_CMD=""
+SENSES_TIMEOUT=600
 # shellcheck source=/dev/null
 [ -f "$CONF" ] && . "$CONF"
 [ -n "$env_slots" ] && SCHEDULE_SLOTS="$env_slots"
@@ -43,6 +60,10 @@ SCHEDULE_OOM_ADJ=500
 [ -n "$env_sample" ] && SCHEDULE_SAMPLE="$env_sample"
 [ -n "$env_catchup" ] && SCHEDULE_CATCHUP="$env_catchup"
 [ -n "$env_oom" ] && SCHEDULE_OOM_ADJ="$env_oom"
+[ -n "$env_senses_slots" ] && SENSES_SLOTS="$env_senses_slots"
+[ -n "$env_senses_cmd" ] && SENSES_CMD="$env_senses_cmd"
+[ -n "$env_senses_timeout" ] && SENSES_TIMEOUT="$env_senses_timeout"
+[ -n "$SENSES_CMD" ] || SENSES_CMD="bash '$HERE/senses.sh' all"
 
 die() { echo "[schedule] $*" >&2; exit 1; }
 
@@ -50,6 +71,8 @@ case "$SCHEDULE_DUR" in ''|*[!0-9]*) die "SCHEDULE_DUR must be a whole number of
 [ "$SCHEDULE_DUR" -gt 0 ] || die "SCHEDULE_DUR must be positive"
 case "$SCHEDULE_SAMPLE" in ''|*[!0-9]*) die "SCHEDULE_SAMPLE must be a whole number of seconds";; esac
 [ "$SCHEDULE_SAMPLE" -gt 0 ] || die "SCHEDULE_SAMPLE must be positive"
+case "$SENSES_TIMEOUT" in ''|*[!0-9]*) die "SENSES_TIMEOUT must be a whole number of seconds, got '$SENSES_TIMEOUT'";; esac
+[ "$SENSES_TIMEOUT" -gt 0 ] || die "SENSES_TIMEOUT must be positive"
 
 # --- slot arithmetic --------------------------------------------------------
 # HH:MM -> seconds since UTC midnight. Rejects everything else; 08 and 09 are
@@ -64,13 +87,14 @@ slot_secs() {
 
 now_epoch() { printf '%d' "${MOLEQULA_SCHED_NOW:-$(date -u +%s)}"; }
 
-# next_slot <now-epoch> -> epoch of the next slot at or after now. The epoch is
-# UTC by definition, so the day starts at now - now % 86400 and a slot already
-# past today is the same slot tomorrow — that is the whole midnight case.
+# next_slot <now-epoch> [slot-list] -> epoch of the next slot at or after now.
+# The epoch is UTC by definition, so the day starts at now - now % 86400 and a
+# slot already past today is the same slot tomorrow — that is the whole
+# midnight case.
 next_slot() {
-    local now="$1" day best="" s sec c
+    local now="$1" slots="${2:-$SCHEDULE_SLOTS}" day best="" s sec c
     day=$((now - now % 86400))
-    for s in $SCHEDULE_SLOTS; do
+    for s in $slots; do
         sec="$(slot_secs "$s")" || { echo "[schedule] bad slot '$s' (want HH:MM, 00:00-23:59)" >&2; return 1; }
         c=$((day + sec))
         [ "$c" -lt "$now" ] && c=$((c + 86400))
@@ -78,6 +102,38 @@ next_slot() {
     done
     [ -n "$best" ] || { echo "[schedule] no slots configured" >&2; return 1; }
     printf '%d' "$best"
+}
+
+# in_colony_window <epoch> -> 0 if that moment falls inside a colony session,
+# 1 if it does not. A window opens at its slot and lasts SCHEDULE_DUR, so a
+# session started late yesterday can still cover a moment early today: both
+# the current day's occurrence and the previous day's are tested.
+in_colony_window() {
+    local t="$1" day s sec c
+    day=$((t - t % 86400))
+    for s in $SCHEDULE_SLOTS; do
+        sec="$(slot_secs "$s")" || { echo "[schedule] bad slot '$s' (want HH:MM, 00:00-23:59)" >&2; return 2; }
+        for c in $((day + sec - 86400)) $((day + sec)); do
+            if [ "$t" -ge "$c" ] && [ "$t" -lt $((c + SCHEDULE_DUR)) ]; then return 0; fi
+        done
+    done
+    return 1
+}
+
+# next_any <now-epoch> -> "<epoch> <kind>" for the nearest slot of either kind.
+# A tie goes to the colony: the senses would be skipped inside its window
+# anyway, and the organisms are the point of the phone.
+next_any() {
+    local now="$1" c s=""
+    c="$(next_slot "$now" "$SCHEDULE_SLOTS")" || return 1
+    if [ -n "$SENSES_SLOTS" ]; then
+        s="$(next_slot "$now" "$SENSES_SLOTS")" || return 1
+    fi
+    if [ -n "$s" ] && [ "$s" -lt "$c" ]; then
+        printf '%d senses' "$s"
+    else
+        printf '%d colony' "$c"
+    fi
 }
 
 iso() { date -u -d "@$1" +%FT%TZ; }
@@ -159,7 +215,7 @@ run_session() {
     left="$(live_names)"
     if [ -n "$left" ]; then
         t0="$(date -u +%s)"
-        log_session "$(iso "$t0") slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t0") dur=$SCHEDULE_DUR elapsed=0 reason=skipped-running alive=${left// /,} mem_mb=$(mem_avail_mb) hwm_mb=- samples=0"
+        log_session "$(iso "$t0") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t0") dur=$SCHEDULE_DUR elapsed=0 reason=skipped-running alive=${left// /,} mem_mb=$(mem_avail_mb) hwm_mb=- samples=0"
         echo "[schedule] slot $(hhmm "$slot"): colony already up ($left) — slot skipped"
         return 0
     fi
@@ -180,7 +236,7 @@ run_session() {
         fi
         t1="$(date -u +%s)"
         left="$(live_names)"
-        log_session "$(iso "$t1") slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$((t1 - t0)) reason=$reason alive=${left:--} mem_mb=${mem0}->$(mem_avail_mb) hwm_mb=- samples=0"
+        log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$((t1 - t0)) reason=$reason alive=${left:--} mem_mb=${mem0}->$(mem_avail_mb) hwm_mb=- samples=0"
         return 0
     fi
 
@@ -212,20 +268,57 @@ run_session() {
     t1="$(date -u +%s)"
     mem1="$(mem_avail_mb)"
     elapsed=$((t1 - t0))
-    log_session "$(iso "$t1") slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$elapsed reason=$reason alive=${left:--} mem_mb=${mem0}->${mem1} hwm_mb=$(hwm_field) samples=$samples"
+    log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$elapsed reason=$reason alive=${left:--} mem_mb=${mem0}->${mem1} hwm_mb=$(hwm_field) samples=$samples"
     echo "[schedule] slot $(hhmm "$slot") done: reason=$reason elapsed=${elapsed}s MemAvailable ${mem0}->${mem1} MB"
     return 0
 }
 
+# run_senses <slot-epoch>: one pass of the senses under a timeout, or a logged
+# refusal. The colony is checked twice — against the configured windows and
+# against what is actually alive — because a manual launch.sh obeys neither.
+run_senses() {
+    local slot="$1" t0 t1 out rc reason frags left
+    t0="$(date -u +%s)"
+
+    if in_colony_window "$slot"; then
+        log_session "$(iso "$t0") kind=senses slot=$(hhmm "$slot") start=- end=- timeout=${SENSES_TIMEOUT} elapsed=0 reason=skipped-colony-window frags=0 mem_mb=$(mem_avail_mb)"
+        echo "[schedule] senses slot $(hhmm "$slot"): inside a colony window — skipped"
+        return 0
+    fi
+    left="$(live_names)"
+    if [ -n "$left" ]; then
+        log_session "$(iso "$t0") kind=senses slot=$(hhmm "$slot") start=- end=- timeout=${SENSES_TIMEOUT} elapsed=0 reason=skipped-colony-alive alive=${left// /,} frags=0 mem_mb=$(mem_avail_mb)"
+        echo "[schedule] senses slot $(hhmm "$slot"): colony up ($left) — skipped"
+        return 0
+    fi
+
+    echo "[schedule] senses slot $(hhmm "$slot") at $(iso "$t0"): $SENSES_CMD (cap ${SENSES_TIMEOUT}s)"
+    out="$(timeout "$SENSES_TIMEOUT" bash -c "$SENSES_CMD" 2>&1)"; rc=$?
+    printf '%s\n' "$out" | sed 's/^/[schedule] /'
+    t1="$(date -u +%s)"
+    case "$rc" in
+        0) reason=ok ;;
+        124) reason=timeout ;;
+        *) reason="failed-rc$rc" ;;
+    esac
+    # The pass reports its own count on its last line; absent that, nothing.
+    frags="$(printf '%s' "$out" | sed -n 's/.* frags=\([0-9][0-9]*\) .*/\1/p' | tail -1)"
+    [ -n "$frags" ] || frags=0
+    log_session "$(iso "$t1") kind=senses slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") timeout=${SENSES_TIMEOUT} elapsed=$((t1 - t0)) reason=$reason frags=$frags mem_mb=$(mem_avail_mb)"
+    echo "[schedule] senses slot $(hhmm "$slot") done: reason=$reason elapsed=$((t1 - t0))s frags=$frags"
+    return 0
+}
+
 loop() {
-    local now target late
+    local now target kind line late
     mkdir -p "$PIDDIR" || exit 1
     trap 'echo "[schedule] signal — daemon exits, any live session keeps its own timeout cap"; rm -f "$PIDF"; exit 0' TERM INT
-    echo "[schedule] daemon pid $$ up at $(iso "$(date -u +%s)"): slots [$SCHEDULE_SLOTS] UTC, session ${SCHEDULE_DUR}s, grace ${SCHEDULE_GRACE}s, sample ${SCHEDULE_SAMPLE}s, catchup ${SCHEDULE_CATCHUP}s, conf $CONF"
+    echo "[schedule] daemon pid $$ up at $(iso "$(date -u +%s)"): colony [$SCHEDULE_SLOTS] UTC session ${SCHEDULE_DUR}s, senses [${SENSES_SLOTS:-none}] cap ${SENSES_TIMEOUT}s, grace ${SCHEDULE_GRACE}s, sample ${SCHEDULE_SAMPLE}s, catchup ${SCHEDULE_CATCHUP}s, conf $CONF"
     while :; do
         now="$(date -u +%s)"
-        target="$(next_slot "$now")" || exit 1
-        echo "[schedule] next slot $(iso "$target") (in $(human_gap $((target - now))))"
+        line="$(next_any "$now")" || exit 1
+        target="${line%% *}"; kind="${line##* }"
+        echo "[schedule] next slot $(iso "$target") kind=$kind (in $(human_gap $((target - now))))"
         # Short naps, decided against the wall clock: a long sleep does not
         # count the time the phone spends suspended.
         while :; do
@@ -237,8 +330,10 @@ loop() {
         done
         late=$(($(date -u +%s) - target))
         if [ "$late" -gt "$SCHEDULE_CATCHUP" ]; then
-            echo "[schedule] slot $(iso "$target") reached ${late}s late — skipped"
-            log_session "$(iso "$(date -u +%s)") slot=$(hhmm "$target") start=- end=- dur=$SCHEDULE_DUR elapsed=0 reason=missed late=${late}s mem_mb=$(mem_avail_mb) hwm_mb=- samples=0"
+            echo "[schedule] slot $(iso "$target") kind=$kind reached ${late}s late — skipped"
+            log_session "$(iso "$(date -u +%s)") kind=$kind slot=$(hhmm "$target") start=- end=- dur=$SCHEDULE_DUR elapsed=0 reason=missed late=${late}s mem_mb=$(mem_avail_mb) hwm_mb=- samples=0"
+        elif [ "$kind" = senses ]; then
+            run_senses "$target"
         else
             run_session "$target"
         fi
@@ -302,10 +397,11 @@ cmd_status() {
     local p; p="$(cat "$PIDF" 2>/dev/null)"
     if alive "$p"; then echo "daemon: pid $p alive"; else echo "daemon: down${p:+ (stale pid $p)}"; fi
     echo "conf:   $CONF"
-    echo "slots:  $SCHEDULE_SLOTS UTC, session ${SCHEDULE_DUR}s, grace ${SCHEDULE_GRACE}s, sample ${SCHEDULE_SAMPLE}s, catchup ${SCHEDULE_CATCHUP}s"
+    echo "colony: $SCHEDULE_SLOTS UTC, session ${SCHEDULE_DUR}s, grace ${SCHEDULE_GRACE}s, sample ${SCHEDULE_SAMPLE}s, catchup ${SCHEDULE_CATCHUP}s"
+    echo "senses: ${SENSES_SLOTS:-none} UTC, cap ${SENSES_TIMEOUT}s, $SENSES_CMD"
     cmd_next
     local left; left="$(live_names)"
-    echo "colony: ${left:-down}"
+    echo "alive:  ${left:-nothing}"
     echo "memory: MemAvailable $(mem_avail_mb) MB"
     if [ -s "$LOGF" ]; then
         echo "last sessions ($LOGF):"
@@ -316,18 +412,45 @@ cmd_status() {
 }
 
 cmd_next() {
-    local now target
+    local now line target kind note=""
     now="$(now_epoch)"
-    target="$(next_slot "$now")" || return 1
-    if [ "${1:-}" = "--epoch" ]; then printf '%s\n' "$target"; return 0; fi
-    echo "next:   $(iso "$target") (in $(human_gap $((target - now)))), session ${SCHEDULE_DUR}s, ends $(iso $((target + SCHEDULE_DUR)))"
+    line="$(next_any "$now")" || return 1
+    target="${line%% *}"; kind="${line##* }"
+    case "${1:-}" in
+        --epoch) printf '%s\n' "$target"; return 0 ;;
+        --kind)  printf '%s\n' "$kind"; return 0 ;;
+    esac
+    if [ "$kind" = senses ]; then
+        in_colony_window "$target" && note=" — inside a colony window, it will be skipped"
+        echo "next:   $(iso "$target") (in $(human_gap $((target - now)))) kind=senses, cap ${SENSES_TIMEOUT}s$note"
+    else
+        echo "next:   $(iso "$target") (in $(human_gap $((target - now)))) kind=colony, session ${SCHEDULE_DUR}s, ends $(iso $((target + SCHEDULE_DUR)))"
+    fi
+}
+
+# in-window <HH:MM|epoch>: the colony-window predicate the senses slots are
+# filtered by, callable on its own so a gate can drive it. HH:MM is read
+# against the current UTC day (or MOLEQULA_SCHED_NOW's day).
+cmd_in_window() {
+    local t="${1:-}" sec now
+    [ -n "$t" ] || die "in-window needs a time: HH:MM or an epoch"
+    case "$t" in
+        *[!0-9]*)
+            sec="$(slot_secs "$t")" || die "in-window: '$t' is neither HH:MM nor an epoch"
+            now="$(now_epoch)"
+            t=$((now - now % 86400 + sec))
+            ;;
+    esac
+    if in_colony_window "$t"; then echo "inside"; return 0; fi
+    echo "outside"; return 1
 }
 
 case "${1:-}" in
-    start)  cmd_start ;;
-    stop)   cmd_stop ;;
-    status) cmd_status ;;
-    next)   cmd_next "${2:-}" ;;
-    __loop) loop ;;
-    *) echo "usage: schedule.sh start|stop|status|next [--epoch]" >&2; exit 2 ;;
+    start)     cmd_start ;;
+    stop)      cmd_stop ;;
+    status)    cmd_status ;;
+    next)      cmd_next "${2:-}" ;;
+    in-window) cmd_in_window "${2:-}" ;;
+    __loop)    loop ;;
+    *) echo "usage: schedule.sh start|stop|status|next [--epoch|--kind]|in-window <HH:MM|epoch>" >&2; exit 2 ;;
 esac

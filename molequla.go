@@ -6527,6 +6527,19 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 				CFG.MaxOrganisms = v
 			}
 			i++
+		} else if os.Args[i] == "--dna-extra-sources" && i+1 < len(os.Args) {
+			// Comma-separated read-only directories under ../dna/output,
+			// beside the four elements: what the phone's senses write
+			// (phone1/senses.sh drops world, sound and place there). Food,
+			// not organisms — nothing here writes back to them and the
+			// writer is the only one that prunes them.
+			CFG.DNAExtraSources = nil
+			for _, s := range strings.Split(os.Args[i+1], ",") {
+				if s = strings.TrimSpace(s); s != "" {
+					CFG.DNAExtraSources = append(CFG.DNAExtraSources, s)
+				}
+			}
+			i++
 		} else if os.Args[i] == "--max-growth-stage" && i+1 < len(os.Args) {
 			// Hard ceiling on ontogenesis: the organism stops at this stage
 			// index whatever the corpus says. Clamped in main against the

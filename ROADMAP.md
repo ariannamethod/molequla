@@ -31,6 +31,13 @@ is long — an organism lives for months of sessions, not for one uptime.
   sessions a day of two hours (04:00, 12:00, 20:00 UTC) by default, one line per
   session in `schedule.log` with memory at start and end and the peak RSS seen,
   restart after reboot through the node's service script.
+- **The senses on their own schedule** (`claude/phone1-senses`). `senses.sh`
+  is one pass of eye, ears and place, and the scheduler gained a second kind of
+  slot: nine senses slots a day in the gaps between the colony windows, capped
+  at 600 s, skipped and logged if they meet a live colony. The organisms are
+  told to eat the result with `--dna-extra-sources world,sound,place`. Waiting
+  on the merge: the daemon still runs the old conf and the binary in
+  `$MOLEQULA_RUN` predates the flag.
 ## Next
 
 1. **First scheduled sessions and the numbers they leave.** Per session: stage
@@ -40,19 +47,20 @@ is long — an organism lives for months of sessions, not for one uptime.
    old one and are not to be turned blind).
 2. **Voice sweep on adults.** temperature × top_k × at least four prompts on a
    stage-4 checkpoint before any verdict on coherence.
-3. **The eye as the fifth DNA source, inside the session.** `ocelli`
-   (SmolVLM2-500M, Yent eye LoRA v2, six GGUFs at
-   `huggingface.co/ataeff/molequla/tree/main/ocelli`) describes a camera frame
-   in one sentence. Today it is `reffs/ocelli/eye <image>` by hand, and the
-   organism has the slot but not the switch: `CFG.DNAExtraSources` (nil by
-   default, "world joins here when the eye writes") has no CLI flag, and no
-   script takes a frame. To land: `phone1/eye.sh` — a frame every N minutes
-   through Termux (`termux-camera-photo -c 0`), `eye`, one line appended to
-   `dna/output/world/`; a `--dna-extra-sources world` flag; the scheduler starts
-   the eye beside the witness on the little cores for the length of the session;
-   the eye's own peak (951-988 MB for 11-13 s per frame) counted in the byte
-   gate. The sentence enters the corpus for every age and cross-graze only at
-   `fade = 1` / stage ≥ teen. Age is `global_step`, already a column in mesh.db.
+3. **The eye inside the session, and the byte gate that counts it.** The organ
+   itself landed on `claude/phone1-senses`, but on the opposite schedule to the
+   one written here (Oleg, 2026-09-13: the senses are gatherers, they run on
+   their own): `phone1/senses.sh` takes both cameras through
+   `reffs/ocelli/eye` in senses slots *between* the colony windows, not beside
+   the witness inside one, and `--dna-extra-sources world,sound,place` is the
+   switch `CFG.DNAExtraSources` was waiting for. What is still open is the
+   session case: if the eye is ever to run while organisms are alive, its
+   measured peak (1020 MB for 14-16 s per frame with the q8_0 projector, 951 MB
+   with f16) has to enter the growth byte gate, which today knows nothing about
+   it — hence the crude fence, a MemAvailable floor plus the colony-window
+   skip. Still open too: the sentence entering the corpus at every age but
+   cross-graze only at `fade = 1` / stage ≥ teen. Age is `global_step`, already
+   a column in mesh.db.
 4. **Other VLMs for the same organ.** Alternative eyes measured on the phone
    with the same table (tok/s, wall, peak RSS, one global frame) and stored in
    sibling folders of the weights repo.
@@ -81,20 +89,26 @@ is long — an organism lives for months of sessions, not for one uptime.
    into `dna/output/sound/` as a sixth source. Not only speech: a plain
    sound-event detector in C ahead of the model turns a bang, a door, a voice
    into one line even when no words are said; a model that names sounds, not
-   just words, comes later.
+   just words, comes later. The interim path is already wired: `senses.sh`
+   records twelve seconds a slot and runs whisper.cpp tiny at
+   `-t 4 -l auto -nth 0.6 -sns`, writing `dna/output/sound/` only when speech
+   survives the noise-tag filter; `SENSES_ASR` and `SENSES_ASR_MODEL` are the
+   two variables the C organ replaces.
 8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
    but the mycelium speaking. First step costs nothing — the witness's line
    through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
    and re-enabled with `pm enable com.google.android.tts`); the real step is a
    TTS on notorch, its own port.
-9. **Place — the world that does not depend on you** (Oleg, 2026-09-13). The
-   phone has GPS (`termux-location`: 13 m by network, 23 m by satellite once
-   `ACCESS_FINE_LOCATION` is granted to termux-api). A seventh source,
-   `dna/output/place/`, written by `phone1/place.sh` in bash with `curl` and
-   `jq` and no library: position, weather and sun from open-meteo, the name of
-   the place from Nominatim, and later headlines for the region. One line of
-   facts per tick. Not a dashboard, not a Palantir: the point is subjectivity —
-   here is the outside, and it moves without the organism.
+9. **Place — the world that does not depend on you** (Oleg, 2026-09-13). Landed
+   on `claude/phone1-senses` as the third organ of `senses.sh` rather than a
+   `place.sh` of its own: `termux-location` (13 m by network here), open-meteo
+   for temperature, humidity, wind, the WMO code as a word and today's sun,
+   Nominatim reverse for the name, `curl` and `jq` and no library, one fragment
+   per pass into `dna/output/place/`, and a haversine against
+   `senses/place.last` that says whether the phone moved more than 50 m. Still
+   open: headlines for the region, and the point of the whole item — that this
+   is subjectivity, not a dashboard, which only shows once the ledger below
+   turns these facts into changes.
 10. **A ledger of change, not a stream of facts.** What makes the senses one
     field: a bitemporal table `world_facts(source, subject, predicate, object,
     valid_from, valid_to, recorded_at, provenance)` in mesh.db, written by

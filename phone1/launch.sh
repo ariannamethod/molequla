@@ -10,6 +10,10 @@ RUN="${MOLEQULA_RUN:-/data/data/com.termux/files/home/arianna/molequla-run}"
 BIN="$RUN/molequla_cgo"
 DUR="${1:-}"
 ELEMENTS="earth air water fire"
+# What the senses write while the colony sleeps (phone1/senses.sh): one
+# directory per organ under dna/output, beside the four elements. Read-only
+# food for every organism — they are told about it with --dna-extra-sources.
+SENSES_SOURCES="world sound place"
 
 if [ ! -x "$BIN" ]; then
     echo "[launch] no binary at $BIN — run phone1/build.sh first"
@@ -24,6 +28,9 @@ for e in $ELEMENTS; do
         cp "$REPO/nonames_$e.txt" "$RUN/$e/nonames_$e.txt" || exit 1
         echo "[launch] $e: corpus copied from $REPO/nonames_$e.txt"
     fi
+done
+for s in $SENSES_SOURCES; do
+    mkdir -p "$RUN/dna/output/$s" || exit 1
 done
 
 # The phone sleeps its CPU without a wake lock; the lock lives in Termux.
@@ -78,6 +85,7 @@ for e in $ELEMENTS; do
     # declared ceiling on the colony's head count.
     start "$e" "$RUN/$e" $TMO taskset -c 4-7 "$BIN" \
         --organism-id "$e" --element "$e" --max-organisms 4 \
+        --dna-extra-sources "${SENSES_SOURCES// /,}" \
         --evolution --cross-graze --corpus-overlay \
         || refused=$((refused + 1))
     sleep 1

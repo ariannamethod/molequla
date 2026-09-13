@@ -80,5 +80,66 @@ else
     pass=$((pass + 1)); printf 'ok   empty slot list in the conf is refused\n'
 fi
 
+# ── two kinds of slot ───────────────────────────────────────────────────────
+# The colony and the senses share one clock. `next` must name the nearest slot
+# of either kind and say which kind it is, and a senses slot that falls inside
+# a colony window must be recognisable as one before it is run.
+
+# want_kind <name> <colony slots> <senses slots> <now> <expected UTC> <expected kind>
+want_kind() {
+    local name="$1" cs="$2" ss="$3" now="$4" expect="$5" wantk="$6" got gotk exp
+    exp="$(e "$expect")"
+    got="$(MOLEQULA_RUN="$TMP" SCHEDULE_CONF=/dev/null SCHEDULE_SLOTS="$cs" SENSES_SLOTS="$ss" \
+           MOLEQULA_SCHED_NOW="$(e "$now")" bash "$SCHED" next --epoch 2>&1)"
+    gotk="$(MOLEQULA_RUN="$TMP" SCHEDULE_CONF=/dev/null SCHEDULE_SLOTS="$cs" SENSES_SLOTS="$ss" \
+           MOLEQULA_SCHED_NOW="$(e "$now")" bash "$SCHED" next --kind 2>&1)"
+    if [ "$got" = "$exp" ] && [ "$gotk" = "$wantk" ]; then
+        pass=$((pass + 1)); printf 'ok   %s\n' "$name"
+    else
+        fail=$((fail + 1))
+        printf 'FAIL %s: colony [%s] senses [%s] now %s -> got %s/%s (%s), want %s/%s (%s)\n' \
+            "$name" "$cs" "$ss" "$now" "$got" "$gotk" \
+            "$(date -u -d "@$got" +%FT%TZ 2>/dev/null || echo '?')" "$exp" "$wantk" "$expect"
+    fi
+}
+
+# window <name> <colony slots> <dur> <time HH:MM> <inside|outside>
+window() {
+    local name="$1" cs="$2" dur="$3" t="$4" expect="$5" got rc rc_ok=1
+    got="$(MOLEQULA_RUN="$TMP" SCHEDULE_CONF=/dev/null SCHEDULE_SLOTS="$cs" SCHEDULE_DUR="$dur" \
+           MOLEQULA_SCHED_NOW="$(e "2026-09-13T00:00:00Z")" bash "$SCHED" in-window "$t" 2>&1)"; rc=$?
+    # The word and the exit code must agree: a caller may read either.
+    case "$expect" in
+        inside)  [ "$rc" -eq 0 ] || rc_ok=0 ;;
+        outside) [ "$rc" -ne 0 ] || rc_ok=0 ;;
+    esac
+    if [ "$got" = "$expect" ] && [ "$rc_ok" -eq 1 ]; then
+        pass=$((pass + 1)); printf 'ok   %s\n' "$name"
+    else
+        fail=$((fail + 1)); printf 'FAIL %s: colony [%s] dur %s at %s -> %s (rc %d), want %s\n' \
+            "$name" "$cs" "$dur" "$t" "$got" "$rc" "$expect"
+    fi
+}
+
+S="01:00 03:00 07:00 09:00 11:00 15:00 17:00 19:00 23:00"
+
+want_kind "senses first after midnight"  "$D" "$S" "2026-09-13T00:30:00Z" "2026-09-13T01:00:00Z" senses
+want_kind "colony first before 04:00"    "$D" "$S" "2026-09-13T03:30:00Z" "2026-09-13T04:00:00Z" colony
+want_kind "the senses take the gap"      "$D" "$S" "2026-09-13T06:30:00Z" "2026-09-13T07:00:00Z" senses
+want_kind "and give the slot back"       "$D" "$S" "2026-09-13T11:30:00Z" "2026-09-13T12:00:00Z" colony
+want_kind "the last senses slot wraps"   "$D" "$S" "2026-09-13T23:30:00Z" "2026-09-14T01:00:00Z" senses
+want_kind "a tie goes to the colony"     "$D" "04:00 09:00" "2026-09-13T03:00:00Z" "2026-09-13T04:00:00Z" colony
+want_kind "no senses slots, colony only" "$D" "" "2026-09-13T00:30:00Z" "2026-09-13T04:00:00Z" colony
+want_kind "senses only between two colony days" "20:00" "$S" "2026-09-13T21:00:00Z" "2026-09-13T23:00:00Z" senses
+
+window "a senses slot inside a colony window" "$D" 7200 "05:00" inside
+window "the colony start itself"              "$D" 7200 "04:00" inside
+window "the moment the window closes"         "$D" 7200 "06:00" outside
+window "an hour after the window"             "$D" 7200 "07:00" outside
+window "a minute before it opens"             "$D" 7200 "03:59" outside
+window "the configured senses slots clear the colony" "$D" 7200 "23:00" outside
+# A session long enough to run past midnight still covers 01:00 the next day.
+window "yesterday's session reaches into today" "20:00" 21600 "01:00" inside
+
 printf '\n%d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

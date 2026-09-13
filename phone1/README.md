@@ -9,11 +9,18 @@ back. The default since: three sessions a day of two hours each, at 04:00, 12:00
 and 20:00 UTC, started by `phone1/schedule.sh` and capped by `timeout` inside
 `launch.sh` so the cap survives the scheduler's own death.
 
-Five scripts around one environment variable, `MOLEQULA_RUN`, which defaults to
+The senses are the exception to that rule, and the reason it survives: camera,
+microphone and place run in their own short slots between the colony windows —
+01:00, 03:00, 07:00, 09:00, 11:00, 15:00, 17:00, 19:00 and 23:00 UTC, capped at
+600 s — so that fragments keep arriving in the DNA field while the organisms are
+down, and an organism waking at 04:00 finds eight hours of the world already
+waiting as food.
+
+Six scripts around one environment variable, `MOLEQULA_RUN`, which defaults to
 `/data/data/com.termux/files/home/arianna/molequla-run` and holds the whole run:
 the binary `molequla_cgo`, one directory per organism (`earth air water fire`)
-with its own corpus copy, `witness/`, `dna/output/`, `pids/`, `daily/` and the
-one-line `BUILD` record.
+with its own corpus copy, `witness/`, `dna/output/`, `pids/`, `daily/`,
+`senses/` and the one-line `BUILD` record.
 
 `bash phone1/build.sh` builds the checkout the script lives in with the recipe
 measured on this phone (`CGO_ENABLED=1`, `-O3 -march=native -mtune=native
@@ -29,7 +36,9 @@ with its own session, so they outlive the shell that launched them: the four
 organisms on the big cores as `taskset -c 4-7 molequla_cgo --organism-id <e>
 --element <e> --evolution --cross-graze --corpus-overlay`, and five seconds later
 the witness on the little ones as `taskset -c 0-3 molequla_cgo --witness
---witness-interval 5`. Each pid lands in `pids/<name>.pid`; a name whose pid file
+--witness-interval 5`. It also creates `dna/output/{world,sound,place}` and
+passes `--dna-extra-sources world,sound,place`, so the organisms eat what the
+senses left there. Each pid lands in `pids/<name>.pid`; a name whose pid file
 points at a live process is refused, not started twice. An optional first argument
 is a duration in seconds — `bash phone1/launch.sh 120` wraps every start in
 `timeout 120` for dry runs.
@@ -40,8 +49,19 @@ files of the dead and releases the wake lock.
 
 `bash phone1/schedule.sh start|stop|status|next` is the daemon that keeps the
 rule. It reads `phone1/schedule.conf` — UTC start times, session length, grace,
-sampling interval, catch-up window, `oom_score_adj` — where every name can be
-overridden from the environment and the file itself with `SCHEDULE_CONF`. It
+sampling interval, catch-up window, `oom_score_adj`, and the senses slots with
+their own command and cap — where every name can be overridden from the
+environment and the file itself with `SCHEDULE_CONF`. Two kinds of slot share
+one clock: `SCHEDULE_SLOTS` runs the colony for `SCHEDULE_DUR`, `SENSES_SLOTS`
+runs `SENSES_CMD` (`senses.sh all`) under `timeout SENSES_TIMEOUT`. `next`
+names the nearest slot of either kind and which kind it is; `next --kind` and
+`in-window` exist for the gate. A senses slot that falls inside a colony
+window, or finds the colony alive from a manual launch, is skipped and logged
+as `reason=skipped-colony-window` or `skipped-colony-alive` — the eye alone
+holds a gigabyte, and four organisms holding 758-928 MB each is how this phone
+lost Termux to lmkd once already.
+`SENSES_SLOTS` empty turns all of this off and leaves the colony scheduler that
+was here before. It
 sleeps to the next slot in naps of at most a minute, each decided against the
 wall clock because a long `sleep` does not count the time a phone spends
 suspended; runs `launch.sh $SCHEDULE_DUR`; writes `SCHEDULE_OOM_ADJ` (500) into
@@ -49,9 +69,13 @@ the organisms' `oom_score_adj`, so that a memory squeeze costs a checkpointed
 organism instead of the whole terminal; samples every organism's `VmHWM` every
 30 s; and when the cap has passed calls `stop.sh` on every path, which clears
 the pid files and releases the wake lock. One line per session goes into
-`$MOLEQULA_RUN/schedule.log` with the slot, the start and end, the reason
-(`capped`, `early-exit`, `overran`, `skipped-running`, `launch-failed`,
-`missed`), MemAvailable before and after, and the per-organism VmHWM peak; the
+`$MOLEQULA_RUN/schedule.log` with `kind=colony`, the slot, the start and end,
+the reason (`capped`, `early-exit`, `overran`, `skipped-running`,
+`launch-failed`, `missed`), MemAvailable before and after, and the
+per-organism VmHWM peak; a senses slot writes the same line with
+`kind=senses`, its reason (`ok`, `timeout`, `failed-rc<N>`,
+`skipped-colony-window`, `skipped-colony-alive`) and the fragments the pass
+reported; the
 daemon's own console is `$MOLEQULA_RUN/schedule.out`. It is detached
 (`setsid nohup`, pid in `pids/schedule.pid`, which `stop.sh` skips), refuses a
 second instance, and a slot whose colony is already up — a manual `launch.sh` —
@@ -61,11 +85,80 @@ reboot, a session that starts hours late is not the session that was scheduled.
 `/usr/local/bin/defender-services.sh` calls `schedule.sh start` so the daemon
 comes back after a reboot.
 
-`bash phone1/schedule_test.sh` is the gate for the slot arithmetic: 21 cases
-through the real `schedule.sh next --epoch` with a fake now — before, at and
-after a boundary, across midnight and across a month, unsorted lists, single
-slots, base-ten hours, a non-UTC host time zone, and five malformed
-configurations that must be refused.
+`bash phone1/senses.sh [eye|ears|place|all]` is the other thing the schedule
+runs, and the reason the phone has organs at all. The colony is down sixteen
+hours a day; the senses are not. One pass takes a frame from each camera, twelve
+seconds from the microphone and one fix of where the phone is, and leaves what
+it found as fragments in `$MOLEQULA_RUN/dna/output/world/`, `sound/` and
+`place/` — the same `gen_<unix>_<seq>.txt` names the organisms order their
+reading by, each fragment one sentence behind a bracketed header
+(`[eye cam0 2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl…`)
+that reads as plain text to whatever eats it. The sequence number only ever
+grows, so two fragments written in the same second still have an order.
+
+What the first night's passes looked like, for scale: the back camera on a
+dark balcony wrote «A close-up view shows a keyboard with white keys and a dark
+background», and there was a keyboard. On a lit table it wrote «a green bowl,
+a spoon, and a plate», and there were. The front camera, facing tiled walls
+and a towel hung up to dry in what the owner of the balcony calls terrible
+light, wrote «A bathroom with a shower curtain hanging» — tile and hanging
+cloth, named with the nearest word a 500M model has. Nothing is filtered:
+the fragment is what the eye believed, and the organisms eat beliefs. The
+correction, when it comes, comes from the other senses and from time
+(ROADMAP item 10), not from a filter in this script.
+
+The eye is `reffs/ocelli/eye`, the pure-C SmolVLM2-500M engine, on the q6_k Yent
+decoder with one global frame (`SMOLVLM_NOSPLIT=1`): 14-16 s and a peak of
+1020 MB per frame on this phone, measured with `/usr/bin/time -v`. Nothing in
+this repo links against it — `SENSES_EYE` is the one variable that names the
+wrapper. The camera's 4080×3060 jpeg is scaled to a 1024 px longest edge before
+the engine sees it, because the engine's first act is to resize to 2048 and a
+12 MP frame would be decoded into 150 MB of float on the way. Below 1300 MB of
+MemAvailable the eye does not open at all and the pass says so
+(`eye=…,skip-mem:1204`).
+
+The ears are whisper.cpp `tiny` for now — `SENSES_ASR` and `SENSES_ASR_MODEL`
+are two variables so the native `ears` on notorch replaces it without touching
+anything else — at `-t 4 -l auto -nth 0.6 -sns`. Room noise does not become a
+sentence: `base` once spent 185 s on eight seconds of ambience and emitted
+`[Motor]` (`~/arianna/ears-reference/REFERENCE.md`), so bracketed tags are
+stripped and what is left must still be eight characters with a letter in it
+before a fragment is written. A quiet twelve seconds produces nothing and costs
+about 20 s.
+
+Place is `termux-location` (network first, satellites if that fails), then two
+keyless APIs over `curl` and `jq`: open-meteo for temperature, humidity, wind,
+the WMO weather code as a word, and today's sunrise and sunset; nominatim,
+reverse, zoom 14, with a User-Agent and English names. The last fix is kept in
+`senses/place.last` and the fragment says whether the phone has moved more than
+50 m since the previous pass.
+
+Every pass appends one line to `$MOLEQULA_RUN/senses/senses.log` with the cores
+it used, MemAvailable before and after, and per organ the exit code, the wall
+time, the fragments written, plus the eye's peak RSS. Frames and wavs are kept
+under `senses/frames/` and `senses/audio/`, the newest 48 of each; the fragment
+directories keep the newest 64. Nothing is pruned by age — an organism's cursor
+only advances while it runs, and it may have slept through eight hours of
+passes. One pass at a time: `senses/.lock` holds the pid and a stale lock is
+cleared.
+
+The organisms are told about those three directories with
+`--dna-extra-sources world,sound,place`, which `launch.sh` passes and which
+sets `CFG.DNAExtraSources`. One flag feeds two paths: `dnaRead` appends the
+fragments to the organism's own corpus, and `NewCrossField` takes its sibling
+list from the same `dnaSources()`, so the senses also reach the logit overlay.
+Without the flag the directories exist and are simply never read.
+
+`bash phone1/schedule_test.sh` is the gate for the slot arithmetic: 36 cases
+through the real `schedule.sh` with a fake now. Twenty-one drive
+`next --epoch` on colony slots — before, at and after a boundary, across
+midnight and across a month, unsorted lists, single slots, base-ten hours, a
+non-UTC host time zone, and five malformed configurations that must be refused.
+The other fifteen are the two kinds together: eight drive `next --epoch` and
+`next --kind` on interleaved colony and senses lists, including the tie and the
+empty senses list, and seven drive `schedule.sh in-window`, the predicate that
+keeps the senses out of a colony session — its opening moment, its closing
+moment, and a session long enough to reach past midnight into the next day.
 
 `bash phone1/status.sh` prints one screen: per organism the pid and whether it is
 alive, VmRSS and VmHWM in MB, the stage and ingested count from the last
