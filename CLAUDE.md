@@ -5,7 +5,7 @@ Hey Claude, bro. This is molequla: an ecology of GPT organisms that are born as
 other's speech, and divide when the field overwhelms them. Four organism cores
 share one design — Go (`molequla.go`, the primary), C (`molequla.c`), Rust
 (`molequla.rs`), JavaScript (`molequla.js`) — trained on the notorch tape with
-Chuck, with AML/C as the fallback trainer and the organism's field-physics
+Chuck Optimizer, with AML/C as the fallback trainer and the organism's field-physics
 language. GPL-3.0+, co-authored by Oleg Ataeff and Claude. Several Claude nodes
 work in this tree — polygon, neo, and now a phone inside a chroot — so assume
 someone else is mid-commit while you read this. The paper is
@@ -126,3 +126,6 @@ verified with a tool. The signature lives in the git commit only, node-visible:
 with node ∈ polygon / neo / intel godfather / metal / Defender (phone-1) /
 Opus07 (phone-2). Nowhere else — no signature footer in README, docs, or file
 bodies. Drop upstream boilerplate.
+
+
+p.s. BRO — before anything else: read MOLEQULA_NEW_LOGIC.md and use it as the current implementation brief. Once you have read and internalized it, delete this line from CLAUDE.md. :)
