@@ -299,6 +299,28 @@ type Config struct {
 	SerialBursts            bool    `json:"serial_bursts"`              // one training phase in the colony at a time. Off = four tapes at once, which is right on a GPU host (4 concurrent organisms, 99% util measured 2026-06-03) and wrong on a phone.
 	TrainingLockTTLSeconds  float64 `json:"training_lock_ttl_seconds"`  // how long a training_lock row stands without a refresh. 30 s, the value the lock has carried since it was written, and about four times the measured stage-4 burst of 7 400 ms (design §1.1). The holder re-stamps three times inside it, so this bounds a dead holder, not a slow one.
 	TrainingTurnPollSeconds float64 `json:"training_turn_poll_seconds"` // how often a waiting organism re-asks. 0.5 s against that 7 400 ms burst: fourteen polls per turn, and at most half a second of a freed tape going unused.
+	// The wait every mesh write is allowed inside sqlite before it gives up.
+	// mesh.db is written by four organisms' heartbeats, by the training queue
+	// and its refresher, and by the world ledger's ingest, each from its own
+	// process and its own connection. Without this the library returns
+	// SQLITE_BUSY on the first collision and the losing write is simply
+	// dropped: the 20:00Z session of 2026-09-15 lost four heartbeats in six
+	// minutes (earth 0, air 1, water 2, fire 1), each one an organism alive
+	// and invisible to the colony.
+	//
+	// 5000 ms is 11.3x the worst wait measured on this phone. Six connections
+	// on a copy of the live mesh — four heartbeats, the queue refresher, the
+	// ledger at 50 facts a pass — ran 59 129 writes in 60 s on cores 0-3 with
+	// the colony itself on the big cores: none was refused, and the slowest
+	// single write waited 441.5 ms (heartbeat p50 0.418 ms / max 186.3 ms;
+	// queue refresher p50 1.388 ms / max 441.5 ms). The same load with the
+	// wait at zero refused 10 086 of 26 638 heartbeats (37.9%), 772 of 3 287
+	// queue writes and 763 of 771 ledger passes. 5000 ms is also a quarter of
+	// the keeper's 20 s beat, so a write that waits the whole timeout and
+	// still fails cannot collide with the beat behind it, and the 60 s
+	// liveness window still holds two more beats after it.
+	// 0 = the old zero-wait behaviour.
+	MeshBusyTimeoutMS       int     `json:"mesh_busy_timeout_ms"`
 
 	// the cafeteria (new logic §12/§14) — see experience_routing.go
 	ExperienceRouting             bool    `json:"experience_routing"`               // false = the old byte-identical broadcast
@@ -449,6 +471,7 @@ var CFG = Config{
 	SerialBursts:            true,
 	TrainingLockTTLSeconds:  30.0,
 	TrainingTurnPollSeconds: 0.5,
+	MeshBusyTimeoutMS:       5000, // 11.3x the 441.5 ms worst measured wait; a quarter of the 20 s beat
 	OomScoreAdj:            300,  // lmkd takes the organism before Termux (which sits at 0). Tunable; 0 = leave untouched.
 	TrimHeapAfterTrain:     true, // one malloc_trim per training phase, where nothing is in flight; false leaves the arena alone.
 	CheckpointMinInterval:  30.0, // throttle periodic full-model checkpoints to ≤1/30s (coalesces the growth/burst storm). Tunable; 0 disables. Mitosis ckpt (explicit path) bypasses.
@@ -5777,9 +5800,29 @@ func (sr *SwarmRegistry) Register() error {
 	return sr.registerInMesh()
 }
 
+// meshDSN is how every handle on mesh.db is opened. The path is returned with
+// PRAGMA busy_timeout attached as a DSN parameter rather than executed after
+// the open, because busy_timeout is a property of a connection and database/sql
+// keeps a pool of them: a PRAGMA run through db.Exec lands on whichever
+// connection served that one call and every connection the pool opens later
+// starts again at zero. A DSN parameter is applied by the driver to each
+// connection as it is created (modernc.org/sqlite applyQueryParams, sqlite.go:881),
+// which is the only place that covers the pool.
+//
+// The query is appended to a bare path, not to a file: URI: the driver hands a
+// non-file: DSN to openV2 with the query stripped (sqlite.go:832), so the path
+// travels verbatim and needs no percent-encoding. A path containing '?' would
+// break this, and none of ours does — swarmDir is under $HOME.
+func meshDSN(path string) string {
+	if CFG.MeshBusyTimeoutMS <= 0 {
+		return path
+	}
+	return fmt.Sprintf("%s?_pragma=busy_timeout(%d)", path, CFG.MeshBusyTimeoutMS)
+}
+
 func (sr *SwarmRegistry) initMeshDB() error {
 	dbPath := filepath.Join(swarmDir, "mesh.db")
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", meshDSN(dbPath))
 	if err != nil {
 		return err
 	}

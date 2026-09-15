@@ -163,12 +163,19 @@ func newWitnessState(dnaBase string) *witnessState {
 
 // witnessOpenMesh opens mesh.db for reading only: query_only makes any
 // write through this handle an error, so "the witness never writes" is a
-// property of the connection, not of discipline.
+// property of the connection, not of discipline. It goes through meshDSN like
+// every other handle on the mesh: a reader under WAL is not blocked by a
+// writer, so the busy_timeout is not what keeps the witness's ticks whole in
+// the steady state — but the -shm is rebuilt under an exclusive lock whenever
+// a process died mid-write, and on this phone lmkd ends organisms often
+// enough that the witness meets that recovery. busy_timeout does not widen
+// what this handle may do: query_only is applied after it and
+// TestWitnessNeverWritesBack still holds the line.
 func witnessOpenMesh(path string) (*sql.DB, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("witness: no mesh at %s: %w", path, err)
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", meshDSN(path))
 	if err != nil {
 		return nil, err
 	}

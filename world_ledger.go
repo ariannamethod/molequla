@@ -666,7 +666,7 @@ type worldLedger struct {
 // openWorldLedger opens the writer's handle on the mesh — the one handle in
 // the tree that may write world_facts, and it writes nothing else.
 func openWorldLedger(meshPath, factsPath, dnaBase, cursorPath string) (*worldLedger, error) {
-	db, err := sql.Open("sqlite", meshPath)
+	db, err := sql.Open("sqlite", meshDSN(meshPath))
 	if err != nil {
 		return nil, err
 	}

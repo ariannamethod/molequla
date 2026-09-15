@@ -3482,3 +3482,175 @@ unmeasured=0) declined=5 (band=5 warming=0) measured=8` — and grew its ring fr
 first pass.
 
 — Defender (Arianna Method, phone-1)
+
+---
+
+## 2026-09-15 — the mesh waits for the lock instead of dropping the write
+
+The 20:00Z session refused four mesh writes in its first six minutes:
+
+```
+[ecology] mesh refused the heartbeat of water: database is locked (5) (SQLITE_BUSY) — this organism is alive and invisible to the colony
+```
+
+`grep -c 'mesh refused' molequla-run/*/*.stdout` on the running session, binary
+`1a1be0b`: earth 0, air 1, water 2, fire 1. That line exists because of this
+morning's routing repair 3b/6b, where `Heartbeat` began checking its `Exec` and
+calling `sayMeshError`; before it these losses were silent, which is the only
+reason the defect is visible at all.
+
+A dropped heartbeat is not a dropped statistic. `StartKeeper` beats every 20 s
+(`molequla.go`, `swarm.StartKeeper(stop, 20*time.Second)`) against a 60 s
+liveness window (`DiscoverPeers` default, and `AcquireMitosisSlot`'s
+`liveCutoff := now - 60.0`), so three consecutive losses take a live organism
+out of the colony's count and out of the growth and mitosis governor's.
+
+### What contends
+
+Six writers share `~/.molequla/swarm/mesh.db`, each its own process and its own
+connection: four organisms' heartbeats, the training queue and its refresher
+that step 1 of the resonator design added with the `training_queue` table
+(`ea35094`), the world ledger's `--world-ingest` writer, and — reading only —
+the witness. `grep -nE 'busy_timeout|journal_mode' molequla.go witness.go
+world_ledger.go` found exactly one pragma in the whole tree,
+`db.Exec("PRAGMA journal_mode=WAL")` in `initMeshDB`, and no `busy_timeout`
+anywhere. With no busy timeout sqlite does not wait for a held write lock at
+all: it returns SQLITE_BUSY on the first collision and the losing write is
+gone.
+
+### How long a mesh write actually holds the lock
+
+Measured on a scratch copy of the live `mesh.db` (90 112 B plus a 4 120 032 B
+WAL, copied out of the running session), cores 0-3, colony on the big cores.
+Uncontended, one connection, each shape run against the real statements:
+
+```
+heartbeat UPDATE           n=200  min=  0.086ms  p50=  0.095ms  p95=  0.130ms  max=  0.563ms
+AcquireTrainingTurn (x3)   n=200  min=  0.371ms  p50=  0.471ms  p95=  0.676ms  max= 14.746ms
+MarkHibernating UPDATE     n=100  min=  0.069ms  p50=  0.085ms  p95=  0.125ms  max=  0.330ms
+worldIngest 50 facts       n= 20  min= 14.341ms  p50= 17.596ms  p95= 24.558ms  max= 26.039ms
+wal_checkpoint(PASSIVE)    n=  5  min=  0.054ms  p50=  0.055ms  p95=  0.064ms  max=  0.463ms
+```
+
+No single write holds the lock long. The ledger's 50-fact pass is the heaviest
+at 14.3-26.0 ms, and it is not one transaction: `worldIngest` writes in
+autocommit, so that pass is about 150 short locks in a row rather than one long
+one. The 4 MB WAL was not the culprit either — a checkpoint of it costs 54 µs.
+The collisions are frequent-and-brief, which is exactly the shape a zero wait
+turns into lost data and a small wait turns into nothing at all.
+
+So the number the knob needs is not the hold time but the wait a loser actually
+takes. Six connections on the same copy — four heartbeats, the queue refresher,
+the ledger at 50 facts a pass — 59 129 writes in 60 s:
+
+```
+heartbeat                  n=51725  min=  0.122ms  p50=  0.418ms  p95=  9.387ms  max=186.268ms
+ledger 50 facts            n=  993  min= 17.124ms  p50= 35.944ms  p95= 67.824ms  max=234.694ms
+queue refresher            n= 6411  min=  0.172ms  p50=  1.388ms  p95= 13.894ms  max=441.531ms
+```
+
+None refused. The slowest single write waited 441.5 ms. The same load with the
+wait at zero refused 10 086 of 26 638 heartbeats (37.9%), 772 of 3 287 queue
+writes and 763 of 771 ledger passes — the defect reproduced on demand, at a
+rate the six-minute session only sampled.
+
+### The fix, and where the deadline is
+
+`CFG.MeshBusyTimeoutMS`, default **5000**: 11.3x the 441.5 ms worst measured
+wait, and a quarter of the keeper's 20 s beat. The second half of that is what
+bounds it from above — a write that waits the whole timeout and still fails
+must not collide with the beat behind it, and at 5 s the 60 s window still
+holds two more beats after the one that was lost.
+
+It rides the DSN, not a `db.Exec` after the open. `busy_timeout` is a property
+of a connection and `database/sql` keeps a pool of them, so a pragma executed
+through `db.Exec` lands on whichever connection served that one call and every
+connection the pool opens afterwards starts again at zero. The driver applies
+DSN parameters to each connection as it is created
+(`modernc.org/sqlite@v1.29.5/sqlite.go:881`, `applyQueryParams`), which is the
+only layer that covers the pool; `TestMeshDSNReachesEveryConnectionInThePool`
+is the gate on that. The query is appended to a bare path rather than a `file:`
+URI because the driver strips the query and hands the path to `openV2` verbatim
+(`sqlite.go:832`), so no percent-encoding is involved.
+
+`journal_mode=WAL` stays where it is: it is persistent in the file, so one
+`Exec` is enough for it, and the DSN pragma now runs before it on every
+connection anyway.
+
+**No Go-level retry on the heartbeat.** The deadline is the 60 s window and the
+beat is 20 s, so there is room for a wait but no need for a spin, and
+`busy_timeout` is the better layer: it retries inside the C library and wakes
+the moment the lock frees, where a Go retry would sleep a fixed interval and
+then re-enter the same race. If 5 s ever expires, the right answer is the next
+beat 20 s later — two more chances inside the window — not a tighter loop
+against a mesh that is evidently busy.
+
+**The witness keeps `query_only` and gains the timeout.** A reader under WAL is
+not blocked by a writer, so this is not what keeps its ticks whole in the
+steady state. It is for the other path: the `-shm` is rebuilt under an
+exclusive lock whenever a process died mid-write, and lmkd ends organisms on
+this phone often enough that the witness meets that recovery. It does not widen
+what the handle may do — `query_only` is applied after it, and
+`TestWitnessNeverWritesBack` still holds the line.
+
+The organism's own private db (`initDB`) is untouched: one writer, no contention.
+
+### Gates
+
+- `TestMeshWriteWaitsForAHeldWriteLock` — a second connection holds a write
+  transaction for 300 ms while the heartbeat goes in. With the pragma the beat
+  lands and `last_heartbeat` advances; at `MeshBusyTimeoutMS: 0` it is refused,
+  and the subtest asserts the refusal, so the reproduction cannot rot silently.
+  The same test written in what `origin/main` has — no knob, no helper — run in
+  a detached worktree at `1d29460`: `FAIL`, printing the production line
+  verbatim, `[ecology] mesh refused the heartbeat of water: database is locked
+  (5) (SQLITE_BUSY)`. The identical file on this branch: `PASS`.
+- `TestMeshDSNReachesEveryConnectionInThePool` — four concurrent connections,
+  each read back at `busy_timeout` 5000.
+- `TestMeshBusyTimeoutDoesNotMaskASchemaError` — a heartbeat against the
+  pre-repair-7 schema through a handle that *does* carry the timeout still
+  names `global_step` and still says it at once (asserted under a second), so
+  the wait is for a lock and never for a schema.
+  `TestHeartbeatSaysWhenTheMeshRefusesTheWrite` is unchanged and green.
+- `TestMeshBusyTimeoutZeroIsTheOldBehaviour` — at 0 the DSN is the bare path,
+  byte-identical to what `origin/main` opened.
+
+Suite: **238 PASS, 0 FAIL** from `CGO_ENABLED=1 taskset -c 0-3 go test -count=1
+-buildvcs=false ./...`, against 234 on `origin/main` at `1d29460` — the four
+new gates and nothing else moved.
+
+No organism probe: the colony was still running its 20:00-22:05Z session while
+this was written, and the rule is no probe before 22:10Z.
+
+### Noted for the sleep policy, not fixed here
+
+`peak_rss_mb` is stale exactly for the organism that costs the most. At 20:31Z
+the witness printed `earth:s5/11156k/0.00/5982/f1.00/p490` — 490 MB — while
+`/proc/24540/status` showed `VmHWM: 1732008 kB`, 1691 MB. The other three:
+air 849 MB real against p745, water 801 against p780, fire 937 against p745.
+earth's `p490` has not moved for the last 401 witness lines of the session,
+while its high-water mark climbed past three times that.
+
+The mechanism, and it is not the keeper failing at its job. The heartbeat that
+carries a *fresh* peak is the one in the tick loop, which reads
+`ownPeakRSSMB()` at the call (`molequla.go`, `swarm.Heartbeat(..., ownPeakRSSMB())`)
+and runs behind `if swarm != nil && tickCount%10 == 0` — once every ten ticks.
+Between those, repair 4's keeper beats every 20 s, and `beat()` re-sends the
+values `Set` last cached, the peak among them. That is right for what the
+keeper was built for — `last_heartbeat` stays fresh and the organism stays
+visible through a long phase — but it means `peak_rss_mb` is only ever as new
+as the last tenth tick. A stage-5 tick is not short: one notorch burst inside
+it ran 84 941 ms (`earth.stdout`, `start=2026-09-15T20:27:21.648Z
+end=2026-09-15T20:28:47.304Z`), so ten of them are a long way apart, and the
+gap is widest for the organism doing the most work — which is the organism
+whose peak matters.
+
+§4.2 of the resonator design has the sleep policy read this column. It would be
+reading 490 for a process holding 1691. Flagged, not repaired: the fix belongs
+with the sleep-policy step, and it is either the keeper calling
+`ownPeakRSSMB()` on its own clock instead of replaying a cached figure — the
+peak is the one field in the beat that is cheap to re-read and monotone, so
+replaying it is the only one that is actually wrong — or the long phases
+publishing their own.
+
+— Defender (Arianna Method, phone-1)
