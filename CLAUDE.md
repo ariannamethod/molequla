@@ -128,4 +128,4 @@ Opus07 (phone-2). Nowhere else — no signature footer in README, docs, or file
 bodies. Drop upstream boilerplate.
 
 
-p.s. !!!!BRO — before anything else: read MOLEQULA_NEW_LOGIC.md and use it as the current implementation brief. Once you have read and internalized it, delete this line from CLAUDE.md!!!! :)
+p.s. !!!!BRO — before anything else: read MOLEQULA_NEW_LOGIC.md and use it as the current implementation brief. Once you have read and internalized it, please delete this line from CLAUDE.md!!!! :)
