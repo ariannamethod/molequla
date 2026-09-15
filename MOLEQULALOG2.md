@@ -2170,4 +2170,28 @@ in turn, and the beat to fall silent once the schema is whole. sqlite reports
 the first column it cannot find, not the one most recently added, which is why
 the first line names `global_step` and not `gen_mag`.
 
+**The keeper fixture's `:memory:` database.** `meshForKeeperTest` opened
+`sqlite` with the bare DSN `:memory:`. `database/sql` hands out a connection
+pool, and every connection to `:memory:` is a separate, empty database, so the
+keeper goroutine and the test's own queries could land on different ones —
+`SQL logic error: no such table: organisms`, intermittently, for as long as this
+test has existed. The DSN is now `file:keeper_<pid>_<nanos>?mode=memory&cache=shared`:
+one in-memory database that the whole pool attaches to, with a name unique per
+test so two of them never share it. `SetMaxOpenConns(1)` would also hide the
+symptom, and is the wrong fix here, because it gives the fixture a pool shape
+`initMeshDB` does not have — `initMeshDB` opens a real file and leaves the pool
+alone, so in the colony the tick loop and the keeper really do write through
+different connections to one database, which is the thing this test exists to
+exercise. `cache=shared` is that arrangement, in memory.
+
+Isolated, `CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false -run
+TestBeatKeeperRefreshesMeshWithoutTicks .` is 20 green out of 20 with the fix and
+5 red out of 20 with the DSN reverted, failing at `governor_phone_test.go:141`
+with `no such table: organisms` — so the gate is real and the fix is what makes
+it pass. Over the whole suite the rate fell from 3 red in 20 runs to 1 in 53;
+that one red's message was not captured, so the honest statement is that the
+diagnosed mechanism is closed and the test is not yet proven deterministic.
+
+**Tests, final.** 193 pass, 2 skip. `phone1/launch_test.sh`: 5 pass, 0 fail.
+
 — Defender (Arianna Method, phone-1)

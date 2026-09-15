@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -69,15 +70,28 @@ func TestMemGateOnThisHost(t *testing.T) {
 
 func meshForKeeperTest(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	// A shared-cache in-memory database with a name of its own, not the bare
+	// ":memory:" DSN. database/sql hands out a pool, and every connection to
+	// ":memory:" is a separate, empty database — so the keeper goroutine and
+	// the test's own queries could land on different ones and the table would
+	// be missing from whichever got the second connection. That was this
+	// test's intermittent "no such table: organisms", 3 failures in 20 runs.
+	// SetMaxOpenConns(1) would also hide it, by giving the fixture a pool
+	// shape initMeshDB does not have: initMeshDB opens a real file and leaves
+	// the pool alone, so the keeper and the tick loop really do write through
+	// different connections to one database. cache=shared is that, in memory.
+	// The name is unique per test so two of them never share a database.
+	dsn := fmt.Sprintf("file:keeper_%d_%d?mode=memory&cache=shared", os.Getpid(), time.Now().UnixNano())
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		t.Skipf("sqlite unavailable: %v", err)
 	}
 	// The columns Heartbeat writes, global_step (repair 7) and the two voice
 	// columns (routing repair 6) included: a fixture narrower than the real
 	// schema makes the UPDATE fail silently — Heartbeat discards the Exec
-	// error — and this test went red on exactly that, twice now, the day a
-	// column was added. Widen it with the schema in initMeshDB.
+	// error, though since routing 6b it says so — and this test went red on
+	// exactly that, twice now, the day a column was added. Widen it with the
+	// schema in initMeshDB.
 	if _, err := db.Exec(`CREATE TABLE organisms(id TEXT PRIMARY KEY, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, status TEXT, global_step INTEGER, gen_mag REAL, overlay_fade REAL)`); err != nil {
 		db.Close()
 		t.Skipf("sqlite exec: %v", err)
