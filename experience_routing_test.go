@@ -45,7 +45,10 @@ var routingCorpora = map[string][]string{
 }
 
 // routingOrganism is one organism's state for the allocator: its own field,
-// its own tokenizer.
+// its own tokenizer, and a warm coverage ring — the history the quantile bars
+// are taken over. An organism with no history declines everything but what it
+// owns (the warming branch), so a test about steady-state allocation has to
+// give it one, exactly as a live organism accumulates it over its first ticks.
 func routingOrganism(t *testing.T, element string) *experienceState {
 	t.Helper()
 	docs := routingCorpora[element]
@@ -54,7 +57,62 @@ func routingOrganism(t *testing.T, element string) *experienceState {
 	field.BuildFromCorpus(tok, docs)
 	st := &experienceState{}
 	st.observe(field, tok)
+	warmRouting(st, element)
 	return st
+}
+
+// warmRouting fills an organism's ring the way its own first ticks would: by
+// measuring the fragments it is about to be offered, until the ring is warm.
+// The numbers are runtime measurements of this fixture, not constants.
+func warmRouting(st *experienceState, element string) {
+	srcs, _, texts := routingFragments()
+	size := func() int {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		return len(st.cov)
+	}
+	for size() < CFG.ExperienceCoverageWarm {
+		before := size()
+		for i := range srcs {
+			if srcs[i] == element {
+				continue
+			}
+			cov, pairs := experienceCoverage(st.field, st.tok, texts[i])
+			if pairs >= CFG.ExperienceMinPairs {
+				st.recordCoverage(cov)
+			}
+		}
+		if size() == before {
+			return // nothing here is measurable; the caller will see it
+		}
+	}
+}
+
+// bandSeed is a warm ring whose quartiles are 0 and 1, so that every real
+// coverage falls strictly inside the declined middle half. Half of it sits at
+// each extreme, and ExperienceCoverageWarm samples of it are enough that the
+// measurements a pass adds do not move either quartile off its extreme.
+func bandSeed() []float64 {
+	n := CFG.ExperienceCoverageWarm
+	if n < 4 {
+		n = 4
+	}
+	out := make([]float64, 0, 2*n)
+	for i := 0; i < n; i++ {
+		out = append(out, 0)
+	}
+	for i := 0; i < n; i++ {
+		out = append(out, 1)
+	}
+	return out
+}
+
+// seedRouting gives an organism an explicit distribution, for the gates that
+// need a known band rather than a measured one.
+func seedRouting(st *experienceState, vals ...float64) {
+	st.mu.Lock()
+	st.cov = append([]float64(nil), vals...)
+	st.mu.Unlock()
 }
 
 // routingFragments builds the synthetic pass: for each element, fragments in
@@ -279,10 +337,11 @@ func TestCafeteriaDeclineDoesNotSpendTheReadBudget(t *testing.T) {
 	defer restore()
 
 	// Nothing resonates and nothing is novel: only the hash owner is admitted,
-	// so every fragment air writes that earth does not own is a decline.
+	// so every fragment air writes that earth does not own is a decline. The
+	// bars are quantiles now, so that is arranged by the ring the organism is
+	// given below — half at 0 and half at 1, which puts every real coverage
+	// strictly inside its own middle half.
 	CFG.ExperienceRouting = true
-	CFG.ExperienceResonanceHigh = 2.0
-	CFG.ExperienceNoveltyLow = -1.0
 	CFG.ExperienceMinPairs = 1
 	CFG.ExperienceMaxMeasuredPerTick = 64
 	CFG.DNAMaxReadsPerTick = 2 // two eats a tick, and only two
@@ -317,6 +376,7 @@ func TestCafeteriaDeclineDoesNotSpendTheReadBudget(t *testing.T) {
 
 	corpus, cur := enterOrganism(t, root, "earth")
 	experienceRouting = routingOrganism(t, "earth")
+	seedRouting(experienceRouting, bandSeed()...)
 
 	added := dnaRead("earth", corpus, nil, nil, cur)
 	if added == 0 {
@@ -341,6 +401,7 @@ func TestCafeteriaDeclineDoesNotSpendTheReadBudget(t *testing.T) {
 	CFG.ExperienceMaxMeasuredPerTick = 1
 	_, cur2 := enterOrganism(t, root, "water")
 	experienceRouting = routingOrganism(t, "water")
+	seedRouting(experienceRouting, bandSeed()...)
 	corpus2 := filepath.Join(root, "water", "corpus.txt")
 	os.WriteFile(corpus2, nil, 0644)
 	dnaRead("water", corpus2, nil, nil, cur2)
@@ -368,12 +429,11 @@ func TestCafeteriaPassPrintsItsAggregate(t *testing.T) {
 	root, restore := dnaTestTree(t)
 	defer restore()
 
-	// Thresholds that make the second fragment a band decline whatever the
-	// tokenizer makes of it: nothing resonates and nothing is novel, so every
-	// measurable fragment earth does not own falls between the two.
+	// A ring that makes the second fragment a band decline whatever the
+	// tokenizer makes of it: half of it at 0 and half at 1, so the organism's
+	// own quartiles are 0 and 1 and every measurable fragment earth does not
+	// own falls strictly between them.
 	CFG.ExperienceRouting = true
-	CFG.ExperienceResonanceHigh = 2.0
-	CFG.ExperienceNoveltyLow = -1.0
 	CFG.ExperienceMinPairs = 1
 	CFG.ExperienceMaxMeasuredPerTick = 64
 	CFG.DNAMaxReadsPerTick = 8
@@ -405,11 +465,12 @@ func TestCafeteriaPassPrintsItsAggregate(t *testing.T) {
 
 	corpus, cur := enterOrganism(t, root, "earth")
 	experienceRouting = routingOrganism(t, "earth")
+	seedRouting(experienceRouting, bandSeed()...)
 
 	added := 0
 	out := captureStdout(t, func() { added = dnaRead("earth", corpus, nil, nil, cur) })
 
-	want := "[cafeteria] earth admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=1 (band=1) measured=1\n"
+	want := "[cafeteria] earth admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=1 (band=1 warming=0) measured=1\n"
 	if !strings.Contains(out, want) {
 		t.Fatalf("the pass printed\n%s\nwant the line\n%s", out, want)
 	}
@@ -613,4 +674,236 @@ func TestStageGateGoesRedWhereTheVoiceGateDoesNot(t *testing.T) {
 	}
 	t.Logf("stage %d: stage gate %v for both; voice gate %v at mag %.2f, %v at mag %.2f",
 		childStage, stageGate(childStage), okMute, mute, okSpeaking, speaking)
+}
+
+// ── the bar is the organism's own, not a number ─────────────────────────────
+//
+// The red on the absolute thresholds, and the reason they were replaced on
+// 2026-09-15. An organism whose corpus has grown scores every fragment it is
+// offered above the old bar of 0.965: on the live stage-4 air reservoir 141 of
+// 145 fragments did (MOLEQULALOG2.md, 2026-09-15). Under a fixed bar that
+// organism admits everything and the cafeteria is a broadcast again. Under a
+// quantile of its own distribution it still declines the middle half, because
+// the bar moved with the corpus.
+func TestCafeteriaBandSurvivesAGrownCorpus(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	// A distribution shaped like the measured stage-4 one: every value above
+	// 0.965, spread over the top three hundredths.
+	grown := make([]float64, 0, 64)
+	for i := 0; i < 64; i++ {
+		grown = append(grown, 0.966+0.034*float64(i%17)/16.0)
+	}
+	st := &experienceState{}
+	seedRouting(st, grown...)
+
+	// The old rule: one number, and every one of these is above it.
+	const oldBar = 0.965
+	oldAdmitted := 0
+	for _, c := range grown {
+		if c >= oldBar {
+			oldAdmitted++
+		}
+	}
+	if oldAdmitted != len(grown) {
+		t.Fatalf("the fixture is not the grown case: only %d of %d sit above %.3f",
+			oldAdmitted, len(grown), oldBar)
+	}
+
+	// The new rule, on the same numbers.
+	hi, lo, warm := st.recordCoverage(grown[len(grown)/2])
+	if !warm {
+		t.Fatalf("a ring of %d is not warm at ExperienceCoverageWarm %d", len(grown), CFG.ExperienceCoverageWarm)
+	}
+	if hi <= oldBar || lo <= oldBar {
+		t.Fatalf("the organism's own bars %.4f / %.4f did not rise above the old fixed bar %.3f", hi, lo, oldBar)
+	}
+	declined := 0
+	for _, c := range grown {
+		if c < hi && c > lo {
+			declined++
+		}
+	}
+	if declined == 0 {
+		t.Fatalf("a grown organism declined nothing: bars %.4f / %.4f over %d samples", hi, lo, len(grown))
+	}
+	t.Logf("grown corpus: old bar %.3f admits %d/%d; own quartiles %.4f / %.4f decline %d",
+		oldBar, oldAdmitted, len(grown), lo, hi, declined)
+}
+
+// Two organisms whose coverage distributions do not overlap at all — a child
+// that has read little and an adult that has read a lot — must each admit about
+// the top quarter as resonance and about the bottom quarter as novelty. A
+// shared absolute bar cannot do this: any number either admits everything the
+// adult sees or nothing the child sees.
+func TestCafeteriaQuantilesAreEachOrganismsOwn(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	mk := func(base, spread float64, n int) []float64 {
+		out := make([]float64, 0, n)
+		for i := 0; i < n; i++ {
+			out = append(out, base+spread*float64(i)/float64(n-1))
+		}
+		return out
+	}
+	child := mk(0.40, 0.30, 64)  // 0.40 .. 0.70
+	adult := mk(0.94, 0.06, 64)  // 0.94 .. 1.00
+	if child[len(child)-1] >= adult[0] {
+		t.Fatalf("the two distributions overlap: child max %.3f, adult min %.3f", child[len(child)-1], adult[0])
+	}
+
+	for _, c := range []struct {
+		name string
+		pop  []float64
+	}{{"child", child}, {"adult", adult}} {
+		st := &experienceState{}
+		seedRouting(st, c.pop...)
+		// The bars this organism's own history defines, taken once: what is
+		// under test is the share each side admits, not the ring's drift.
+		hi, lo, warm := st.recordCoverage(c.pop[len(c.pop)/2])
+		if !warm {
+			t.Fatalf("%s: ring of %d not warm", c.name, len(c.pop))
+		}
+		res, nov, band := 0, 0, 0
+		for _, v := range c.pop {
+			switch {
+			case v >= hi:
+				res++
+			case v <= lo:
+				nov++
+			default:
+				band++
+			}
+		}
+		n := float64(len(c.pop))
+		fr, fn := float64(res)/n, float64(nov)/n
+		// A quarter each, within the granularity a ring of this size can
+		// resolve: one sample is 1/64 = 0.016, and the quantile sits between
+		// two of them.
+		if fr < 0.20 || fr > 0.31 {
+			t.Fatalf("%s admitted %.2f as resonance, not about a quarter (bars %.4f / %.4f)", c.name, fr, lo, hi)
+		}
+		if fn < 0.20 || fn > 0.31 {
+			t.Fatalf("%s admitted %.2f as novelty, not about a quarter (bars %.4f / %.4f)", c.name, fn, lo, hi)
+		}
+		t.Logf("%-5s range %.3f..%.3f: own bars %.4f / %.4f, resonance %.2f novelty %.2f band %.2f",
+			c.name, c.pop[0], c.pop[len(c.pop)-1], lo, hi, fr, fn, float64(band)/n)
+	}
+}
+
+// Until the ring is long enough to be quantiled there is no distribution and no
+// bar, so only the owner rule runs — and the line says which it is, because a
+// warming organism and a selective one are opposite states that would otherwise
+// print the same declined count.
+func TestCafeteriaWarmingAdmitsOwnerOnlyAndSaysSo(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	savedRouting := experienceRouting
+	defer func() { experienceRouting = savedRouting }()
+
+	root, restore := dnaTestTree(t)
+	defer restore()
+	CFG.ExperienceRouting = true
+	CFG.ExperienceMinPairs = 1
+	CFG.ExperienceMaxMeasuredPerTick = 64
+	CFG.DNAMaxReadsPerTick = 8
+	CFG.DNAExtraReadsPerTick = 4
+	CFG.DNAExtraSources = nil
+	CFG.DNAMinFragmentBytes = 5
+	CFG.MaxLineChars = 240
+	CFG.ExperienceCoverageWarm = 1 << 20 // never warm inside this test
+
+	text := strings.Join(routingCorpora["air"], " ")
+	owned, others := "", []string{}
+	for i := 0; i < 400 && (owned == "" || len(others) < 3); i++ {
+		name := fmt.Sprintf("gen_1789332400_%d.txt", i)
+		if experienceOwner("air", name) == "earth" {
+			if owned == "" {
+				owned = name
+			}
+			continue
+		}
+		if owned != "" && len(others) < 3 {
+			others = append(others, name)
+		}
+	}
+	if owned == "" || len(others) != 3 {
+		t.Fatalf("fixture: owned=%q others=%v", owned, others)
+	}
+	for _, n := range append([]string{owned}, others...) {
+		dnaWriteFragment(t, root, "air", n, text)
+	}
+
+	corpus, cur := enterOrganism(t, root, "earth")
+	experienceRouting = &experienceState{}
+	warmed := routingOrganism(t, "earth")
+	experienceRouting.observe(warmed.field, warmed.tok) // a field, but no history
+
+	out := captureStdout(t, func() { dnaRead("earth", corpus, nil, nil, cur) })
+	want := "[cafeteria] earth admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=3 (band=0 warming=3) measured=3\n"
+	if !strings.Contains(out, want) {
+		t.Fatalf("a warming organism printed\n%s\nwant\n%s", out, want)
+	}
+	body, err := os.ReadFile(corpus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(body), routingCorpora["air"][0]); n != 1 {
+		t.Fatalf("a warming organism ate the fragment %d times; only the one it owns should have reached the corpus", n)
+	}
+	t.Logf("%s", strings.TrimSpace(want))
+}
+
+// The ring is the organism's own history and the two bars are quantiles of it,
+// so a restart that lost it would drop the organism back into warming and hand
+// the owner rule the whole colony for as many ticks as it takes to refill. It
+// is written beside dna_cursor.json and read back at boot.
+func TestCafeteriaCoverageRingSurvivesARestart(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	dir := t.TempDir()
+	path := filepath.Join(dir, experienceCoverageFile)
+
+	before := &experienceState{}
+	before.loadCoverage(path) // nothing there yet
+	vals := []float64{0.11, 0.42, 0.73, 0.94, 0.55}
+	for _, v := range vals {
+		before.recordCoverage(v)
+	}
+	before.saveCoverage()
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the ring was not written beside the cursor: %v", err)
+	}
+
+	after := &experienceState{}
+	after.loadCoverage(path)
+	after.mu.Lock()
+	got := append([]float64(nil), after.cov...)
+	after.mu.Unlock()
+	if len(got) != len(vals) {
+		t.Fatalf("the restart read back %d coverages, wrote %d", len(got), len(vals))
+	}
+	for i := range vals {
+		if got[i] != vals[i] {
+			t.Fatalf("coverage %d came back %.4f, wrote %.4f", i, got[i], vals[i])
+		}
+	}
+
+	// And the ring is bounded by the window on the way back in, so a window
+	// shrunk between runs does not resurrect an old distribution.
+	CFG.ExperienceCoverageWindow = 2
+	short := &experienceState{}
+	short.loadCoverage(path)
+	short.mu.Lock()
+	n := len(short.cov)
+	tail := append([]float64(nil), short.cov...)
+	short.mu.Unlock()
+	if n != 2 || tail[0] != vals[3] || tail[1] != vals[4] {
+		t.Fatalf("a window of 2 read back %v", tail)
+	}
+	t.Logf("%d coverages written to %s and read back; window 2 keeps the newest two %v",
+		len(vals), experienceCoverageFile, tail)
 }

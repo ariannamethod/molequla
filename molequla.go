@@ -303,8 +303,10 @@ type Config struct {
 	// the cafeteria (new logic §12/§14) — see experience_routing.go
 	ExperienceRouting             bool    `json:"experience_routing"`               // false = the old byte-identical broadcast
 	ExperienceCoverageSampleBytes int     `json:"experience_coverage_sample_bytes"` // bytes of a fragment the coverage is taken over, strided
-	ExperienceResonanceHigh       float64 `json:"experience_resonance_high"`        // bigram coverage at or above which a fragment is already this organism's language
-	ExperienceNoveltyLow          float64 `json:"experience_novelty_low"`           // coverage at or below which it is news
+	ExperienceCoverageWindow      int     `json:"experience_coverage_window"`       // how many recent coverage measurements this organism keeps as its own distribution
+	ExperienceCoverageWarm        int     `json:"experience_coverage_warm"`         // below this many samples the ring cannot be quantiled; only the owner rule runs
+	ExperienceResonanceQuantile   float64 `json:"experience_resonance_quantile"`    // coverage at or above this quantile of the organism's own ring is already its language
+	ExperienceNoveltyQuantile     float64 `json:"experience_novelty_quantile"`      // coverage at or below this quantile of the same ring is news
 	ExperienceMinPairs            int     `json:"experience_min_pairs"`             // fewer measured token pairs than this = unmeasurable = food
 	ExperienceMaxMeasuredPerTick  int     `json:"experience_max_measured_per_tick"` // coverage measurements one dnaRead may spend; a decline costs no read budget, only this
 	ExperienceMealMemory          int     `json:"experience_meal_memory"`           // fragments kept as "what was just eaten"
@@ -472,8 +474,10 @@ var CFG = Config{
 	// MOLEQULALOG2.md 2026-09-15) and every one is a knob that can be moved.
 	ExperienceRouting:             true,
 	ExperienceCoverageSampleBytes: 480,   // 4 windows of 120 B: sibling quartiles preserved to 0.006 against the whole fragment, 22 ms/call instead of 144
-	ExperienceResonanceHigh:       0.965, // the median of the sibling-DNA coverage distribution (n=120, min 0.909, p25 0.952, med 0.965, p75 0.975, max 0.996)
-	ExperienceNoveltyLow:          0.620, // the median of the senses coverage distribution (n=52, min 0.427, p25 0.578, med 0.620, p75 0.651, max 0.736)
+	ExperienceCoverageWindow:      96,    // the smallest measured ring whose quantile noise is at most a fifth of the band it defines, in all four live populations (the tightest is stage-4 sibling DNA: band 0.0073, sd(q25) 0.00138 = 0.188 of it; at 64 it is 0.212). MOLEQULALOG2.md, 2026-09-15
+	ExperienceCoverageWarm:        32,    // the smallest measured ring whose two band edges stand two combined noise-widths apart, again on stage-4 sibling DNA: 2 x (0.00188 + 0.00156) = 0.0069 against a band of 0.0073; at 24 it is 0.0077 and the band is inside its own error
+	ExperienceResonanceQuantile:   0.75,  // the top quarter of what this organism has recently been offered
+	ExperienceNoveltyQuantile:     0.25,  // and the bottom quarter; the half between is declined
 	ExperienceMinPairs:            16,    // below this the coverage of a fragment is noise; a shorter fragment is eaten, not judged
 	ExperienceMaxMeasuredPerTick:  8,     // 8 x 21.7 ms of coverage against a 250 ms tick; the two read budgets are 8 + 4, so this is already fewer measurements than they were making. Tunable; 0 disables.
 	ExperienceMealMemory:          16,    // two ticks of the sibling read budget (DNAMaxReadsPerTick 8)
@@ -6679,6 +6683,11 @@ reading:
 	if moved {
 		cur.save()
 	}
+	// The coverages this pass measured, beside the cursor: the ring is the
+	// organism's own distribution and the two bars are quantiles of it, so a
+	// restart that lost it would put the organism back into warming. Once per
+	// pass and only when a measurement arrived, not once per fragment.
+	experienceRouting.saveCoverage()
 	// The decision before the meal: what was offered and on what ground it was
 	// taken or refused, whether or not anything was eaten. Silent when the
 	// cafeteria is off or when nothing was offered to judge.
@@ -7138,6 +7147,10 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 	// This organism's read position into every DNA source, persisted in its
 	// working directory so a restart continues where it left off (repair 3).
 	dnaCur := loadDNACursor(dnaCursorFile)
+	// And its own coverage distribution, beside it: the cafeteria's two bars are
+	// quantiles of this ring (experience_routing.go), so a restart reads it back
+	// rather than warming up again.
+	experienceRouting.loadCoverage(experienceCoverageFile)
 	// And lo, asynchronous training shall occur, because sleeping is for humans.
 	syntracker := NewSyntropyTracker()
 	field := NewCooccurField()

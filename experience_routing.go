@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"os"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -31,17 +34,37 @@ import (
 //                asking anybody.
 //   resonance  — the fragment is already in the reader's language: the share of
 //                its token bigrams that its own CooccurField has seen is at or
-//                above CFG.ExperienceResonanceHigh.
+//                above the CFG.ExperienceResonanceQuantile quantile of the
+//                coverages this organism has recently measured.
 //   novelty    — the fragment is outside the reader's language: that same share
-//                is at or below CFG.ExperienceNoveltyLow. Without this branch an
-//                organism is sealed inside what it already knows, and the senses
-//                — the only food that is new by construction — would never be
-//                eaten by anybody but their hash owner. See the measured
-//                distribution in MOLEQULALOG2.md, 2026-09-15.
+//                is at or below the CFG.ExperienceNoveltyQuantile quantile of
+//                the same ring. Without this branch an organism is sealed inside
+//                what it already knows, and the senses — the only food that is
+//                new by construction — would never be eaten by anybody but
+//                their hash owner.
 //
 // The band in between is refused. Coverage is state: it rises as the organism
 // eats, so the same fragment file routes differently in week two than in week
 // one, which is the drift §12 is after.
+//
+// The bar is state too, and that is what this file changed on 2026-09-15.
+// It carried two absolute numbers — 0.965 and 0.620, the medians of two
+// populations measured that morning on stage-3 corpora. Coverage grows with the
+// corpus, so an absolute bar cannot follow the organism: the same air
+// checkpoint declined 8 of 9 fragments against the 1498-line seed corpus and 0
+// of 12 against its grown 9586-line reservoir, where 141 of 145 live fragments
+// sit above 0.965 and the cafeteria had become a broadcast again
+// (MOLEQULALOG2.md, 2026-09-15). Each organism now carries a ring of its own
+// last CFG.ExperienceCoverageWindow measured coverages, persisted beside its
+// dna_cursor.json, and the two bars are quantiles of that ring. The
+// distribution moves with the corpus; the shares do not.
+//
+// Until the ring holds CFG.ExperienceCoverageWarm samples the organism has no
+// distribution to quantile, so only the owner rule runs and everything else is
+// declined as "warming" — which the [cafeteria] line names, so a session can
+// tell a warming organism from one that is judging. A newborn without a field
+// at all is a different case and is upstream of this one: it fails the
+// ExperienceMinPairs test and eats everything as "unmeasured".
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // experienceMeal is one fragment this organism accepted, kept so that what it
@@ -60,12 +83,18 @@ type experienceMeal struct {
 
 // experienceState is this process's view of itself: the field and tokenizer the
 // training loop is currently using (published by dnaWrite, which already
-// receives both), and the last CFG.ExperienceMealMemory fragments eaten.
+// receives both), the last CFG.ExperienceMealMemory fragments eaten, and the
+// last CFG.ExperienceCoverageWindow coverages it measured — the distribution
+// its own two bars are quantiles of.
 type experienceState struct {
 	mu    sync.Mutex
 	field *CooccurField
 	tok   *EvolvingTokenizer
 	meals []experienceMeal
+
+	cov      []float64 // oldest first; at most CFG.ExperienceCoverageWindow
+	covPath  string    // where it is persisted; empty = in memory only (tests)
+	covDirty bool      // a measurement has arrived since the last write
 }
 
 // experienceRouting is the per-process singleton. One organism, one process,
@@ -169,6 +198,120 @@ func experienceOwner(src, name string) string {
 	return readers[int(h.Sum64()%uint64(len(readers)))]
 }
 
+// experienceCoverageFile is the ring's file, written in the organism's working
+// directory beside dna_cursor.json (dna_field.go). The ring is a life's worth
+// of measurement, not a cache: a restart that reset it would put the organism
+// back into warming and hand the owner rule the whole colony for a few ticks.
+const experienceCoverageFile = "experience_coverage.json"
+
+// experienceQuantile is the q-quantile of an ascending slice by linear
+// interpolation between the two neighbouring order statistics — the definition
+// R's type 7 and numpy's default use, chosen because it is the one that returns
+// the sample itself at q = 0 and q = 1 and moves continuously in between.
+func experienceQuantile(sorted []float64, q float64) float64 {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	if n == 1 {
+		return sorted[0]
+	}
+	if q <= 0 {
+		return sorted[0]
+	}
+	if q >= 1 {
+		return sorted[n-1]
+	}
+	pos := q * float64(n-1)
+	lo := int(pos)
+	frac := pos - float64(lo)
+	if lo+1 >= n {
+		return sorted[n-1]
+	}
+	return sorted[lo] + (sorted[lo+1]-sorted[lo])*frac
+}
+
+// recordCoverage appends one measurement to the ring and returns the two bars
+// it defines, and whether the ring is warm enough to have defined them.
+func (s *experienceState) recordCoverage(cov float64) (hi, lo float64, warm bool) {
+	window := CFG.ExperienceCoverageWindow
+	if window < 1 {
+		window = 1
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cov = append(s.cov, cov)
+	if len(s.cov) > window {
+		s.cov = s.cov[len(s.cov)-window:]
+	}
+	s.covDirty = true
+	if len(s.cov) < CFG.ExperienceCoverageWarm {
+		return 0, 0, false
+	}
+	sorted := make([]float64, len(s.cov))
+	copy(sorted, s.cov)
+	sort.Float64s(sorted)
+	return experienceQuantile(sorted, CFG.ExperienceResonanceQuantile),
+		experienceQuantile(sorted, CFG.ExperienceNoveltyQuantile), true
+}
+
+// loadCoverage points the ring at its file and reads what is there. Called once
+// at boot, beside loadDNACursor.
+func (s *experienceState) loadCoverage(path string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.covPath = path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var on struct {
+		Coverage []float64 `json:"coverage"`
+	}
+	if json.Unmarshal(data, &on) != nil || on.Coverage == nil {
+		return
+	}
+	window := CFG.ExperienceCoverageWindow
+	if window > 0 && len(on.Coverage) > window {
+		on.Coverage = on.Coverage[len(on.Coverage)-window:]
+	}
+	s.cov = on.Coverage
+	s.covDirty = false
+}
+
+// saveCoverage writes the ring atomically, and only when a measurement has
+// arrived since the last write. Called once per dnaRead pass, not once per
+// fragment: at the read budgets that would be up to twelve writes a tick, the
+// write storm the checkpoint debounce exists against.
+func (s *experienceState) saveCoverage() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.covPath == "" || !s.covDirty {
+		s.mu.Unlock()
+		return
+	}
+	path := s.covPath
+	out := make([]float64, len(s.cov))
+	copy(out, s.cov)
+	s.covDirty = false
+	s.mu.Unlock()
+	data, err := json.Marshal(struct {
+		Coverage []float64 `json:"coverage"`
+	}{out})
+	if err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, data, 0644) == nil {
+		os.Rename(tmp, path)
+	}
+}
+
 // admits is the cafeteria decision for one fragment. It returns whether this
 // organism eats it, why, and the coverage the decision was taken on (-1 when
 // coverage was not consulted).
@@ -189,10 +332,22 @@ func (s *experienceState) admits(element, src, name, text string) (bool, string,
 		// second gate exists to catch, so an unmeasurable fragment is food.
 		return true, "unmeasured", -1
 	}
-	if cov >= CFG.ExperienceResonanceHigh {
+	// The measurement joins the organism's own distribution before it is judged
+	// against it: the ring is what this organism has recently been offered, and
+	// this fragment is part of that whether it is eaten or not.
+	hi, lo, warm := s.recordCoverage(cov)
+	if !warm {
+		// No distribution yet, so no quantile and nothing to compare against.
+		// The owner rule above has already guaranteed this fragment an eater,
+		// so declining here starves nobody — and admitting instead would be the
+		// byte-identical broadcast §12 refuses, handed out by default to every
+		// organism that has just restarted.
+		return false, "warming", cov
+	}
+	if cov >= hi {
 		return true, "resonance", cov
 	}
-	if cov <= CFG.ExperienceNoveltyLow {
+	if cov <= lo {
 		return true, "novelty", cov
 	}
 	return false, "refused", cov
@@ -228,7 +383,8 @@ func (s *experienceState) admits(element, src, name, text string) (bool, string,
 // the caller prints nothing.
 type cafeteriaTally struct {
 	owner, resonance, novelty, unmeasured int // admitted, per branch
-	band                                  int // declined: coverage between the two thresholds
+	band                                  int // declined: coverage inside the organism's own middle half
+	warming                               int // declined: the ring is not yet long enough to be quantiled
 	measured                              int // coverage measurements the pass spent (the ExperienceMaxMeasuredPerTick budget)
 }
 
@@ -245,18 +401,25 @@ func (t *cafeteriaTally) record(why string) {
 		t.unmeasured++
 	case "refused":
 		t.band++
+	case "warming":
+		t.warming++
 	}
 }
 
 func (t *cafeteriaTally) admitted() int  { return t.owner + t.resonance + t.novelty + t.unmeasured }
-func (t *cafeteriaTally) decisions() int { return t.admitted() + t.band }
+func (t *cafeteriaTally) declined() int  { return t.band + t.warming }
+func (t *cafeteriaTally) decisions() int { return t.admitted() + t.declined() }
 
 // line is the pass's line, newline included. admitted is the sum of the four
-// bracketed reasons and declined the sum of the one, so the line can be checked
-// against itself by whoever reads it.
+// bracketed reasons and declined the sum of its two, so the line can be checked
+// against itself by whoever reads it. warming is its own reason and not folded
+// into band because the two mean opposite things about the organism: band is a
+// judgement, warming is the absence of one, and a session that cannot tell them
+// apart cannot tell a restarted organism from a selective one.
 func (t *cafeteriaTally) line(element string) string {
-	return fmt.Sprintf("[cafeteria] %s admitted=%d (owner=%d resonance=%d novelty=%d unmeasured=%d) declined=%d (band=%d) measured=%d\n",
-		element, t.admitted(), t.owner, t.resonance, t.novelty, t.unmeasured, t.band, t.band, t.measured)
+	return fmt.Sprintf("[cafeteria] %s admitted=%d (owner=%d resonance=%d novelty=%d unmeasured=%d) declined=%d (band=%d warming=%d) measured=%d\n",
+		element, t.admitted(), t.owner, t.resonance, t.novelty, t.unmeasured,
+		t.declined(), t.band, t.warming, t.measured)
 }
 
 // remember keeps an accepted fragment in the meal ring as the corpus lines it
