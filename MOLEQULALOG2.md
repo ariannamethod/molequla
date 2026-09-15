@@ -1759,3 +1759,38 @@ history, and it goes after the merge, not before. The eye's watermark probe
 over a frame set that is not in the tree, and nothing in the engine changed.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the inspection §17 asks for, before anything is built
+
+`molequla_new_logic.md` opens its seventeenth section by asking that the paths which already exist be
+inspected before new machinery is added under new names. That inspection is
+`reports/2026-09-15_new_logic_audit/README.md`: a row per section 1-16 saying what exists with a line
+number, what is partial, what is missing and where the smallest extension point is; a trace of how an
+eaten fragment actually reaches an organism; the lineage reading of dario, q, actually.life and netta;
+and a proposed order for §18 in which routing changes come before new infrastructure. Nothing in the
+tree changed — the audit is one document and this entry.
+
+The load-bearing answer is that the brief's early regime already runs end to end. `dnaRead` appends a
+fragment's bytes to the organism's corpus (`molequla.go:6138-6144`), `loadCorpusLines` and
+`BuildFromCorpus` turn the corpus into unigram, bigram, trigram, 4-gram and co-occurrence every thirty
+ticks (`molequla.go:6625-6635`, `:4227-4294`), the same `docs` slice is what `MetaweightsOverlay` reads
+through `model.corpusField` and what both trainers are handed (`molequla.go:6673-6675`, `:6753`), and a
+second, independent path takes the same files straight to the logits (`cross_graze.go:79-165`,
+`molequla.go:4745-4747`). Routing lives in one function, `dnaSources(element)` (`dna_field.go:35-48`),
+and today it is the same list for everybody: `SENSES_SOURCES="world sound place"` goes to all four
+launches as one string (`phone1/launch.sh:16,88`).
+
+Three findings were not being looked for. `loadCorpusLines` truncates every line to
+`MaxLineChars = 240` on every read (`molequla.go:3262-3264`, default `:268`), and an eaten fragment is
+one line padded toward 5000 B (`molequla.go:271`), so most of a sibling fragment never reaches the
+field or a batch while the growth clock counted all of it — in the live run `earth/nonames_earth.txt`
+holds 1600 lines of which 592 exceed 240 characters and the longest is 5406, and a place fragment at
+301-318 B loses its moved clause. The senses also stand last in the read queue: extra sources come
+after the elements in `dnaSources` under one budget of `DNAMaxReadsPerTick = 8` (`molequla.go:273`,
+`:6117-6123`), and in the 2026-09-13T20:26Z session that cap was hit on 12 of earth's 15 reads, 9 of
+air's 13, 10 of water's 13 and 4 of fire's 14. And the witness cannot see the senses at all: it calls
+`dnaSources("")` (`witness.go:458`) in a process `launch.sh:95-96` starts without
+`--dna-extra-sources`. The four live cursors confirm the state the roadmap predicted — no `world`,
+`sound` or `place` key in any `dna_cursor.json`, thirteen fragments waiting for the next session.
+
+— Defender (Arianna Method, phone-1)
