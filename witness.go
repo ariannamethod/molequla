@@ -101,7 +101,34 @@ type witnessSnapshot struct {
 	Alerts     []string                    `json:"alerts,omitempty"`
 	DNA        map[string]witnessDNASource `json:"dna,omitempty"`
 	DNAEvents  []string                    `json:"dna_events,omitempty"`
+	World      *witnessWorld               `json:"world,omitempty"`
 	SchemaNote string                      `json:"schema_note,omitempty"`
+}
+
+// witnessWorld is the world ledger seen from the witness: how many facts it
+// holds, how many of them are still open, and when it last learned something.
+// Read through the query_only handle; the writer is `molequla --world-ingest`.
+type witnessWorld struct {
+	Facts    int     `json:"facts"`
+	Open     int     `json:"open"`
+	Recorded float64 `json:"newest_recorded_at,omitempty"`
+}
+
+// witnessReadWorld returns nil when world_facts does not exist — a node whose
+// senses have never written a fact has no world memory, which is a state and
+// not an error.
+func witnessReadWorld(db *sql.DB) *witnessWorld {
+	var w witnessWorld
+	var open sql.NullInt64
+	var recorded sql.NullFloat64
+	err := db.QueryRow(`SELECT COUNT(*), SUM(valid_to IS NULL), MAX(recorded_at) FROM world_facts`).
+		Scan(&w.Facts, &open, &recorded)
+	if err != nil || w.Facts == 0 {
+		return nil
+	}
+	w.Open = int(open.Int64)
+	w.Recorded = recorded.Float64
+	return &w
 }
 
 // witnessState is what persists between ticks: the entropy history the
@@ -431,6 +458,9 @@ func (s witnessSnapshot) line() string {
 	if len(s.DNAEvents) > 0 {
 		fmt.Fprintf(&b, " | %s", strings.Join(s.DNAEvents, "; "))
 	}
+	if s.World != nil {
+		fmt.Fprintf(&b, " | world %d facts/%d open", s.World.Facts, s.World.Open)
+	}
 	if len(s.Alerts) > 0 {
 		fmt.Fprintf(&b, "  !! %s", strings.Join(s.Alerts, "; "))
 	}
@@ -478,6 +508,12 @@ func runWitness(interval float64, once bool) int {
 			}
 			snap = w.observe(now, orgs, dna)
 		}
+		// The world ledger, read only (ROADMAP 10). The writer is a separate
+		// process — `molequla --world-ingest`, world_ledger.go — because this
+		// handle carries PRAGMA query_only and the §11 arrow says it keeps
+		// carrying it. The witness says how large the world's memory is and
+		// how much of it is still open; it does not touch a row of it.
+		snap.World = witnessReadWorld(db)
 		if once {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")

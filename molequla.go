@@ -82,6 +82,27 @@ type Config struct {
 	// TickJitterSeconds — random extra sleep per tick so sibling processes do
 	// not scan the DNA tree in lockstep.
 	TickJitterSeconds float64 `json:"tick_jitter_seconds"`
+	// WorldFactsPath — the structured sidecar the senses write beside their
+	// prose fragments (phone1/senses.sh → $MOLEQULA_RUN/senses/facts.jsonl),
+	// which the witness ingests into the bitemporal world_facts table. The
+	// path is relative to the witness's working directory, like ../dna/output.
+	// Empty disables the ledger; a path that does not exist yet is waited for.
+	WorldFactsPath string `json:"world_facts_path"`
+	// WorldMoveMeters — how far a position fix must move before the ledger
+	// calls it a different position. The same 50 m senses.sh compares against
+	// senses/place.last, against a network fix that reports 13-14 m of
+	// accuracy on phone-1; below it, a still phone would emit a change line
+	// every pass out of nothing but fix noise.
+	WorldMoveMeters float64 `json:"world_move_meters"`
+	// WorldPersonWords — the lexical vocabulary behind the derived
+	// `sees_person` fact, which is what turns two unrelated camera sentences
+	// into "a person entered the frame". Empty turns the derivation off.
+	WorldPersonWords []string `json:"world_person_words"`
+	// WorldNegationWords — a word of the vocabulary above does not count when
+	// one of these stands immediately before it. The eye says "with no people
+	// or text visible" about an empty room and the first live run read a
+	// person into exactly that sentence.
+	WorldNegationWords []string `json:"world_negation_words"`
 
 	// model
 	TieEmbeddings bool `json:"tie_embeddings"`
@@ -274,6 +295,11 @@ var CFG = Config{
 	DNARetainSeconds:     1800, // repair 3: the writer prunes its own fragments after 30 min
 	DNARetainFiles:       256,  // repair 5: and keeps at most 256 of them (~1.3 MB at 5 KB each). Tunable; 0 disables.
 	TickJitterSeconds:    0.05, // repair 3: de-phase sibling scans
+	WorldFactsPath:       "../senses/facts.jsonl", // what the organs write beside their fragments
+	WorldMoveMeters:      50,   // the move gate, same as senses.sh's SENSES_MOVE_M
+	WorldPersonWords: []string{"person", "people", "man", "men", "woman", "women",
+		"child", "children", "someone", "somebody", "hand", "hands", "face", "figure"},
+	WorldNegationWords: []string{"no", "not", "without", "none", "nobody", "empty"},
 	TieEmbeddings:        true,
 	NLayer:               1,
 	NEmbd:                16,
@@ -6520,6 +6546,26 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 			i++
 		} else if os.Args[i] == "--once" {
 			witnessOnce = true
+		} else if os.Args[i] == "--world-ingest" {
+			// The world ledger's writer (world_ledger.go): reads the facts
+			// the senses appended, files them into world_facts, closes what
+			// they contradict and leaves the changes in ../dna/output/world/.
+			// Its own process on purpose — the witness's mesh handle is
+			// query_only and stays that way.
+			worldIngestMode = true
+		} else if os.Args[i] == "--world-facts" && i+1 < len(os.Args) {
+			// Where the senses write their structured sidecar
+			// (world_ledger.go). An empty argument turns the world ledger
+			// off: the witness then reads the field and says what it sees,
+			// and writes nothing at all, as it did before ROADMAP 10.
+			CFG.WorldFactsPath = strings.TrimSpace(os.Args[i+1])
+			i++
+		} else if os.Args[i] == "--world-move-meters" && i+1 < len(os.Args) {
+			// The gate between a fix that wandered and a phone that moved.
+			if v, err := strconv.ParseFloat(os.Args[i+1], 64); err == nil && v >= 0 {
+				CFG.WorldMoveMeters = v
+			}
+			i++
 		} else if os.Args[i] == "--max-organisms" && i+1 < len(os.Args) {
 			// Hard ceiling on the live colony, the cascade governor's admit
 			// count. The default 16 was written for a pod; a phone passes 4.
@@ -7033,6 +7079,13 @@ func main() {
 	// Witness mode: no model, no training, no GPU — read and say (repair 7).
 	if witnessMode {
 		os.Exit(runWitness(witnessInterval, witnessOnce))
+	}
+
+	// World-ingest mode: no model either. The one process in the tree that
+	// writes world_facts (ROADMAP 10, world_ledger.go), run by senses.sh at
+	// the end of a pass and by the scheduler on its own.
+	if worldIngestMode {
+		os.Exit(runWorldIngest(witnessInterval, witnessOnce))
 	}
 
 	// (repair 10) Arm the shutdown before anything trains. The handler used to
