@@ -284,6 +284,15 @@ type Config struct {
 	NotorchLR        float64 `json:"notorch_lr"`        // learning rate for notorch step
 	NotorchDecay     float64 `json:"notorch_decay"`     // adaptive weight decay
 	CoordinateWarmup bool    `json:"coordinate_warmup"` // true = warmup through training queue (for Mac 8GB)
+
+	// the cafeteria (new logic §12/§14) — see experience_routing.go
+	ExperienceRouting             bool    `json:"experience_routing"`               // false = the old byte-identical broadcast
+	ExperienceCoverageSampleBytes int     `json:"experience_coverage_sample_bytes"` // bytes of a fragment the coverage is taken over, strided
+	ExperienceResonanceHigh       float64 `json:"experience_resonance_high"`        // bigram coverage at or above which a fragment is already this organism's language
+	ExperienceNoveltyLow          float64 `json:"experience_novelty_low"`           // coverage at or below which it is news
+	ExperienceMinPairs            int     `json:"experience_min_pairs"`             // fewer measured token pairs than this = unmeasurable = food
+	ExperienceMaxMeasuredPerTick  int     `json:"experience_max_measured_per_tick"` // coverage measurements one dnaRead may spend; a decline costs no read budget, only this
+	ExperienceMealMemory          int     `json:"experience_meal_memory"`           // fragments kept as "what was just eaten"
 }
 
 var CFG = Config{
@@ -422,6 +431,17 @@ var CFG = Config{
 
 	NotorchLR:    0.01,
 	NotorchDecay: 0.999,
+
+	// The cafeteria. Every default below is a quantile of a distribution
+	// measured on the live run 2026-09-15 (four corpora x 133 fragments;
+	// MOLEQULALOG2.md 2026-09-15) and every one is a knob that can be moved.
+	ExperienceRouting:             true,
+	ExperienceCoverageSampleBytes: 480,   // 4 windows of 120 B: sibling quartiles preserved to 0.006 against the whole fragment, 22 ms/call instead of 144
+	ExperienceResonanceHigh:       0.965, // the median of the sibling-DNA coverage distribution (n=120, min 0.909, p25 0.952, med 0.965, p75 0.975, max 0.996)
+	ExperienceNoveltyLow:          0.620, // the median of the senses coverage distribution (n=52, min 0.427, p25 0.578, med 0.620, p75 0.651, max 0.736)
+	ExperienceMinPairs:            16,    // below this the coverage of a fragment is noise; a shorter fragment is eaten, not judged
+	ExperienceMaxMeasuredPerTick:  8,     // 8 x 21.7 ms of coverage against a 250 ms tick; the two read budgets are 8 + 4, so this is already fewer measurements than they were making. Tunable; 0 disables.
+	ExperienceMealMemory:          16,    // two ticks of the sibling read budget (DNAMaxReadsPerTick 8)
 }
 
 // headTypesForNHead returns the head type list for a given number of heads.
@@ -6202,6 +6222,11 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	if element == "" || len(docs) == 0 {
 		return
 	}
+	// Publish the field and tokenizer the organism is speaking with, so the
+	// cafeteria in experience_routing.go judges the fragments dnaRead is about
+	// to offer (one line below, same tick) against this same state.
+	experienceRouting.observe(field, tok)
+
 	probes := []string{
 		"What do you feel?", "Tell me about yourself.",
 		"What is truth?", "What matters?",
@@ -6296,7 +6321,18 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 	}
 	var consumed []string
 	moved := false
+	// Coverage costs a BPE encode of the sampled fragment — 21.7 ms on cores
+	// 4-7 (MOLEQULALOG2.md, 2026-09-15). A declined fragment costs one of these
+	// and no read budget, so this is what bounds the work a tick can spend
+	// deciding rather than eating; when it is spent the loop stops with the
+	// cursors where they are and the rest is examined next tick.
+	measured := 0
+	measuredCap := CFG.ExperienceMaxMeasuredPerTick
+	if measuredCap <= 0 {
+		measuredCap = 1 << 30
+	}
 
+reading:
 	for _, src := range dnaSources(element) {
 		left := &siblingLeft
 		if isExtra[src] {
@@ -6315,13 +6351,35 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 			if err != nil {
 				continue
 			}
-			*left--
 			text := strings.TrimSpace(string(data))
 			if len(text) < CFG.DNAMinFragmentBytes {
+				*left-- // a read happened; it was not food
 				cur.Last[src] = name // too short to be food; step past it, do not delete
 				moved = true
 				continue
 			}
+			// The cafeteria (experience_routing.go): this organism's own plate,
+			// decided from the fragment's name and its coverage under this
+			// organism's own field. A declined plate advances the cursor — the
+			// fragment is not eaten and is not looked at again — and it does
+			// NOT spend a read from either budget: those two bound how much an
+			// organism EATS per tick, and a colony that declines a third of
+			// what it is offered would otherwise starve on a backlog. What a
+			// decline does cost is a coverage measurement, and that is what
+			// ExperienceMaxMeasuredPerTick bounds instead.
+			ok, why, _ := experienceRouting.admits(element, src, name, text)
+			if why != "owner" && why != "broadcast" {
+				measured++
+			}
+			if !ok {
+				cur.Last[src] = name
+				moved = true
+				if measured >= measuredCap {
+					break reading
+				}
+				continue
+			}
+			*left--
 			// Append to own corpus — the organism eats another's words, cut
 			// into corpus lines so that the whole fragment survives
 			// loadCorpusLines instead of its first CFG.MaxLineChars bytes
@@ -6360,6 +6418,12 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 			// accident of the append and different by 20× in fact; now they
 			// differ only by the whitespace between sentences.
 			added += wrote
+			// What was just eaten shapes what is said next (§14) — see
+			// dnaWrite. The meal is the lines that were appended, not the
+			// fragment they were cut from: those lines are what loadCorpusLines
+			// will hand back, so they are what the padding must be able to
+			// recognise.
+			experienceRouting.remember(src, lines, experienceIsExtraSource(src))
 			consumed = append(consumed, fmt.Sprintf("%s/%s", src, name))
 			if qbuf != nil && tok != nil {
 				qbuf.Feed(text, tok)
