@@ -286,6 +286,20 @@ type Config struct {
 	NotorchDecay     float64 `json:"notorch_decay"`     // adaptive weight decay
 	CoordinateWarmup bool    `json:"coordinate_warmup"` // true = warmup through training queue (for Mac 8GB)
 
+	// Step 1 of docs/resonator_design.md: burst admission. CoordinateGrowth
+	// already keeps two stage transitions apart, but the micro-bursts of four
+	// organisms run concurrently and each one builds its own tape — 139.7 MB of
+	// live C tensors at the backward and an arena that reached 214-352 MB at a
+	// burst peak (design §1.1, §1.3, measured by tape census and mallinfo2).
+	// With SerialBursts the training phases of a colony are serialized on
+	// training_lock, so one tape exists at a time. What is NOT serialized is the
+	// tick: the 2026-06-03 wall was the lock's `continue` skipping the whole
+	// tick body — DNA exchange and the ontogenesis clock with it — and freezing
+	// three of four organisms for twelve minutes. Only the burst waits.
+	SerialBursts            bool    `json:"serial_bursts"`              // one training phase in the colony at a time. Off = four tapes at once, which is right on a GPU host (4 concurrent organisms, 99% util measured 2026-06-03) and wrong on a phone.
+	TrainingLockTTLSeconds  float64 `json:"training_lock_ttl_seconds"`  // how long a training_lock row stands without a refresh. 30 s, the value the lock has carried since it was written, and about four times the measured stage-4 burst of 7 400 ms (design §1.1). The holder re-stamps three times inside it, so this bounds a dead holder, not a slow one.
+	TrainingTurnPollSeconds float64 `json:"training_turn_poll_seconds"` // how often a waiting organism re-asks. 0.5 s against that 7 400 ms burst: fourteen polls per turn, and at most half a second of a freed tape going unused.
+
 	// the cafeteria (new logic §12/§14) — see experience_routing.go
 	ExperienceRouting             bool    `json:"experience_routing"`               // false = the old byte-identical broadcast
 	ExperienceCoverageSampleBytes int     `json:"experience_coverage_sample_bytes"` // bytes of a fragment the coverage is taken over, strided
@@ -423,6 +437,16 @@ var CFG = Config{
 	GrowthMinFreeMB:        256,  // headroom left to the machine after one stage step. Tunable; 0 disables.
 	GrowthPeakFactorPct:    300,  // a stage step multiplied VmHWM by ~3.3-3.9x on 2026-09-13 (231-240 MB -> 758-928 MB per organism); charge 300% of the current peak for the increment.
 	CoordinateGrowth:       true, // growth + warmup serialized colony-wide; the micro-burst path stays parallel (that is CoordinateWarmup, still off).
+	// Step 1 of the resonator design. There is no host-profile mechanism in this
+	// tree: CFG is one compiled-in set of defaults and the phone differs from a
+	// pod only by the flags phone1/launch.sh passes (--max-organisms 4,
+	// --max-growth-stage, taskset -c 4-7). So the default is what the phone
+	// needs, and a GPU host turns it off with --no-serial-bursts — the reverse
+	// of CoordinateWarmup, which defaulted to the pod and left the phone to
+	// discover the cost.
+	SerialBursts:            true,
+	TrainingLockTTLSeconds:  30.0,
+	TrainingTurnPollSeconds: 0.5,
 	OomScoreAdj:            300,  // lmkd takes the organism before Termux (which sits at 0). Tunable; 0 = leave untouched.
 	TrimHeapAfterTrain:     true, // one malloc_trim per training phase, where nothing is in flight; false leaves the arena alone.
 	CheckpointMinInterval:  30.0, // throttle periodic full-model checkpoints to ≤1/30s (coalesces the growth/burst storm). Tunable; 0 disables. Mitosis ckpt (explicit path) bypasses.
@@ -5702,6 +5726,8 @@ type SwarmRegistry struct {
 	meshErrSaid map[string]bool
 	growthMu    sync.Mutex
 	growthStop  chan struct{} // closed by ReleaseGrowthLock; stops the lock refresher (repair 9)
+	trainMu     sync.Mutex
+	trainStop   chan struct{} // closed by ReleaseTrainingLock; stops the lock refresher (resonator step 1)
 }
 
 // StartKeeper launches the heartbeat keeper: from now until stop closes, the
@@ -5799,6 +5825,19 @@ func (sr *SwarmRegistry) initMeshDB() error {
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS training_lock(
 		organism_id TEXT PRIMARY KEY, acquired_at REAL)`)
+	if err != nil {
+		db.Close()
+		return err
+	}
+	// The queue behind training_lock (resonator design §2.3, step 1). The lock
+	// says who is training; this says who is waiting, since when, and how badly,
+	// so the turn goes by the order of §2.3 instead of to whichever process
+	// happened to poll first. `since` is when the organism joined the queue and
+	// is what makes the order fair; `seen` is re-stamped on every poll, so an
+	// organism killed while waiting stops blocking its siblings after one TTL
+	// instead of forever.
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS training_queue(
+		organism_id TEXT PRIMARY KEY, since REAL, seen REAL, priority INTEGER)`)
 	if err != nil {
 		db.Close()
 		return err
@@ -5991,36 +6030,186 @@ func (sr *SwarmRegistry) Unregister() {
 	}
 }
 
-// AcquireTrainingLock attempts to acquire the training lock in mesh.db.
-// Returns true if lock acquired, false if another organism holds a fresh lock (< 30s).
+// The two priorities of the queue (resonator design §2.3). The design names
+// three keys in order: an organism that has just grown and is at stage N+1
+// untrained, then the steepest loss trend, then the longest wait. The middle
+// key is not implemented and the reason is a fact about the schema rather than
+// a choice: the ordering key §2.3 names is the mean of the last eight burst
+// deltas, which lives in SyntropyTracker.BurstHistory inside each process, and
+// the mesh column that looks like it — `syntropy` — is the entropy trend
+// (molequla.go, SyntropyTrend = oldMean - newMean over EntropyHistory), not the
+// loss trend. Publishing the loss trend would be another column, and step 0 is
+// the only column this work adds. So the order here is: grown-and-unwarmed
+// first, everyone else longest-wait first.
+const (
+	trainTurnBurst = 0 // an ordinary micro-burst
+	trainTurnGrown = 1 // a stage transition's warmup: at stage N+1 and untrained
+)
+
+// trainingLockRefreshSeconds is the TTL divided so that three refreshes fall
+// inside it: two lost ones still cannot expire a holder that is alive.
+func trainingLockRefreshSeconds() float64 {
+	ttl := CFG.TrainingLockTTLSeconds
+	if ttl <= 0 {
+		ttl = 30.0
+	}
+	return ttl / 3.0
+}
+
+// AcquireTrainingLock attempts to acquire the training lock in mesh.db without
+// joining the queue: the turn goes to whoever asks first. Kept for the callers
+// that only need mutual exclusion; the admission gate is AcquireTrainingTurn.
 func (sr *SwarmRegistry) AcquireTrainingLock() bool {
+	return sr.AcquireTrainingTurn(trainTurnBurst, false)
+}
+
+// AcquireTrainingTurn is the burst admission gate of step 1: one training phase
+// in the colony at a time, and the turn goes by the order of §2.3 rather than
+// to whichever process polled first. With queued=false it is the bare lock.
+//
+// One statement, as the lock has always been: a TOCTOU race between "am I the
+// head of the queue" and "take the lock" would hand the tape to two organisms.
+// On success a refresher re-stamps the row until Release, so the TTL bounds a
+// holder that died and not one that is merely slow — the shape AcquireGrowthLock
+// already uses for the minutes-long growth event.
+func (sr *SwarmRegistry) AcquireTrainingTurn(priority int, queued bool) bool {
 	if sr.MeshDB == nil {
 		return true // no mesh = solo, always proceed
 	}
 	now := float64(time.Now().UnixMilli()) / 1000.0
-	cutoff := now - 30.0 // lock expires after 30 seconds
-
-	// Atomic check-and-acquire: single statement prevents TOCTOU race.
-	// INSERT succeeds only if no fresh lock exists from another organism.
-	result, err := sr.MeshDB.Exec(
-		`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
-		 SELECT ?, ? WHERE NOT EXISTS (
-		   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
-		 )`,
-		sr.OrganismID, now, sr.OrganismID, cutoff)
+	ttl := CFG.TrainingLockTTLSeconds
+	if ttl <= 0 {
+		ttl = 30.0
+	}
+	cutoff := now - ttl
+	if queued {
+		// Join the queue, or re-stamp the row if this organism is already in it.
+		// `since` is written once and never moved while the organism waits: it
+		// is the longest-wait key, and a poll that refreshed it would make a
+		// waiter that polls often the youngest waiter there is.
+		sr.MeshDB.Exec(
+			"INSERT OR IGNORE INTO training_queue(organism_id, since, seen, priority) VALUES(?,?,?,?)",
+			sr.OrganismID, now, now, priority)
+		sr.MeshDB.Exec("UPDATE training_queue SET seen=?, priority=? WHERE organism_id=?",
+			now, priority, sr.OrganismID)
+	}
+	var result sql.Result
+	var err error
+	if queued {
+		result, err = sr.MeshDB.Exec(
+			`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
+			 SELECT ?, ? WHERE NOT EXISTS (
+			   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
+			 ) AND NOT EXISTS (
+			   SELECT 1 FROM training_queue q, training_queue me
+			   WHERE me.organism_id = ? AND q.organism_id != me.organism_id AND q.seen > ?
+			     AND (q.priority > me.priority
+			          OR (q.priority = me.priority AND q.since < me.since))
+			 )`,
+			sr.OrganismID, now, sr.OrganismID, cutoff, sr.OrganismID, cutoff)
+	} else {
+		// Atomic check-and-acquire: single statement prevents TOCTOU race.
+		// INSERT succeeds only if no fresh lock exists from another organism.
+		result, err = sr.MeshDB.Exec(
+			`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
+			 SELECT ?, ? WHERE NOT EXISTS (
+			   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
+			 )`,
+			sr.OrganismID, now, sr.OrganismID, cutoff)
+	}
 	if err != nil {
 		return false
 	}
 	rows, _ := result.RowsAffected()
-	return rows > 0
+	if rows <= 0 {
+		return false
+	}
+	sr.startTrainingRefresh()
+	return true
 }
 
-// ReleaseTrainingLock releases the training lock in mesh.db.
+// RefreshTrainingLock re-stamps the holder's row. A row that is not the holder's
+// is never touched, so a refresh cannot steal a lock.
+func (sr *SwarmRegistry) RefreshTrainingLock() {
+	if sr.MeshDB == nil {
+		return
+	}
+	sr.MeshDB.Exec("UPDATE training_lock SET acquired_at=? WHERE organism_id=?",
+		float64(time.Now().UnixMilli())/1000.0, sr.OrganismID)
+}
+
+func (sr *SwarmRegistry) startTrainingRefresh() {
+	sr.trainMu.Lock()
+	defer sr.trainMu.Unlock()
+	if sr.trainStop != nil {
+		return // already refreshing
+	}
+	stop := make(chan struct{})
+	sr.trainStop = stop
+	go func() {
+		t := time.NewTicker(time.Duration(trainingLockRefreshSeconds() * float64(time.Second)))
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				sr.RefreshTrainingLock()
+			}
+		}
+	}()
+}
+
+// ReleaseTrainingLock releases the training lock in mesh.db, stops the refresher
+// and leaves the queue: the organism that has just trained goes to the back.
 func (sr *SwarmRegistry) ReleaseTrainingLock() {
+	sr.trainMu.Lock()
+	if sr.trainStop != nil {
+		close(sr.trainStop)
+		sr.trainStop = nil
+	}
+	sr.trainMu.Unlock()
 	if sr.MeshDB == nil {
 		return
 	}
 	sr.MeshDB.Exec("DELETE FROM training_lock WHERE organism_id=?", sr.OrganismID)
+	sr.MeshDB.Exec("DELETE FROM training_queue WHERE organism_id=?", sr.OrganismID)
+}
+
+// WaitTrainingTurn blocks until this organism is admitted to a training phase,
+// polling every CFG.TrainingTurnPollSeconds. It returns false only when the
+// process is shutting down, and it is called from inside the burst and the
+// warmup — never around the tick body. That distinction is the whole of the
+// 2026-06-03 wall: the lock's `continue` skipped DNA exchange and the
+// ontogenesis clock along with the burst, and three of four organisms made no
+// tick at all for twelve minutes while the fourth trained (PROJECT_LOG.md,
+// "Two more walls past the GPU fix"). Here the tick has already happened; what
+// waits is the tape.
+func (sr *SwarmRegistry) WaitTrainingTurn(priority int, what string) bool {
+	if sr == nil || sr.MeshDB == nil {
+		return true
+	}
+	poll := CFG.TrainingTurnPollSeconds
+	if poll <= 0 {
+		poll = 0.5
+	}
+	t0 := time.Now()
+	said := false
+	for !sr.AcquireTrainingTurn(priority, true) {
+		if trainAborting() {
+			sr.MeshDB.Exec("DELETE FROM training_queue WHERE organism_id=?", sr.OrganismID)
+			return false
+		}
+		if !said {
+			fmt.Printf("[trainer] %s waits for the colony's training turn\n", what)
+			said = true
+		}
+		time.Sleep(time.Duration(poll * float64(time.Second)))
+	}
+	if said {
+		fmt.Printf("[trainer] %s admitted after %.1fs of waiting\n", what, time.Since(t0).Seconds())
+	}
+	return true
 }
 
 // The growth lock is the training lock's shape over a longer event. Growth and
@@ -6896,6 +7085,14 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 				CFG.WorldMoveMeters = v
 			}
 			i++
+		} else if os.Args[i] == "--serial-bursts" || os.Args[i] == "--no-serial-bursts" {
+			// Burst admission, resonator design step 1. On by default: four
+			// concurrent tapes are 139.7 MB of live C tensors each plus four
+			// arenas that reached 214-352 MB at a burst peak, which is the
+			// colony this phone cannot hold. A GPU host wants the opposite —
+			// four organisms at 99% util, measured 2026-06-03 — and passes
+			// --no-serial-bursts.
+			CFG.SerialBursts = os.Args[i] == "--serial-bursts"
 		} else if os.Args[i] == "--max-organisms" && i+1 < len(os.Args) {
 			// Hard ceiling on the live colony, the cascade governor's admit
 			// count. The default 16 was written for a pod; a phone passes 4.
@@ -7023,12 +7220,17 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		// Per-stage warmup: if model grew since last warmup, train before continuing
 		currentStage := model.CurrentGrowthStage()
 		if currentStage > model.lastWarmupStage && len(docs) > 0 {
-			// Optional warmup coordination through training queue (for Mac 8GB)
+			// Warmup coordination through the training queue. Under SerialBursts
+			// (resonator step 1) this is the same admission gate the bursts go
+			// through, so "one training phase in the colony at a time" covers
+			// the warmup too — without it a warmup's tape and a sibling's burst
+			// tape are alive together, which is two of the four copies the step
+			// exists to remove. The warmup enters at trainTurnGrown: §2.3's
+			// first key is the organism that has grown and is at stage N+1
+			// untrained, and it is already holding the growth lock.
 			warmupLocked := false
-			if CFG.CoordinateWarmup && swarm != nil {
-				for !swarm.AcquireTrainingLock() {
-					time.Sleep(5 * time.Second)
-				}
+			if swarm != nil && (CFG.SerialBursts || CFG.CoordinateWarmup) {
+				swarm.WaitTrainingTurn(trainTurnGrown, "warmup")
 				warmupLocked = true
 			}
 
@@ -7075,17 +7277,6 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 		}
 
 		if model.lastWarmupStage >= 0 && qbuf.ShouldTrigger() && len(docs) > 0 {
-			// Training queue: acquire lock before micro-burst (swarm coordination)
-			// Cooperative training-lock serialization is for memory-constrained
-			// nodes (Mac 8GB) — gated on CoordinateWarmup. On GPU (handles 4
-			// concurrent orgs, 99% util observed) it must be OFF: the lock's
-			// `continue` skipped the WHOLE tick (DNA exchange + ontogenesis clock,
-			// not just the burst), freezing 3 of 4 orgs while one held the lock
-			// (2026-06-03). With CoordinateWarmup=false all orgs train in parallel.
-			if swarm != nil && CFG.CoordinateWarmup && !swarm.AcquireTrainingLock() {
-				continue // someone else is training, skip this tick
-			}
-
 			snapBytes, snapNovelty := qbuf.SnapshotStats()
 			fmt.Printf("[trainer] micro-train burst (%d bytes, novelty %.2f) — and lo, it feeds again.\n",
 				snapBytes, snapNovelty)
@@ -7125,9 +7316,31 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// Apply syntropy-adjusted learning rate for notorch (local var, not mutating CFG)
 			burstLR := CFG.NotorchLR * lrMul
 
+			// Burst admission (resonator design step 1), around the tape and
+			// nothing else. The tick body above has already run — DNA read and
+			// written, the ontogenesis clock advanced, generation done — and so
+			// has this burst's own measurement, which costs one forward pass and
+			// not the 139.7 MB of live C tensors a backward builds. What waits
+			// here is the tape alone. That placement is the correction to
+			// 2026-06-03, where the same lock's `continue` skipped the whole tick
+			// and froze three of four organisms for twelve minutes: the failure
+			// was where the lock was taken, not that it was taken. Measured on
+			// this phone 2026-09-15: with the gate around the whole block instead
+			// of the tape, a sibling waited 224.0s for a burst of 10.4s.
+			burstTurn := swarm != nil && (CFG.SerialBursts || CFG.CoordinateWarmup)
+			if burstTurn {
+				swarm.WaitTrainingTurn(trainTurnBurst, "burst")
+			}
 			// notorch: gradient-free delta training (no backward pass, no compute graph)
 			ntBurstTrain(model, tok, docs, CFG.MicroSteps, burstLR)
 			memSnapshot("burst")
+			// Released before the loss is measured again and before the
+			// checkpoint is written: the tape is gone by here, and holding a
+			// colony-wide turn across a 110 MB JSON write buys the colony
+			// nothing and costs the next organism its tick.
+			if burstTurn {
+				swarm.ReleaseTrainingLock()
+			}
 
 			model.mu.Lock()
 			// Measure loss after burst
@@ -7155,10 +7368,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			}
 			model.mu.Unlock()
 
-			// Training queue: release lock after burst completes
-			if swarm != nil {
-				swarm.ReleaseTrainingLock()
-			}
+			// The turn was released above, the moment the tape was freed.
 
 			qbuf.Reset()
 
