@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -246,5 +248,111 @@ func TestWaitTrainingTurnBlocksUntilTheTurnIsFree(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("the waiter never woke after the release")
+	}
+}
+
+// The gate of step 1 as the design states it — "no two [notorch] burst complete
+// lines overlap in wall time" — over the admission code itself rather than over
+// a session. It is stated over a session in the design, and a session is where
+// it was first tried: two stage-4 organisms from the live checkpoints, 540 s,
+// produced one burst each (2026-09-15, MOLEQULALOG2), because the burst cadence
+// of an adult is one in several minutes. A gate that needs a two-hour run to
+// have any power is not a gate anyone will re-run when they change the lock.
+// Here four organisms take turns on one mesh, each phase is timed by the same
+// clock that stamps the burst line, and the assertion is the design's: no two
+// phases from different organisms intersect.
+type trainPhase struct {
+	org        string
+	start, end time.Time
+}
+
+func runTrainingPhases(t *testing.T, gated bool, orgs []*SwarmRegistry, rounds int, phase time.Duration) []trainPhase {
+	t.Helper()
+	var mu sync.Mutex
+	var out []trainPhase
+	var wg sync.WaitGroup
+	for _, sr := range orgs {
+		wg.Add(1)
+		go func(sr *SwarmRegistry) {
+			defer wg.Done()
+			for i := 0; i < rounds; i++ {
+				if gated {
+					sr.WaitTrainingTurn(trainTurnBurst, "burst")
+				}
+				start := time.Now()
+				time.Sleep(phase) // stands for ntBurstTrain: the tape is alive here
+				p := trainPhase{sr.OrganismID, start, time.Now()}
+				if gated {
+					sr.ReleaseTrainingLock()
+				}
+				mu.Lock()
+				out = append(out, p)
+				mu.Unlock()
+			}
+		}(sr)
+	}
+	wg.Wait()
+	return out
+}
+
+// overlaps counts pairs of phases from different organisms that intersect in
+// wall time — the same arithmetic as reading start=/end= off four stdout files.
+func overlaps(ps []trainPhase) (int, string) {
+	n := 0
+	first := ""
+	for i := range ps {
+		for j := i + 1; j < len(ps); j++ {
+			if ps[i].org == ps[j].org {
+				continue
+			}
+			lo, hi := ps[i].start, ps[j].end
+			if ps[j].start.After(lo) {
+				lo = ps[j].start
+			}
+			if ps[i].end.Before(hi) {
+				hi = ps[i].end
+			}
+			if hi.After(lo) {
+				n++
+				if first == "" {
+					first = fmt.Sprintf("%s and %s overlapped for %v", ps[i].org, ps[j].org, hi.Sub(lo))
+				}
+			}
+		}
+	}
+	return n, first
+}
+
+func TestNoTwoTrainingPhasesOverlap(t *testing.T) {
+	savedPoll := CFG.TrainingTurnPollSeconds
+	CFG.TrainingTurnPollSeconds = 0.05
+	defer func() { CFG.TrainingTurnPollSeconds = savedPoll }()
+	orgs := trainingTurnMesh(t, "earth", "air", "water", "fire")
+
+	// The control first: without the gate, four organisms that all want the tape
+	// at once get it at once. If this arm does not overlap, the measurement
+	// below proves nothing and the test says so instead of passing.
+	loose := runTrainingPhases(t, false, orgs, 3, 40*time.Millisecond)
+	if n, _ := overlaps(loose); n == 0 {
+		t.Fatalf("the ungated arm produced no overlap in %d phases — this gate cannot tell the two apart", len(loose))
+	} else {
+		t.Logf("ungated: %d overlapping cross-organism pairs in %d phases", n, len(loose))
+	}
+
+	gated := runTrainingPhases(t, true, orgs, 3, 40*time.Millisecond)
+	if n, first := overlaps(gated); n != 0 {
+		t.Fatalf("%d overlapping pairs in %d gated phases: %s", n, len(gated), first)
+	}
+	if len(gated) != 12 {
+		t.Fatalf("%d gated phases ran, want 12 — an organism was starved", len(gated))
+	}
+	byOrg := map[string]int{}
+	for _, p := range gated {
+		byOrg[p.org]++
+	}
+	for _, sr := range orgs {
+		if byOrg[sr.OrganismID] != 3 {
+			t.Fatalf("%s got %d turns, want 3 — starvation is a bug, not a policy", sr.OrganismID, byOrg[sr.OrganismID])
+		}
 	}
 }

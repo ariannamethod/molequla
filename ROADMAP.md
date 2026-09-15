@@ -153,7 +153,27 @@ is long — an organism lives for months of sessions, not for one uptime.
    Order and gates in the document, smallest first: the peak-RSS column the
    policy needs and does not have, the burst admission gate, a GGUF checkpoint
    beside the JSON one, sleep as a mapping, the resonator process, the policy,
-   quantized sleepers last behind a voice sweep. Nothing built yet.
+   quantized sleepers last behind a voice sweep.
+
+   - **0 — `peak_rss_mb`** (`31f2d25`, Defender, 2026-09-15). The column the
+     policy of §4.2 needs and the mesh did not have: `ownPeakRSSMB()` on the
+     heartbeat, one idempotent ALTER beside `gen_mag` and `overlay_fade`, the
+     keeper carrying it through a warmup, the witness printing it per organism
+     as `/pN`. Gates: a fresh mesh and a mesh created without the column both
+     end with it, four live organisms show four non-zero peaks, and the schema
+     alert stays quiet. It decides nothing on its own; steps 4 and 5 read it.
+   - **1 — burst admission** (`ea35094` + `bcc6bdc`, Defender, 2026-09-15). `training_lock`
+     promoted from an optional flag to the colony's admission gate behind
+     `CFG.SerialBursts` (default on; `--no-serial-bursts` for a GPU host), with
+     a queue table for the order of §2.3, the growth lock's refresher so a TTL
+     bounds a dead holder and not a slow one, and the burst line carrying
+     `start=`/`end=` so overlap is a fact anyone can check. Only the burst
+     waits: the tick body is not skipped, which is the 2026-06-03 wall. Order
+     is grown-and-unwarmed first, then longest wait — §2.3's middle key, the
+     loss trend, is not implemented because the mesh has no column for it and
+     step 0 is the only column this work adds.
+   - Next: step 2, the GGUF writer and a mappable checkpoint beside the JSON
+     one. Nothing beyond step 1 is built.
 
 ## Later
 
