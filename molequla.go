@@ -5760,7 +5760,8 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		last_heartbeat REAL, parent_id TEXT,
 		status TEXT DEFAULT 'alive',
 		element TEXT, global_step INTEGER,
-		gen_mag REAL, overlay_fade REAL)`)
+		gen_mag REAL, overlay_fade REAL,
+		peak_rss_mb INTEGER)`)
 	// Migrations for existing databases
 	db.Exec("ALTER TABLE organisms ADD COLUMN element TEXT")
 	db.Exec("ALTER TABLE organisms ADD COLUMN global_step INTEGER") // repair 7: age in training steps, for the witness and for gates
@@ -5775,6 +5776,16 @@ func (sr *SwarmRegistry) initMeshDB() error {
 	// outcome and is discarded like the two before it.
 	db.Exec("ALTER TABLE organisms ADD COLUMN gen_mag REAL")
 	db.Exec("ALTER TABLE organisms ADD COLUMN overlay_fade REAL")
+	// Step 0 of docs/resonator_design.md: the organism's own high-water resident
+	// set, in MB. §4.2 of that document reads the schema rather than assuming it
+	// and finds no resident-set figure anywhere in the mesh, so every memory
+	// decision can only see the process it is made in — growthGateDecision
+	// charges three times this organism's VmHWM without any sibling's. The value
+	// exists already (ownPeakRSSMB, governor_phone.go), and this is one more
+	// idempotent ALTER of the same shape as the four above so that the colony's
+	// four peaks are one query. It is the input to the sleep policy of §4.2 and
+	// to the byte gate of §2.3; it changes no decision on its own.
+	db.Exec("ALTER TABLE organisms ADD COLUMN peak_rss_mb INTEGER")
 	if err != nil {
 		db.Close()
 		return err
@@ -5902,17 +5913,20 @@ func (sr *SwarmRegistry) sayMeshError(err error) {
 // voice (routing repair 6) — the raw transformer magnitude at the first step of
 // the last generation, and how far the corpus overlay has faded out of it.
 // Both were process-local until now, readable only in the organism's own
-// stdout, so no gate outside the process could follow the voice.
-func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int, genMag, overlayFade float64) {
+// stdout, so no gate outside the process could follow the voice. peakRSSMB is
+// the organism's own VmHWM in MB (resonator design, step 0): the same number
+// growthGateDecision already charges for, published so that a decision about
+// the colony can read the colony's peaks instead of one process's.
+func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int, genMag, overlayFade float64, peakRSSMB int64) {
 	if sr.MeshDB == nil {
 		return
 	}
 	if _, err := sr.MeshDB.Exec(
-		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=?,gen_mag=?,overlay_fade=? WHERE id=?",
-		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, genMag, overlayFade, sr.OrganismID); err != nil {
+		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=?,gen_mag=?,overlay_fade=?,peak_rss_mb=? WHERE id=?",
+		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, genMag, overlayFade, peakRSSMB, sr.OrganismID); err != nil {
 		sr.sayMeshError(err)
 	}
-	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep, genMag, overlayFade) // nil-safe; the keeper repeats this state
+	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep, genMag, overlayFade, peakRSSMB) // nil-safe; the keeper repeats this state
 }
 
 // DiscoverPeers finds other living organisms.
@@ -7270,7 +7284,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			if len(syntracker.EntropyHistory) > 0 {
 				lastEntropy = syntracker.EntropyHistory[len(syntracker.EntropyHistory)-1]
 			}
-			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs, genMag, genFade)
+			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs, genMag, genFade, ownPeakRSSMB())
 			// Update swarm info for hibernate decisions
 			peers := swarm.DiscoverPeers(60)
 			syntracker.SwarmInfo = &SwarmPeerInfo{Peers: peers}
@@ -7769,7 +7783,7 @@ func main() {
 	}
 	seedMag, seedFade := model.lastGenMag, 1-model.lastOverlayWeight
 	model.mu.Unlock()
-	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep, seedMag, seedFade)
+	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep, seedMag, seedFade, ownPeakRSSMB())
 
 	if evolution {
 		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")

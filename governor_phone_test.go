@@ -92,7 +92,7 @@ func meshForKeeperTest(t *testing.T) *sql.DB {
 	// error, though since routing 6b it says so — and this test went red on
 	// exactly that, twice now, the day a column was added. Widen it with the
 	// schema in initMeshDB.
-	if _, err := db.Exec(`CREATE TABLE organisms(id TEXT PRIMARY KEY, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, status TEXT, global_step INTEGER, gen_mag REAL, overlay_fade REAL)`); err != nil {
+	if _, err := db.Exec(`CREATE TABLE organisms(id TEXT PRIMARY KEY, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, status TEXT, global_step INTEGER, gen_mag REAL, overlay_fade REAL, peak_rss_mb INTEGER)`); err != nil {
 		db.Close()
 		t.Skipf("sqlite exec: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestBeatKeeperRefreshesMeshWithoutTicks(t *testing.T) {
 		t.Fatalf("keeper beat before any state was reported (age %.0f s)", age)
 	}
 
-	sr.Heartbeat(3, 1100000, 0.3, 0.4, 4200, 7.9, 1.0) // the tick loop reports once, then blocks
+	sr.Heartbeat(3, 1100000, 0.3, 0.4, 4200, 7.9, 1.0, 412) // the tick loop reports once, then blocks
 	time.Sleep(120 * time.Millisecond)
 	age, stage, status := heartbeatRow(t, db, "a")
 	if age > 5 {
@@ -134,6 +134,16 @@ func TestBeatKeeperRefreshesMeshWithoutTicks(t *testing.T) {
 	}
 	if stage != 3 || status != "alive" {
 		t.Fatalf("keeper sent stage=%d status=%s, want the last Heartbeat values 3/alive", stage, status)
+	}
+	// Step 0: the peak rides the keeper too, or an organism inside a
+	// multi-minute warmup reports a resident set of zero exactly while it is
+	// at its largest.
+	var peak int64
+	if err := db.QueryRow(`SELECT COALESCE(peak_rss_mb,0) FROM organisms WHERE id=?`, "a").Scan(&peak); err != nil {
+		t.Fatal(err)
+	}
+	if peak != 412 {
+		t.Fatalf("keeper sent peak_rss_mb=%d, want the last Heartbeat value 412", peak)
 	}
 
 	sr.MarkHibernating()

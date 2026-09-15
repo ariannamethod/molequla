@@ -157,6 +157,7 @@ type beatKeeper struct {
 	step    int
 	mag     float64
 	fade    float64
+	peak    int64 // VmHWM in MB (resonator design, step 0)
 	set     bool
 	stopped bool
 }
@@ -166,13 +167,13 @@ func newBeatKeeper(swarm *SwarmRegistry) *beatKeeper {
 }
 
 // Set records the latest state the tick loop reported.
-func (b *beatKeeper) Set(stage, nParams int, syn, ent float64, step int, mag, fade float64) {
+func (b *beatKeeper) Set(stage, nParams int, syn, ent float64, step int, mag, fade float64, peak int64) {
 	if b == nil {
 		return
 	}
 	b.mu.Lock()
 	b.stage, b.nParams, b.syn, b.ent, b.step, b.set = stage, nParams, syn, ent, step, true
-	b.mag, b.fade = mag, fade
+	b.mag, b.fade, b.peak = mag, fade, peak
 	b.mu.Unlock()
 }
 
@@ -194,12 +195,12 @@ func (b *beatKeeper) beat() bool {
 	}
 	b.mu.Lock()
 	stage, nParams, syn, ent, step, set, stopped := b.stage, b.nParams, b.syn, b.ent, b.step, b.set, b.stopped
-	mag, fade := b.mag, b.fade
+	mag, fade, peak := b.mag, b.fade, b.peak
 	b.mu.Unlock()
 	if !set || stopped {
 		return false
 	}
-	b.swarm.Heartbeat(stage, nParams, syn, ent, step, mag, fade)
+	b.swarm.Heartbeat(stage, nParams, syn, ent, step, mag, fade, peak)
 	return true
 }
 
