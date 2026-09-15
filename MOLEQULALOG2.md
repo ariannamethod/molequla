@@ -1794,3 +1794,134 @@ air's 13, 10 of water's 13 and 4 of fire's 14. And the witness cannot see the se
 `sound` or `place` key in any `dna_cursor.json`, thirteen fragments waiting for the next session.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the sensing window, and the half of hearing that is not language
+
+Two changes from `molequla_new_logic.md`, §2 and §3, and steps 1-5 of §18. A
+sensing episode stops being one sample of each organ: the eye takes a short
+measured trajectory, and the microphone's twelve seconds leave something behind
+even when nobody says a word. Both on `claude/phone1-sensing-window`, not pushed.
+
+**The window.** `phone1/senses.sh` grew three variables and a summary line.
+`SENSES_EYE_PATTERN` is the camera order, cycled; `SENSES_EYE_WINDOW` is how many
+frames the pass takes; `SENSES_EYE_SPACING` is the seconds between the starts of
+two consecutive captures, so a slow frame does not push the next one back. The
+memory floor moved inside the loop — the eye holds about a gigabyte per frame and
+the colony can wake between two frames, so `MemAvailable` is re-read before every
+capture and the window stops where it falls short, `skip-mem` in the pass line,
+rather than failing the slot. Each window appends one `eyewin` line beside the
+pass line, e.g.
+
+    2026-09-15T02:01:04Z eyewin pattern=0,1,0,0 n=4 spacing=30s frames=4 said=4
+    repeat=1 novel=0.750 wall=107s rss=1020mb batt=96%->96%,1395->1009mA cpu=4-7
+
+**The cadence was measured, not decided.** Six windows on cores 4-7, a scratch
+`MOLEQULA_RUN` so the live field was untouched, pattern `0 1 0 0`, spacing 30 s,
+each configuration twice, 14 frames in total:
+
+| n | wall, run 1 | wall, run 2 | peak RSS | descriptions | repeats | novelty |
+|---|---|---|---|---|---|---|
+| 1 | 18 s | 15 s | 1020 MB | 1 | 0 | 1.000 |
+| 2 | 46 s | 49 s | 1020 MB | 2 | 0 | 1.000 |
+| 4 | 107 s | 104 s | 1020 MB | 4 | 1 | 0.750 |
+
+Peak RSS is the eye process's own `VmHWM` through `/usr/bin/time -v` and it does
+not move with n: the window is one process per frame and nothing accumulates
+across them. Novelty is the share of descriptions that did not repeat an earlier
+frame of the same window, where a repeat is a token overlap ≥ 0.8 — lowercased,
+non-alphanumerics as separators, intersection over union of the distinct tokens.
+Measured overlaps from those same windows: a rear frame repeating an earlier rear
+frame 1.000 (the eye returns the sentence word for word), two different scenes
+from one camera 0.350 and 0.368, the two cameras of one window 0.154. Nothing
+lands between 0.4 and 1.0, so the threshold sits in the middle of empty space.
+
+**The default is n=4 at 30 s, and the reason is in the table.** Not because n=4
+scored highest — it scored lowest. At n=2 the two frames come from different
+cameras and cannot help being new, so 1.000 there is arithmetic rather than a
+discovery; n=4 puts two rear frames a minute apart, and in both runs one of them
+repeated, which is the window noticing that the scene held still. That is the
+observation §5 wants and a single frame cannot produce. It costs 104-107 s, 18 %
+of the 600 s senses slot cap, and a full pass with it measures about 200 s worst
+case. Spacing comes out of the eye's own period: a frame occupies 15-18 s
+(14 s engine, 3-4 s capture and scale), so below ~20 s there is no spacing at
+all; 30 s leaves 12-15 s of world between frames and spreads n=4 over 90 s.
+
+**Battery, honestly.** The window line records `capacity` and `current_now` from
+`/sys/class/power_supply/battery` before and after, but the phone was on the
+charger for all six windows — capacity went 95 % → 97 % while the charge current
+fell from 1605 mA to 979 mA as the battery filled. No discharge cost can be read
+off these runs. The measurement is recorded per window from now on, so the first
+unplugged pass will have it.
+
+**Hearing.** A quiet twelve seconds used to produce nothing, and the recognizer's
+own `[Motor]`, `(wind)`, `[BLANK_AUDIO]` were stripped before the fragment was
+written — correct for speech, empty for hearing. `senses/ears/soundscape` is the
+other question, asked without a model: 512-point frames through notorch's
+`nt_stft`, level percentiles, the 300-3400 Hz band share, spectral flatness, peak
+prominence over its own neighbourhood, onset count, envelope autocorrelation and
+the 2-8 Hz modulation share, and one English line naming the kind of sound —
+quiet room, a single loud transient, music is audible, speech-like modulation
+words unclear, repeated mechanical noise, steady broadband noise, or an unsteady
+sound without clear structure. 0.057 s on a 12 s wav against the 22 s the
+recognizer takes on the same file. It runs on every pass and writes an
+`[ears env …]` fragment beside the `[ears mic …]` transcript, whether or not
+anybody spoke, with the recognizer's tags appended to it instead of dropped —
+two separate pieces of evidence about the same twelve seconds, which §15 says do
+not have to agree. Live, on a scratch field, 2026-09-15T02:13:18Z:
+
+    ears=rc0,22s,speechno,frags1,env:quiet-room
+    [ears env 2026-09-15T02:13:18Z] Quiet room. The recognizer also marked [BLANK_AUDIO].
+
+The environmental line also leaves a fact, `ears microphone soundscape "<line>"`,
+in `senses/facts.jsonl` beside the fragment — the sidecar the world ledger reads
+(`world_ledger.go`), which landed in `main` while this branch was open and which
+every other organ already wrote to. Without it the ledger could see that speech
+stopped and not that the room itself changed. `soundscape` and not `hearing`
+deliberately: the two predicates make different claims about one window and
+neither corrects the other.
+
+**Two artefacts the fixtures could not have shown**, both found by running the
+describer over the six real recordings the live field left in
+`molequla-run/senses/audio/` on 2026-09-13/14. The recorder hands over a third of
+a second of digital silence at the start of every wav; frames of literal nothing
+sit at -120 dB and put the envelope's standard deviation at 13.3-13.5 dB in all
+six files while their 10th-to-90th percentile span was under 6 dB. And with the
+spectrum as it arrives, every recording is "tonal" — a phone on a table has more
+power under 100 Hz than in the room above it, so six of six night recordings came
+out as music. Leading and trailing zeros are now cut before anything is measured,
+a one-pole high pass at 100 Hz sits in front of everything, and tonality is
+prominence over the median of the 48 bins around the peak rather than over the
+whole spectrum. Tonal frame share on those recordings fell from 0.44-0.94 to
+0.06-0.13 while the tone fixtures stayed at 1.000, and the six files then read
+five `quiet room` — one of them with a single click, `a single loud transient`,
+`db_max` -21.2 against a median of -45.6 — and, for the one with `jfk.wav` played
+into the room from the phone's own speaker, `speech-like modulation, words
+unclear`. Room tone on this microphone measures `db_p90` -47.6 .. -41.5, which is
+where the -40 dB quiet threshold comes from. Every threshold is an `SND_*`
+environment variable with the measurement written beside its default in
+`soundscape.c`.
+
+**Gates, each shown red first.** `phone1/senses_test.sh`, 20 cases through the
+real `senses.sh` with the camera, the microphone and the three engines stubbed
+and `ffmpeg` real: red on the unchanged script, **0 pass, 20 fail**, green after,
+**20 pass, 0 fail**. Ten are the window (four fragments from a four-frame window,
+the cameras in the pattern's order at capture and in the headers, a short pattern
+cycling, the summary line's n / pattern / repeat=1 / novel=0.750, spacing holding
+a capture back), five the overlap metric, five hearing (silence still leaving an
+`env` fragment, speech leaving both, a bare `[Motor]` not counting as a
+transcript, the tag surviving). `make test-soundscape`, seven fixtures
+synthesised in C — there is no sox on this phone and no wav in the repository —
+**7 pass, 0 fail**, red twice by moving a threshold rather than patching the
+organ: `SND_QUIET_DB=-80` takes the quiet row down, `SND_SPEECH_BAND=1.1` the
+speech row. `bash phone1/schedule_test.sh`: 36 pass, 0 fail, unchanged.
+
+**Left, named.** The four whisper parity gates were not re-run: this branch adds
+a binary beside the recognizer and changes none of its sources. No Go file and no
+Go test changed either. The eye's own 14-frame watermark probe was not re-run —
+nothing in the engine changed, only how often it is called. The live scheduler
+still runs the pre-merge `senses.sh`, so nothing measured here has reached the
+real field; the `dna/output/` used throughout was a scratch directory. And the
+tagger that would name a sound rather than classify its shape is a survey, not a
+port: `senses/ears/PORT_NOTES_SOUND.md`.
+
+— Defender (Arianna Method, phone-1)

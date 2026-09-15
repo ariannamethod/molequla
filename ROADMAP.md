@@ -89,17 +89,20 @@ is long — an organism lives for months of sessions, not for one uptime.
 6. **Replacement instead of growth under a full machine.** When the byte budget
    refuses growth for long, an organism yields to a sibling rather than waiting
    forever; needs a channel between organisms that does not exist yet.
-7. **Sound that is not speech** (Oleg, 2026-09-13: "if there is sight there must
-   be hearing"). The speech half is closed below — `senses/ears` is the organ and
-   `senses.sh` runs it. What is still open is everything a transcript throws
-   away: a plain sound-event detector in C ahead of the model, so that a bang, a
-   door, a passing voice becomes one line even when no words are said; and later
-   a model that names sounds rather than words. Today a quiet twelve seconds
-   produces nothing, which is correct for speech and empty for hearing. Also
-   open: the encoder gap, `senses/ears/EARSLOG.md` measures whisper.cpp 3.4-4.3×
-   faster on the same wav and names the reason (its threaded REPACK kernel
-   against a single `nt_qmatmul` per projection), which is a notorch debt below
-   as much as an ears one.
+7. **A model that names sounds rather than classifying their shape.** The
+   detector half of this item is closed below: `senses/ears/soundscape` says what
+   kind of sound twelve seconds were, without weights. What it cannot say is what
+   made the sound — "a car passed nearby", "a door closed" — and that needs an
+   AudioSet-vocabulary tagger on notorch. The survey with the measured weight
+   sizes and the ops notorch is missing is `senses/ears/PORT_NOTES_SOUND.md`:
+   YAMNet first (4 126 810 B of TFLite, depthwise conv2d and pooling are what
+   notorch lacks, and the mel bank has to arrive as a binary rather than be
+   generated), PANNs CNN10 second if weights can be found, AST and BEATs not
+   while the eye holds a gigabyte in the same slot. Also still open: the encoder
+   gap, `senses/ears/EARSLOG.md` measures whisper.cpp 3.4-4.3× faster on the same
+   wav and names the reason (its threaded REPACK kernel against a single
+   `nt_qmatmul` per projection), which is a notorch debt below as much as an ears
+   one.
 8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
    but the mycelium speaking. First step costs nothing — the witness's line
    through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
@@ -140,6 +143,22 @@ is long — an organism lives for months of sessions, not for one uptime.
 
 ## Closed
 
+- **The sensing window, and hearing that is not only speech**
+  (`claude/phone1-sensing-window`, 2026-09-15; molequla_new_logic.md §2, §3 and
+  §18 steps 1-5). An eye pass is a window of `SENSES_EYE_WINDOW` frames taken
+  `SENSES_EYE_SPACING` apart with the cameras cycled from `SENSES_EYE_PATTERN`,
+  and one summary line per window carries its novelty — the share of descriptions
+  that did not repeat an earlier frame, by token overlap. The cadence is not
+  frozen by decree: n ∈ {1, 2, 4} was measured twice each on cores 4-7 (15-18 s,
+  46-49 s, 104-107 s, peak RSS 1020 MB throughout, novelty 1.000 / 1.000 / 0.750)
+  and the default n=4, spacing 30 s comes out of that table. Hearing gained
+  `senses/ears/soundscape`: no weights, `nt_stft`, seven labels from measured
+  features, an `[ears env …]` fragment on every pass whether or not anybody spoke,
+  and the recognizer's own non-speech tags kept instead of stripped. Gates:
+  `phone1/senses_test.sh` 20 cases (red first: 0 pass, 20 fail),
+  `make test-soundscape` 7 fixtures (red twice by moving a threshold). Numbers in
+  `MOLEQULALOG2.md` and `senses/ears/EARSLOG.md`; the tagger port stays open above
+  as item 7.
 - **The senses gathered into one folder** (`claude/phone1-senses-tree`,
   2026-09-13). Oleg's decision: the organs live inside molequla, in `senses/`,
   and neither gets a repository of its own. The eye came across from the
