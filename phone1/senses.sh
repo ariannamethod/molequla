@@ -21,6 +21,16 @@
 # the organisms' cursors and nothing here deletes another writer's fragments:
 # these directories are food, pruned by the hand that fills them.
 #
+# Beside every fragment each organ also writes one JSON line into
+# $MOLEQULA_RUN/senses/facts.jsonl — the same observation as a fact, with its
+# provenance, for the world ledger (world_ledger.go, ROADMAP 10). The fragment
+# is prose an organism eats; the fact is what lets the ledger tell a change
+# from a repetition. At the end of a pass `molequla --world-ingest --once`
+# reads what was appended, files it into world_facts in mesh.db and drops one
+# more fragment into world/ for each thing that actually changed. The two paths
+# are independent: SENSES_FACTS= turns the sidecar off, SENSES_INGEST= leaves
+# the facts for the scheduler, and neither moves anything about the fragments.
+#
 # Every value below can be overridden from the environment; the ASR binary and
 # model are two variables on purpose, and that is what let the native `ears` on
 # notorch take over from whisper.cpp — the binary and the weights moved, the
@@ -110,6 +120,26 @@ SENSES_MOVE_M="${SENSES_MOVE_M:-50}"
 SENSES_UA="${SENSES_UA:-molequla-senses/1.0 (phone-1, Arianna Method)}"
 SENSES_HTTP_TIMEOUT="${SENSES_HTTP_TIMEOUT:-25}"
 
+# --- the world ledger ------------------------------------------------------
+# The structured sidecar: one JSON line per observation, read by
+# `molequla --world-ingest` into the bitemporal world_facts table in mesh.db
+# (world_ledger.go). Empty SENSES_FACTS turns the sidecar off and the fragment
+# path above is untouched by that. SENSES_INGEST names the binary that reads
+# it; it is run once at the end of a pass, from $SENSES_DIR, so that
+# ../dna/output and ../senses/facts.jsonl resolve to this run's tree. Empty
+# SENSES_INGEST leaves the facts on disk for the scheduler to ingest later.
+SENSES_FACTS="${SENSES_FACTS-$SENSES_DIR/facts.jsonl}"
+SENSES_FACTS_MAX_KB="${SENSES_FACTS_MAX_KB:-4096}"
+if [ -z "${SENSES_INGEST+x}" ]; then
+    if [ -x "$RUN/molequla_cgo" ]; then
+        SENSES_INGEST="$RUN/molequla_cgo"
+    elif [ -x "$REPO/molequla_cgo" ]; then
+        SENSES_INGEST="$REPO/molequla_cgo"
+    else
+        SENSES_INGEST=""
+    fi
+fi
+
 # --- shared ----------------------------------------------------------------
 SENSES_KEEP="${SENSES_KEEP:-48}"          # frames and wavs kept on disk
 SENSES_FRAG_KEEP="${SENSES_FRAG_KEEP:-64}" # fragments kept per source directory
@@ -172,6 +202,87 @@ frag_write() {
     return 0
 }
 
+# --- facts -----------------------------------------------------------------
+# The sidecar of every fragment. A fragment is prose for an organism to eat; a
+# fact is the same observation with a subject, a predicate and its provenance,
+# so that the ledger can tell a change from a repetition. jq builds the line,
+# which is the point of using it here: the line is valid JSON or it is nothing,
+# and no amount of quoting in a camera sentence can break the file.
+#
+# rotate_facts keeps the file bounded. Truncating it is safe for the reader:
+# the ingest cursor is a byte offset, a file shorter than the offset is read as
+# rotated and the cursor returns to zero, and re-reading facts that are already
+# in the table writes no row and emits no fragment.
+rotate_facts() {
+    local bytes kb
+    [ -n "$SENSES_FACTS" ] || return 0
+    [ -f "$SENSES_FACTS" ] || return 0
+    [ "$SENSES_FACTS_MAX_KB" -gt 0 ] || return 0
+    bytes="$(stat -c %s "$SENSES_FACTS" 2>/dev/null || echo 0)"
+    kb=$((bytes / 1024))
+    [ "$kb" -lt "$SENSES_FACTS_MAX_KB" ] && return 0
+    mv -f "$SENSES_FACTS" "$SENSES_FACTS.1" && say "facts.jsonl rotated at ${kb} KB"
+    return 0
+}
+
+# fact_emit <source> <subject> <predicate> <object> [provenance-json]
+fact_emit() {
+    local src="$1" subj="$2" pred="$3" obj="$4" prov="${5:-}"
+    [ -n "$SENSES_FACTS" ] || return 0
+    [ -n "$prov" ] || prov='{}'
+    mkdir -p "$(dirname "$SENSES_FACTS")" || return 1
+    rotate_facts
+    jq -cn --arg source "$src" --arg subject "$subj" --arg predicate "$pred" \
+       --arg object "$obj" --arg valid_from "$(now_iso)" --argjson provenance "$prov" \
+       '{source:$source,subject:$subject,predicate:$predicate,object:$object,
+         valid_from:$valid_from,provenance:$provenance}' >> "$SENSES_FACTS"
+}
+
+# cam_lens <camera-id> — the subject a camera id is in the ledger. On this
+# phone termux-camera-photo -c 0 is the back camera and -c 1 the front one.
+cam_lens() {
+    case "$1" in
+        0) echo "rear camera" ;;
+        1) echo "front camera" ;;
+        *) echo "camera $1" ;;
+    esac
+}
+
+# The conditions a pass ran under — §6 stores the interpretation together with
+# what made it possible, so that a later correction can see why the first
+# reading was reasonable.
+conditions_json() {
+    jq -cn --arg cpus "${CPUS:-unknown}" \
+       --arg colony "$(colony_alive && echo awake || echo asleep)" \
+       --argjson mem_mb "$(mem_avail_mb)" \
+       '{cpus:$cpus,colony:$colony,mem_mb:$mem_mb}'
+}
+
+# eye_prov <camera-id> <frame> <wall-s> <rss-mb>
+eye_prov() {
+    jq -cn --arg camera "$1" --arg lens "$(cam_lens "$1")" \
+       --arg frame "$(basename "$2")" \
+       --arg model "$(basename "$SENSES_EYE_MODEL")" \
+       --arg mmproj "$(basename "$SENSES_EYE_MMPROJ")" \
+       --arg prompt "$SENSES_EYE_PROMPT" --arg engine "$(basename "$SENSES_EYE")" \
+       --argjson edge "$SENSES_EYE_EDGE" --argjson wall_s "$3" --argjson rss_mb "$4" \
+       --argjson conditions "$(conditions_json)" \
+       '{camera:$camera,lens:$lens,frame:$frame,model:$model,mmproj:$mmproj,
+         prompt:$prompt,engine:$engine,edge:$edge,wall_s:$wall_s,rss_mb:$rss_mb,
+         conditions:$conditions}'
+}
+
+# ears_prov <transcript> <rc>
+ears_prov() {
+    jq -cn --arg asr "$(basename "$SENSES_ASR")" \
+       --arg model "$(basename "$SENSES_ASR_MODEL")" \
+       --arg kind "$SENSES_ASR_KIND" --arg text "$1" \
+       --argjson window_s "$SENSES_REC_SECONDS" --argjson rc "$2" \
+       --argjson conditions "$(conditions_json)" \
+       '{asr:$asr,model:$model,kind:$kind,window_s:$window_s,text:$text,rc:$rc,
+         conditions:$conditions}'
+}
+
 # prune_dir <dir> <keep> — newest `keep` files by mtime, the rest go. The
 # organisms keep cursors into these directories and only advance them while
 # they run, so nothing is pruned by age: a colony that slept through eight
@@ -190,7 +301,7 @@ EYE_RC=0; EYE_WALL=0; EYE_RSS=0; EYE_FRAGS=0; EYE_FRAMES=0; EYE_NOTE=""
 
 # eye_one <camera-id> -> frames, fragments, wall, peak RSS
 eye_one() {
-    local cam="$1" ts remote local_jpg out err rc t0 t1 rss line
+    local cam="$1" ts remote local_jpg out err rc t0 t1 wall rss line
     ts="$(stamp)"
     remote="$HOME_TERMUX/.senses_cam${cam}.jpg"
     local_jpg="$FRAMES/${ts}_cam${cam}.jpg"
@@ -226,7 +337,8 @@ eye_one() {
         > "$out" 2> "$err"
     rc=$?
     t1="$(date -u +%s)"
-    EYE_WALL=$((EYE_WALL + t1 - t0))
+    wall=$((t1 - t0))
+    EYE_WALL=$((EYE_WALL + wall))
     rss="$(awk '/Maximum resident set size/{print $NF}' "$err")"
     case "${rss:-}" in ''|*[!0-9]*) rss=0 ;; esac
     rss=$(( (rss + 512) / 1024 ))
@@ -255,6 +367,11 @@ eye_one() {
         [ "${#line}" -ge 8 ] || continue
         frag_write world "[eye cam$cam $(now_iso)] $line" && EYE_FRAGS=$((EYE_FRAGS + 1))
     done <<< "$(printf '%s\n' "$said" | sed -E 's/([.!?]) +/\1\n/g')"
+    # One fact for the whole answer, not one per sentence: what the engine
+    # interpreted is one interpretation. `interpreted_as`, never `is` — §6, the
+    # balcony Ocelli read as a bathroom is a true record of a reading and a
+    # false record of a room.
+    fact_emit eye "$(cam_lens "$cam")" interpreted_as "$said" "$(eye_prov "$cam" "$local_jpg" "$wall" "$rss")"
     return 0
 }
 
@@ -351,11 +468,17 @@ do_ears() {
     if [ "${#clean}" -lt "$SENSES_SPEECH_MIN_CHARS" ] || ! printf '%s' "$clean" | grep -q '[[:alpha:]]'; then
         say "ears: no speech in ${SENSES_REC_SECONDS}s"
         EARS_SPEECH=no
+        # Silence is a fact too, and the only way the ledger can later say that
+        # speech stopped. It writes no fragment on its own — a microphone that
+        # has always been quiet is not news (world_ledger.go).
+        fact_emit ears microphone hearing silence "$(ears_prov "" "$rc")"
         prune_dir "$AUDIO" "$SENSES_KEEP"
         return 0
     fi
     EARS_SPEECH=yes
     frag_write sound "[ears mic $(now_iso)] $clean" && EARS_FRAGS=$((EARS_FRAGS + 1))
+    fact_emit ears microphone hearing speech "$(ears_prov "$clean" "$rc")"
+    fact_emit ears microphone interpreted_as "$clean" "$(ears_prov "$clean" "$rc")"
     prune_dir "$AUDIO" "$SENSES_KEEP"
     prune_dir "$RUN/dna/output/sound" "$SENSES_FRAG_KEEP"
     return 0
@@ -398,13 +521,15 @@ dist_m() {
 
 do_place() {
     local t0 loc lat lon acc meteo geo name tz local_time temp hum wind code sky sunrise sunset
-    local plat plon moved d text
+    local plat plon moved d text provider
     t0="$(date -u +%s)"
 
+    provider=network
     loc="$(timeout 45 $SENSES_SSH 'termux-location -p network -r once' 2>/dev/null)"
     lat="$(printf '%s' "$loc" | jq -r '.latitude // empty' 2>/dev/null)"
     if [ -z "$lat" ]; then
         say "place: no network fix, asking the satellites"
+        provider=gps
         loc="$(timeout 90 $SENSES_SSH 'termux-location -p gps -r once' 2>/dev/null)"
         lat="$(printf '%s' "$loc" | jq -r '.latitude // empty' 2>/dev/null)"
     fi
@@ -467,10 +592,69 @@ do_place() {
     text="$text. Sunrise ${sunrise:-unknown}, sunset ${sunset:-unknown}. And ${moved}."
 
     frag_write place "$text" && PLACE_FRAGS=$((PLACE_FRAGS + 1))
+
+    # Three facts out of one pass, because a moment has more than one kind of
+    # truth in it (§15): where the phone is by name, where it is by coordinate,
+    # and what the sky over it is doing. The name and the coordinate are
+    # separate predicates on purpose — a walk across a neighbourhood changes
+    # the coordinate and not the name, and the ledger should be able to say so.
+    fact_emit place phone at_place "$name" \
+        "$(jq -cn --arg lat "$lat" --arg lon "$lon" --arg accuracy_m "${acc:-}" \
+            --arg provider "$provider" --arg moved_m "${d:-}" --arg geocoder nominatim \
+            '{lat:$lat,lon:$lon,accuracy_m:$accuracy_m,provider:$provider,
+              moved_m:$moved_m,geocoder:$geocoder} | with_entries(select(.value != ""))')"
+    fact_emit place phone at_position "$lat,$lon" \
+        "$(jq -cn --arg accuracy_m "${acc:-}" --arg provider "$provider" \
+            --arg moved_m "${d:-}" --arg place "$name" \
+            '{accuracy_m:$accuracy_m,provider:$provider,moved_m:$moved_m,place:$place}
+             | with_entries(select(.value != ""))')"
+    [ -n "$temp" ] && fact_emit place sky reported_as "$sky" \
+        "$(jq -cn --arg weather_code "${code:-}" --arg temp_c "${temp:-}" \
+            --arg humidity "${hum:-}" --arg wind_kmh "${wind:-}" \
+            --arg local_time "${local_time:-}" --arg tz "${tz:-}" \
+            --arg sunrise "${sunrise:-}" --arg sunset "${sunset:-}" \
+            --arg place "$name" --arg source open-meteo \
+            '{weather_code:$weather_code,temp_c:$temp_c,humidity:$humidity,
+              wind_kmh:$wind_kmh,local_time:$local_time,tz:$tz,sunrise:$sunrise,
+              sunset:$sunset,place:$place,source:$source}
+             | with_entries(select(.value != ""))')"
+
     prune_dir "$RUN/dna/output/place" "$SENSES_FRAG_KEEP"
     PLACE_WALL=$(( $(date -u +%s) - t0 ))
     return 0
 }
+
+# --- the ledger's writer ----------------------------------------------------
+# One pass of `molequla --world-ingest --once`, run from $SENSES_DIR so that
+# ../dna/output and ../senses/facts.jsonl are this run's. It reads the facts
+# written above, files them into world_facts and leaves in dna/output/world/
+# only what changed. It is a separate process because the witness's mesh
+# handle is query_only and stays that way; failing here costs the pass
+# nothing, the facts stay on disk and the next run of the ingest picks them up
+# from the cursor.
+INGEST_RC=0; INGEST_LINES=0
+do_ingest() {
+    local out
+    [ -n "$SENSES_INGEST" ] || return 0
+    [ -n "$SENSES_FACTS" ] || return 0
+    [ -x "$SENSES_INGEST" ] || { say "ingest: no binary at $SENSES_INGEST"; INGEST_RC=127; return 0; }
+    [ -s "$SENSES_FACTS" ] || return 0
+    out="$(cd "$SENSES_DIR" && timeout 120 "$SENSES_INGEST" --world-ingest --once \
+           --world-facts "$SENSES_FACTS" 2>&1)"
+    INGEST_RC=$?
+    printf '%s\n' "$out" | sed 's/^/[senses]   /'
+    INGEST_LINES="$(printf '%s\n' "$out" | grep -c '^\[world\] ' || true)"
+    return 0
+}
+
+# --- sourceable -------------------------------------------------------------
+# Everything above is definitions. A caller that wants only the functions —
+# phone1/senses_facts_test.sh drives fact_emit over a fixture rather than
+# waking the camera, the microphone and the GPS — sources this file with
+# SENSES_LIB_ONLY=1 and stops here.
+if [ "${SENSES_LIB_ONLY:-0}" = 1 ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 # --- one pass --------------------------------------------------------------
 MODE="${1:-all}"
@@ -492,12 +676,15 @@ case "$MODE" in
     all)   do_eye; do_ears; do_place ;;
 esac
 
+do_ingest
+
 T1="$(date -u +%s)"
 FRAGS=$((EYE_FRAGS + EARS_FRAGS + PLACE_FRAGS))
 LINE="$(now_iso) pass=$MODE cpu=$CPUS mem_mb=${MEM0}->$(mem_avail_mb)"
 LINE="$LINE eye=rc${EYE_RC},${EYE_WALL}s,rss${EYE_RSS}mb,frames${EYE_FRAMES},frags${EYE_FRAGS}${EYE_NOTE:+,$EYE_NOTE}"
 LINE="$LINE ears=rc${EARS_RC},${EARS_WALL}s,speech${EARS_SPEECH},frags${EARS_FRAGS}${EARS_NOTE:+,$EARS_NOTE}"
 LINE="$LINE place=rc${PLACE_RC},${PLACE_WALL}s,moved${PLACE_MOVED},frags${PLACE_FRAGS}${PLACE_NOTE:+,$PLACE_NOTE}"
+LINE="$LINE world=rc${INGEST_RC},changes${INGEST_LINES}"
 LINE="$LINE frags=$FRAGS total=$((T1 - T0))s"
 printf '%s\n' "$LINE" >> "$LOGF"
 say "$LINE"
