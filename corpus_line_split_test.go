@@ -137,3 +137,40 @@ func corpusBytes(docs []string) int {
 	}
 	return n
 }
+
+// dnaRead appends, and a corpus file whose last line has no newline of its own
+// swallowed the first sentence of every fragment eaten after it — seen in the
+// live probe of 2026-09-15 as "...microorganism[eye cam0 2026-09-13T22:12:01Z]
+// A blurry...". One malformed line per fragment, and the sentence it ruins is
+// the one the header is on.
+func TestDNAReadDoesNotGlueAFragmentOntoAnUnterminatedCorpus(t *testing.T) {
+	root, restore := dnaTestTree(t, "world")
+	defer restore()
+
+	const head = "[eye cam0 2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl."
+	dnaWriteFragment(t, root, "world", "gen_1789337521_2.txt", head+" The light is dim.")
+
+	withArgs(t, []string{"--element", "earth", "--dna-extra-sources", "world"}, func() {
+		CFG.DNAExtraSources = nil
+		parseCLIArgs()
+		if err := os.Chdir(filepath.Join(root, "earth")); err != nil {
+			t.Fatal(err)
+		}
+		corpus := filepath.Join(root, "earth", "nonames_earth.txt")
+		// No trailing newline — the shape saveCorpusLines does not produce but
+		// a hand-edited or truncated corpus does.
+		if err := os.WriteFile(corpus, []byte("A handful of healthy soil contains more microorganisms"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if added := dnaRead("earth", corpus, nil, nil, &dnaCursor{Last: map[string]string{}}); added == 0 {
+			t.Fatal("dnaRead ate nothing")
+		}
+		lines := loadCorpusLines(corpus)
+		for _, ln := range lines {
+			if ln == head {
+				return // the fragment's first sentence is a line of its own
+			}
+		}
+		t.Fatalf("the fragment's first sentence is not a line of its own; loadCorpusLines gave %q", lines)
+	})
+}

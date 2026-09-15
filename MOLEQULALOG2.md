@@ -2138,4 +2138,36 @@ emitter and the last infrastructure block. Nothing here decides who receives
 what — it only makes sure that what is sent arrives, whole, and that the signals
 the allocator will need are visible from outside the organism.
 
+**The two things named above, repaired.** Both sit on the path these repairs
+already changed, and both were gated before they were fixed.
+
+`dnaRead` opens the corpus `O_APPEND` and never asked whether the file ended in
+a newline, so a corpus whose last line has none took the next fragment's first
+sentence onto the end of it — and with repair 3 that sentence is the one
+carrying the organ's header. It now reads the last byte (`O_RDWR`, because an
+`O_APPEND` handle cannot read) and closes the open line first. `saveCorpusLines`
+always terminates its lines, so this is the hand-edited or truncated file rather
+than the ordinary one, which is why it survived this long. The gate feeds a
+corpus with no trailing newline one fragment and requires the fragment's first
+sentence to be a line of its own; before the fix it names the glue it found:
+`"A handful of healthy soil contains more microorganisms[eye cam0
+2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl."`
+
+`Heartbeat` discarded the error from its `Exec`. That write is the organism's
+only statement that it is alive, so when a column is added to the write and not
+to the schema in front of it, every beat becomes a no-op and the colony's own
+governor and the witness both stop seeing an organism that is running perfectly
+well — a failure whose only symptom is silence. It happened when repair 7 added
+`global_step` and again here. `sayMeshError` now prints one line per distinct
+error, `[ecology] mesh refused the heartbeat of earth: SQL logic error: no such
+column: global_step (1) — this organism is alive and invisible to the colony`,
+and not once per beat: the tick loop beats every ten ticks for the life of the
+run and a line repeated that often is a line nobody reads. The gate drives the
+unwidened pre-repair-7 fixture, requires the line, requires ten further beats of
+the same failure to add nothing, then adds the missing columns one at a time and
+requires each newly uncovered one — `gen_mag`, then `overlay_fade` — to be said
+in turn, and the beat to fall silent once the schema is whole. sqlite reports
+the first column it cannot find, not the one most recently added, which is why
+the first line names `global_step` and not `gen_mag`.
+
 — Defender (Arianna Method, phone-1)

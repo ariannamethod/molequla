@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -431,5 +432,97 @@ func TestMeshMigratesAPreRepair7Database(t *testing.T) {
 			t.Fatalf("after migration the voice reads back as mag=%.4f fade=%.4f, want 3.25 / 0.40",
 				o.GenMag, o.OverlayFade)
 		}
+	}
+}
+
+// captureStdout runs f with os.Stdout replaced by a pipe and returns what was
+// written to it. The mesh lines go to stdout like the rest of [ecology].
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Stdout
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
+	f()
+	os.Stdout = saved
+	w.Close()
+	out := <-done
+	r.Close()
+	return out
+}
+
+// Heartbeat discarded the error from its Exec, so a mesh whose schema is
+// narrower than the write stopped beating in silence: the organism is alive,
+// every heartbeat is a no-op, and the governor's live count and the witness
+// both see it disappear. That is how TestBeatKeeperRefreshesMeshWithoutTicks
+// went red when repair 7 added global_step and again when routing repair 6
+// added the two voice columns. The failure is now said — once per distinct
+// error, not once per beat, since the tick loop beats every ten ticks for the
+// life of the run.
+func TestHeartbeatSaysWhenTheMeshRefusesTheWrite(t *testing.T) {
+	dir := witnessTestMesh(t)
+	path := filepath.Join(dir, "mesh.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// The pre-repair-7 schema, unwidened: no global_step, no gen_mag, no
+	// overlay_fade.
+	if _, err := db.Exec(`CREATE TABLE organisms(
+		id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER,
+		n_params INTEGER, syntropy REAL, entropy REAL,
+		last_heartbeat REAL, parent_id TEXT,
+		status TEXT DEFAULT 'alive', element TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	sr := &SwarmRegistry{OrganismID: "earth", Element: "earth", MeshDB: db}
+
+	out := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) })
+	if !strings.Contains(out, "[ecology]") || !strings.Contains(out, "earth") {
+		t.Fatalf("a refused heartbeat said nothing: %q", out)
+	}
+	// sqlite names the first column it cannot find, which on the pre-repair-7
+	// schema is global_step.
+	if !strings.Contains(out, "global_step") {
+		t.Fatalf("the line does not name the column the mesh refused: %q", out)
+	}
+	if n := strings.Count(out, "\n"); n != 1 {
+		t.Fatalf("one refused heartbeat printed %d lines: %q", n, out)
+	}
+
+	// Ten more beats of the same failure say nothing further.
+	again := captureStdout(t, func() {
+		for i := 0; i < 10; i++ {
+			sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40)
+		}
+	})
+	if again != "" {
+		t.Fatalf("the same failure was repeated %d times: %q", strings.Count(again, "\n"), again)
+	}
+
+	// A different failure is a different line: closing one column uncovers the
+	// next, and each one is said once.
+	for _, step := range []struct{ alter, want string }{
+		{"ALTER TABLE organisms ADD COLUMN global_step INTEGER", "gen_mag"},
+		{"ALTER TABLE organisms ADD COLUMN gen_mag REAL", "overlay_fade"},
+	} {
+		db.Exec(step.alter)
+		next := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) })
+		if !strings.Contains(next, step.want) {
+			t.Fatalf("after %q the mesh error was swallowed as a repeat: %q", step.alter, next)
+		}
+	}
+	// And once the schema is whole, the beat is silent again.
+	db.Exec("ALTER TABLE organisms ADD COLUMN overlay_fade REAL")
+	if quiet := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) }); quiet != "" {
+		t.Fatalf("a heartbeat the mesh accepted still said %q", quiet)
 	}
 }
