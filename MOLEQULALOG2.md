@@ -1760,173 +1760,37 @@ over a frame set that is not in the tree, and nothing in the engine changed.
 
 — Defender (Arianna Method, phone-1)
 
-## 2026-09-15 — a ledger of change instead of a stream of state
+## 2026-09-15 — the inspection §17 asks for, before anything is built
 
-ROADMAP item 10, and §4–6 and §15–16 of the new-logic brief. The senses have
-been writing prose since 2026-09-13 and the prose is a stream of state: four
-place passes on a still phone leave four fragments that say the same sentence,
-and the two rear-camera frames of 22:18 and 01:00 say it byte for byte. An
-organism eating that learns that the world repeats. What is wanted is the
-other thing — *the phone moved from A to B*, *the sky changed from fog to
-overcast*, *a person entered the frame* — and a change can only be named
-against a memory of what was true before.
+`molequla_new_logic.md` opens its seventeenth section by asking that the paths which already exist be
+inspected before new machinery is added under new names. That inspection is
+`reports/2026-09-15_new_logic_audit/README.md`: a row per section 1-16 saying what exists with a line
+number, what is partial, what is missing and where the smallest extension point is; a trace of how an
+eaten fragment actually reaches an organism; the lineage reading of dario, q, actually.life and netta;
+and a proposed order for §18 in which routing changes come before new infrastructure. Nothing in the
+tree changed — the audit is one document and this entry.
 
-**The table.** `world_facts(id, source, subject, predicate, object,
-valid_from, valid_to, recorded_at, provenance)` in the same `mesh.db` the
-organisms and the witness already share, migrated idempotently like the
-`global_step` ALTER (`molequla.go:5629`). `valid_from`/`valid_to` is when a
-fact held in the world; `recorded_at` is when molequla learned it. A
-contradicting observation closes the open row at the new fact's `valid_from`
-and opens a new one; a fact older than the open row is filed as closed history
-and says nothing, because the revision that replaced it stands. Nothing is
-deleted and nothing is overwritten, so the belief a correction corrected is
-still there to be read.
+The load-bearing answer is that the brief's early regime already runs end to end. `dnaRead` appends a
+fragment's bytes to the organism's corpus (`molequla.go:6138-6144`), `loadCorpusLines` and
+`BuildFromCorpus` turn the corpus into unigram, bigram, trigram, 4-gram and co-occurrence every thirty
+ticks (`molequla.go:6625-6635`, `:4227-4294`), the same `docs` slice is what `MetaweightsOverlay` reads
+through `model.corpusField` and what both trainers are handed (`molequla.go:6673-6675`, `:6753`), and a
+second, independent path takes the same files straight to the logits (`cross_graze.go:79-165`,
+`molequla.go:4745-4747`). Routing lives in one function, `dnaSources(element)` (`dna_field.go:35-48`),
+and today it is the same list for everybody: `SENSES_SOURCES="world sound place"` goes to all four
+launches as one string (`phone1/launch.sh:16,88`).
 
-It is `id INTEGER PRIMARY KEY` and not AUTOINCREMENT, and that is not a taste
-decision — the first run of the one-way gate went red on it. AUTOINCREMENT
-keeps its high-water mark in `sqlite_sequence`, which this mesh already has
-because `messages` uses it (`molequla.go:5634`), so the ledger's first insert
-wrote a row of a table an organism owns:
-
-    a pre-existing table changed under the ledger:
-    before  organisms[earth 25578 2 262144 0.1 1.25 1.789437447087e+09 <nil> alive earth 4200]
-    after   organisms[earth …]
-            sqlite_sequence[world_facts 4]
-
-**The writer is not the witness.** It was, for one commit, and the audit that
-landed the same night (`claude/phone1-new-logic-audit`, `9464b81`) is right
-that this is the §11 arrow: the witness opens the mesh `query_only`
-(`witness.go:167`) and that property is the one-way rule, not a habit. So the
-writer is its own process, `molequla --world-ingest [--once]`, run from a
-sibling of the organism directories exactly as the witness is, so
-`../dna/output` and `../senses/facts.jsonl` are the same tree. The witness
-reads `world_facts` on its tick and prints `world <n> facts/<m> open`. It may
-do nothing else with it, and after the writer has been through the same file
-its own connection still refuses every write — that is a gate now, in both
-directions.
-
-**The sidecar.** `phone1/senses.sh` keeps writing its fragments untouched and
-appends one JSON line per observation to `$MOLEQULA_RUN/senses/facts.jsonl`:
-
-    eye    <lens> interpreted_as <the whole answer>
-    ears   microphone hearing speech|silence · microphone interpreted_as <text>
-    place  phone at_place <name> · phone at_position <lat,lon> · sky reported_as <sky>
-
-`interpreted_as` and never `is` — §6. The provenance of an eye fact carries the
-camera, the lens, the frame, the decoder and the projector by file name, the
-prompt, the resize edge, the wall time, the peak RSS and the conditions of the
-pass (cores, colony awake or asleep, MemAvailable). The balcony the eye read as
-a bathroom on the first night is a true record of a reading and a false record
-of a room, and the table now says which of the two it holds. `provider` is new
-in place — which locator answered, network or gps.
-
-jq builds every line, and that is the whole reason jq is in that function. The
-eye's own sentence of 2026-09-14T01:00:28Z is
-
-    A black screen with a small white text that reads "the world is not what it seems".
-
-and a `printf`-built line breaks on it. Replacing the jq call with `printf` in
-`fact_emit` took eight cases of the bash gate down, the first of them printing
-the broken object in full.
-
-**One knob that is a gate, not a shape.** A network fix on this phone reports
-13–14 m of accuracy and wanders a metre or four between passes
-(`senses.log`, `movedno` at 2 m, 1 m, 4 m). `CFG.WorldMoveMeters`, default 50 m
-— the same figure `senses.sh` already compares against `senses/place.last` — is
-what separates a fix that wandered from a phone that moved, and `at_position`
-is the only predicate compared in metres rather than as text. The gate fails
-both ways in test: 22 m under 50 m emits nothing, 22 m under 5 m is a move,
-1112 m is a move under either.
-
-**Red before green.** Every gate was shown failing by breaking the thing it
-names:
-
-| broken on purpose | what went red |
-|---|---|
-| `worldSameObject` always false | `repeat 1 emitted [The phone moved from … to …] — repeated identical state must produce no fragment` |
-| the close skipped | `the old row's valid_to = {Float64:0 Valid:false}, want 260` |
-| `recorded_at` set to `valid_from` | `valid_from=1000 recorded_at=1000, want 1000 and 5000` |
-| the cursor never advanced | `the cursor stopped at 0 of 541 bytes` |
-| the move gate at 0 m | `22 m under a 50 m gate emitted [The phone moved 22 m.]` |
-| the derivation suppressed | `a hand appearing said [scene change], want a scene change and a person entering` |
-| the negation vocabulary emptied | `"…with no people or text visible." matched [people] — a negated word is not a sighting` |
-| `query_only` removed from the witness handle | `the witness handle wrote to organisms after the ingest ran` |
-| `fact_emit` on `printf` instead of jq | 8 bash cases, starting with `not JSON: {"…object":"A black screen … reads "the world is not what it seems".",…}` |
-| `cam_lens 0` returning `camera 0` | `eye: the subject is the lens: got [camera 0], want [rear camera]` |
-
-The cursor gate did not go red the first time it was written: the dedupe behind
-it — an observation identical to the open row writes nothing — covered for a
-cursor that never moved, so the test passed over a broken mechanism. It was
-rewritten around a fixture with two observations of one triple, where
-re-reading the file from the start is visible in the table as one extra history
-row, plus a direct assertion on the offset. Then it went red.
-
-**Counts.** `CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false ./...`
-— 196 pass, 2 skipped, 0 fail, 4.2 s, against 184/2/0 on `origin/main` at
-`5d46fc0`; twelve of the new tests are the ledger's, one extends the witness's.
-One run in the middle of the session reported `FAIL … 3.448s` without a named
-case and five full runs since have been green; the name was not captured, so it
-is recorded here as unexplained rather than attributed. `go vet` clean,
-`gofmt` clean on the new files, `go build -a` 35.7 s. Bash: 37 cases in
-`phone1/senses_facts_test.sh` (new), `phone1/schedule_test.sh` unchanged at 36.
-
-**The live smoke.** `mesh.db` copied out of the live swarm into a scratch
-`HOME`, and `facts.jsonl` built from the fragments the senses actually wrote
-on 2026-09-13/14 — the same sentences, through `senses.sh`'s own `fact_emit`,
-`cam_lens`, `eye_prov` and `ears_prov` with `now_iso` overridden so each fact
-carries its fragment's stamp. 24 facts, one ingest pass, 14 changes, 14
-fragments, on cores 4–7 at 02:17 UTC with 3.3 GB MemAvailable (neighbourhood
-scrubbed here, not in the run):
-
-    [world] The phone is at <neighbourhood>, Be'er-Sheva, Israel. Where it was before that, the ledger does not know.
-    [world] The sky is fog.
-    [world] The rear camera opened on: "A blurry kitchen table shows a green bowl, a spoon, and a plate, …"
-    [world] The front camera opened on: "An empty room has a ceiling fan, a white floor, and a metal frame for a door."
-    [world] The rear camera's scene changed from "A blurry kitchen table …" to "A close-up view shows a keyboard with white keys …"
-    [world] The front camera's scene changed from "An empty room has a ceiling fan …" to "A bathroom with a shower curtain hanging, a person's hand reaching out, …"
-    [world] A person entered the front camera's frame.
-    [world] Speech was heard through the microphone for 12 s.
-    [world] The microphone heard: "And so my fellow Americans ask not what your country can do for you."
-    [world] The rear camera's scene changed from "A close-up view shows a keyboard …" to "A black screen with a small white text that reads "the world is not what it seems"."
-    [world] The front camera's scene changed from "A bathroom with a shower curtain hanging, a person's hand reaching out, …" to "A bathroom with a shower curtain, a light above the shower, and a small trash can."
-    [world] A person left the front camera's frame.
-    [world] The microphone stopped hearing speech: 12 s of room noise instead.
-    [world] The front camera's scene changed from "A bathroom with a shower curtain, …" to "A dark room with a chair, a table, and a blanket, with no people or text visible."
-    [world] 24 facts read, 14 changes emitted
-
-What is not in that list is the point of it. The four place passes produced one
-line, not four: the second, third and fourth say the same neighbourhood, the
-same fog and a coordinate 1–4 m away, and none of that is a change. The two
-rear-camera readings of the black screen are byte-identical and the second
-wrote nothing at all. A second ingest over the same file read 0 facts and left
-the 14 fragments where they were; deleting the cursor and running a third time
-emitted nothing either, because everything in the file already matches an open
-row. The witness then read the table through its own handle and said
-`world 18 facts/9 open` — nine open triples, nine rows closed behind them.
-
-**The first live run found a false positive and it is fixed in the same pass.**
-`sees_person` is lexical, and the eye's phrasing for an empty room is *"A dark
-room with a chair, a table, and a blanket, with no people or text visible."* —
-so the first ingest of the real fragments ended with `A person entered the
-front camera's frame.` `CFG.WorldNegationWords` (`no`, `not`, `without`,
-`none`, `nobody`, `empty`) now cancels a vocabulary word that stands
-immediately after one of them, which took the run from 15 changes to 14 and put
-the exact sentence in the test. It is a lexical rule guarding a lexical rule
-and it will miss negation at any distance; every derived fact says
-`derived: lexical` in its provenance so that a later reading may disagree with
-it, which is the §6 position applied to molequla's own inference rather than
-the eye's.
-
-**Left, named.** The eye and the ears still write one observation per pass, so
-§2's short trajectory is not built. The ingest is called at the end of a senses
-pass and by hand; the scheduler has no slot of its own for it yet. Routing —
-which organism eats which change, §12's cafeteria — is untouched: the change
-fragments land in `dna/output/world/` beside the eye's own, and every organism
-told `--dna-extra-sources world` eats all of them. `facts.jsonl` rotates at
-`SENSES_FACTS_MAX_KB` (4096) and the rotated file is not ingested after the
-move, which is correct only because everything in it is already in the table.
-The live run directory was not touched by any of this: the smoke ran against a
-copy of `mesh.db` under a scratch `HOME`, and the daemon on the phone still
-runs the binary and the conf that predate this branch.
+Three findings were not being looked for. `loadCorpusLines` truncates every line to
+`MaxLineChars = 240` on every read (`molequla.go:3262-3264`, default `:268`), and an eaten fragment is
+one line padded toward 5000 B (`molequla.go:271`), so most of a sibling fragment never reaches the
+field or a batch while the growth clock counted all of it — in the live run `earth/nonames_earth.txt`
+holds 1600 lines of which 592 exceed 240 characters and the longest is 5406, and a place fragment at
+301-318 B loses its moved clause. The senses also stand last in the read queue: extra sources come
+after the elements in `dnaSources` under one budget of `DNAMaxReadsPerTick = 8` (`molequla.go:273`,
+`:6117-6123`), and in the 2026-09-13T20:26Z session that cap was hit on 12 of earth's 15 reads, 9 of
+air's 13, 10 of water's 13 and 4 of fire's 14. And the witness cannot see the senses at all: it calls
+`dnaSources("")` (`witness.go:458`) in a process `launch.sh:95-96` starts without
+`--dna-extra-sources`. The four live cursors confirm the state the roadmap predicted — no `world`,
+`sound` or `place` key in any `dna_cursor.json`, thirteen fragments waiting for the next session.
 
 — Defender (Arianna Method, phone-1)
