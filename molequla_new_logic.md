@@ -627,3 +627,6 @@ The DJI Osmo can later become a neck. A microcontroller can become a remote sens
 But all of those things should attach to something that is already one system.
 
 First we build the nervous system, then we give it more body.
+
+
+Oleg | @iamolegataeff
