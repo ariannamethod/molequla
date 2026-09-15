@@ -1955,3 +1955,39 @@ for. On `origin/main`'s `launch.sh` the gate reads 1 passed, 4 failed, the
 witness argv being `--witness --witness-interval 5` and its snapshot carrying no
 `dna` key at all; on the repaired script, 5 passed, 0 failed
 (`MOLEQULA_BIN=$PWD/molequla_cgo bash phone1/launch_test.sh`, cores 4-7).
+
+**2. The senses stood last in a queue the siblings kept full.** `dnaRead` walked
+`dnaSources(element)` — three siblings, then the extra sources — under one bound
+of `CFG.DNAMaxReadsPerTick = 8` and broke out of both loops when it was spent.
+Each sibling emits one fragment per tick and a tick is 0.25 s, so a sibling
+backlog is the normal state of the field: in the 2026-09-13T20:26Z session the
+shared cap was spent before the source list ran out on 12 of earth's 15 reads, 9
+of air's 13, 10 of water's 13 and 4 of fire's 14 (audit §3). The extra sources
+now read under `CFG.DNAExtraReadsPerTick`, a second counter, and a spent half
+skips to the next source instead of ending the walk. Which counter a read is
+charged to is decided by membership in `CFG.DNAExtraSources`, not by position,
+so the order `dnaSources` returns stays an order of service and stops being an
+order of entitlement — and the cafeteria can reorder that list without touching
+the budget.
+
+The default is 4, and the number comes from the live field rather than from
+taste. One senses pass leaves at most four fragments — eye cam0, eye cam1, ears,
+place — and the largest bundle actually on disk is exactly that, `gen_..._4`
+through `gen_..._7` between 2026-09-13T22:18:27Z and 22:21:08Z; the two
+scheduled passes in `molequla-run/schedule.log` recorded `frags=3` and `frags=2`.
+Arrival is nowhere near the bound: the thirteen fragments standing in
+`dna/output/{world,sound,place}` span 2026-09-13T22:10:52Z to
+2026-09-14T01:00:48Z, 10195 s, which is 4.59 fragments an hour, or 3.2e-4 per
+tick. So 4 never binds on live arrival — it binds on the backlog a sixteen-hour
+sleep leaves, and it is one sensing episode, so an episode enters whole in one
+tick instead of arriving in pieces over four.
+
+Two gates in `dna_extra_sources_test.go`, one per direction. Sixty-four sibling
+fragments standing in front of one `world` fragment, one `dnaRead`: the world
+fragment must be in the corpus, and air must have been read exactly
+`DNAMaxReadsPerTick` times. Sixty-four `world` fragments in front of one sibling
+fragment: the sibling must be in the corpus, and world must have been read
+exactly `DNAExtraReadsPerTick` times. Reverted to the single shared counter both
+go red, and they name the mechanism as they fall — `corpus holds 9 lines, cursor:
+map[air:gen_1789337000_7.txt]`, the whole budget spent inside air, and in the
+mirror `world was read 7 times, want 4`.

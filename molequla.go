@@ -69,8 +69,13 @@ type Config struct {
 	DNAExtraSources []string `json:"dna_extra_sources"`
 	// DNAMaxReadsPerTick — dnaRead eats at most this many new fragments per
 	// tick, so an organism that fell behind catches up over ticks instead of
-	// swallowing a backlog in one.
+	// swallowing a backlog in one. Siblings only — see DNAExtraReadsPerTick.
 	DNAMaxReadsPerTick int `json:"dna_max_reads_per_tick"`
+	// DNAExtraReadsPerTick — the same bound for DNAExtraSources, counted
+	// separately. One shared bound put the senses last in a queue the siblings
+	// kept full (the routing audit of 2026-09-15 §3); two bounds mean neither
+	// half of the field can starve the other. 0 = unbounded.
+	DNAExtraReadsPerTick int `json:"dna_extra_reads_per_tick"`
 	// DNARetainSeconds — the writer prunes its own fragments older than this;
 	// readers never delete (see dna_field.go).
 	DNARetainSeconds float64 `json:"dna_retain_seconds"`
@@ -291,7 +296,20 @@ var CFG = Config{
 	DNAMinFragmentBytes:  5, // unified DNA emit+consume gate (Fix A)
 	DNAFragmentTargetBytes: 5000, // dnaWrite pads fragments toward this (Fix B; 200→600→5000 2026-06-03: per-tick cost grows with model size so ingestion/tick must too — real corpus text, not seeding; corpus FILE capped at MaxCorpusLines so field-rebuild stays bounded while the monotonic ingest clock climbs fast)
 	DNAExtraSources:      nil,  // "world" joins here when the eye writes
-	DNAMaxReadsPerTick:   8,    // repair 3: catch up over ticks, not in one
+	DNAMaxReadsPerTick:   8,    // repair 3: catch up over ticks, not in one — siblings only
+	// Routing repair 2: the extra sources read under their own budget, so the
+	// siblings cannot starve the senses and the senses cannot starve the
+	// siblings. 4 is one sensing episode: the largest bundle one senses pass
+	// left in the live field is four fragments (eye cam0, eye cam1, ears,
+	// place — gen_..._4 through gen_..._7, 2026-09-13T22:18:27Z..22:21:08Z),
+	// and the scheduled passes in molequla-run/schedule.log recorded frags=3
+	// and frags=2. Arrival is far below that: the 13 fragments standing in
+	// dna/output/{world,sound,place} span 22:10:52Z..2026-09-14T01:00:48Z,
+	// 10195 s, i.e. 4.59 fragments/hour or 3.2e-4 per 0.25 s tick. So this
+	// number never binds on live arrival — it binds on the backlog a sleeping
+	// colony leaves, and it is chosen so that one episode enters in one tick
+	// instead of being split across four. 0 disables the bound.
+	DNAExtraReadsPerTick: 4,
 	DNARetainSeconds:     1800, // repair 3: the writer prunes its own fragments after 30 min
 	DNARetainFiles:       256,  // repair 5: and keeps at most 256 of them (~1.3 MB at 5 KB each). Tunable; 0 disables.
 	TickJitterSeconds:    0.05, // repair 3: de-phase sibling scans
@@ -6121,8 +6139,17 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 
 // dnaRead eats fragments from every source this organism reads (the other
 // elements plus CFG.DNAExtraSources), newer than its cursor, at most
-// CFG.DNAMaxReadsPerTick per call. Fragments are never removed here; the
-// cursor is advanced and persisted instead. Returns bytes added to the corpus.
+// CFG.DNAMaxReadsPerTick sibling fragments and CFG.DNAExtraReadsPerTick extra
+// ones per call. Fragments are never removed here; the cursor is advanced and
+// persisted instead. Returns bytes added to the corpus.
+//
+// The two budgets are routing repair 2. Under one shared bound the extra
+// sources were read last, after three siblings that emit a fragment per tick
+// each, so a senses fragment waited behind sibling chatter for as long as the
+// backlog lasted: in the 2026-09-13T20:26Z session the shared cap was spent
+// before the source list ran out on 12 of earth's 15 reads, 9 of air's 13, 10
+// of water's 13 and 4 of fire's 14. A separate counter per half makes the
+// order in dnaSources an order of service and not an order of entitlement.
 func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *EvolvingTokenizer, cur *dnaCursor) int {
 	if element == "" {
 		return 0
@@ -6131,21 +6158,37 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 		cur = &dnaCursor{Last: map[string]string{}}
 	}
 	added := 0
-	reads := 0
-	limit := CFG.DNAMaxReadsPerTick
-	if limit <= 0 {
-		limit = 1 << 30
+	budget := func(n int) int {
+		if n <= 0 {
+			return 1 << 30
+		}
+		return n
+	}
+	siblingLeft := budget(CFG.DNAMaxReadsPerTick)
+	extraLeft := budget(CFG.DNAExtraReadsPerTick)
+	// Membership, not order: dnaSources decides who is served in what order,
+	// this decides which counter the read is charged to. Built from CFG so it
+	// stays true however dnaSources is later allocated.
+	isExtra := make(map[string]bool, len(CFG.DNAExtraSources))
+	for _, s := range CFG.DNAExtraSources {
+		if s != "" && s != element {
+			isExtra[s] = true
+		}
 	}
 	var consumed []string
 	moved := false
 
 	for _, src := range dnaSources(element) {
-		if reads >= limit {
-			break
+		left := &siblingLeft
+		if isExtra[src] {
+			left = &extraLeft
+		}
+		if *left <= 0 {
+			continue // that half is spent; the other half is still owed its reads
 		}
 		dir := filepath.Join("../dna/output", src)
 		for _, name := range dnaListNew(dir, cur.Last[src]) {
-			if reads >= limit {
+			if *left <= 0 {
 				break
 			}
 			fpath := filepath.Join(dir, name)
@@ -6153,7 +6196,7 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 			if err != nil {
 				continue
 			}
-			reads++
+			*left--
 			text := strings.TrimSpace(string(data))
 			if len(text) < CFG.DNAMinFragmentBytes {
 				cur.Last[src] = name // too short to be food; step past it, do not delete
