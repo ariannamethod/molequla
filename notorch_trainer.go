@@ -470,6 +470,9 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		seqLen = model.BlockSize
 	}
 	m := ntNewMirror(model, seqLen)
+	// Defers run last-in-first-out: registering the release first means it runs
+	// after m.free(), with the tape clear and every mirrored tensor gone.
+	defer releaseTrainingHeap()
 	defer m.free()
 
 	// Post-growth: wipe positional Chuck slots before the first step (S1).
@@ -510,6 +513,9 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		lossIdx, _ := ntBuildForward(m, tokIdx, tgtIdx, maskIdx, seqLen, vocab)
 		loss := ntEntryScalar(lossIdx)
 		ntTapeBackward(lossIdx)
+		if step == 0 || step == steps-1 {
+			memTapeSnapshot(fmt.Sprintf("step%d", step), seqLen, model.NEmbd, model.NLayer, vocab)
+		}
 		if guard.check() {
 			ntTapeClipGrads(1.0)
 			ntTapeChuckStep(lrFor(step), loss)

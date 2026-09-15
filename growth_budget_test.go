@@ -839,3 +839,91 @@ func TestLoadCheckpointRejectsTruncation(t *testing.T) {
 	}
 	t.Logf("six truncations of a %d-byte checkpoint, all refused", len(blob))
 }
+
+// ── 7. the C allocator's free pages ───────────────────────────────────────────
+
+// TestHeapTrimReturnsTheTapeArena runs a real burst, so the arena is grown the
+// way training grows it, and then asks the allocator what it is holding before
+// and after releaseTrainingHeap. The comparison is runtime against runtime —
+// no expected byte count is written down anywhere — so the test measures the
+// mechanism rather than agreeing with itself: with the release made a no-op the
+// two readings are identical and it goes red.
+func TestHeapTrimReturnsTheTapeArena(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.NEmbd, CFG.NLayer, CFG.NHead = 64, 2, 2
+	CFG.BlockSize = 96
+	CFG.HeadTypes = []string{"content", "content"}
+	CFG.TieEmbeddings = true
+	CFG.TrimHeapAfterTrain = false // the burst below must leave the arena grown
+
+	words := make([]string, 0, 256)
+	for i := 0; i < 256; i++ {
+		words = append(words, "the organism "+strconv.Itoa(i)+" eats and speaks and grows again")
+	}
+	tok := NewEvolvingTokenizer(words)
+	model := NewGPT(tok)
+	ntTapeDestroy()
+	defer ntTapeDestroy()
+
+	// Enough steps that glibc has raised its dynamic mmap threshold: while the
+	// tensors are still coming back as their own mappings a free returns them to
+	// the kernel by itself and there is nothing for a trim to do, which is the
+	// state a fresh process starts in and not the state a colony session runs in.
+	ntBurstTrain(model, tok, words, 48, CFG.NotorchLR)
+
+	mb := func(v int64) float64 { return float64(v) / (1 << 20) }
+	arenaBefore, _, inUseBefore, freeBefore := cHeapStats()
+	rssBefore := procSelfRSSKB()
+	if freeBefore == 0 {
+		t.Skipf("the allocator reports no free chunks after a burst (arena %.1f MB, in use %.1f MB) — nothing for the trim to return here",
+			mb(arenaBefore), mb(inUseBefore))
+	}
+
+	CFG.TrimHeapAfterTrain = true
+	releaseTrainingHeap()
+
+	arenaAfter, _, inUseAfter, freeAfter := cHeapStats()
+	rssAfter := procSelfRSSKB()
+	t.Logf("burst left arena %.1f MB (%.1f in use, %.1f free), RSS %d kB; after the release arena %.1f MB (%.1f in use, %.1f free), RSS %d kB",
+		mb(arenaBefore), mb(inUseBefore), mb(freeBefore), rssBefore,
+		mb(arenaAfter), mb(inUseAfter), mb(freeAfter), rssAfter)
+
+	// The resident set is the thing under test: malloc_trim hands whole pages
+	// back with madvise, which shows in VmRSS even when the arena keeps its own
+	// bookkeeping at the same size.
+	if rssAfter >= rssBefore {
+		t.Fatalf("the release returned nothing: VmRSS %d → %d kB, free chunks %d → %d bytes",
+			rssBefore, rssAfter, freeBefore, freeAfter)
+	}
+	// What was in use must survive: the trim hands back pages nobody holds, it
+	// does not move or drop a live allocation.
+	if inUseAfter > inUseBefore {
+		t.Fatalf("the release changed what is in use: %d → %d bytes", inUseBefore, inUseAfter)
+	}
+}
+
+// TestHeapTrimObeysItsKnob is the other half: with CFG.TrimHeapAfterTrain false
+// the release must do nothing at all, so a session that wants the arena left
+// alone can have it.
+func TestHeapTrimObeysItsKnob(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.TrimHeapAfterTrain = false
+	_, _, _, freeBefore := cHeapStats()
+	releaseTrainingHeap()
+	_, _, _, freeAfter := cHeapStats()
+	if freeAfter != freeBefore {
+		t.Fatalf("the knob is off and the arena still moved: free chunks %d → %d bytes", freeBefore, freeAfter)
+	}
+}
+
+// procSelfRSSKB is VmRSS in kB — the resolution /proc gives, which the trim
+// gate needs because a small fixture returns less than a megabyte.
+func procSelfRSSKB() int64 {
+	data, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0
+	}
+	return parseProcKB(string(data), "VmRSS")
+}

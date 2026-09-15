@@ -261,6 +261,7 @@ type Config struct {
 	GrowthPeakFactorPct    int     `json:"growth_peak_factor_pct"`    // repair 9: what one stage step costs, as a percentage of the organism's current peak RSS. Measured, not guessed — see MOLEQULALOG2.md 2026-09-13.
 	CoordinateGrowth       bool    `json:"coordinate_growth"`         // repair 9: hold a colony-wide lock across growth AND the warmup that follows, so four siblings do not peak together. Unlike CoordinateWarmup this does not serialize the micro-bursts.
 	OomScoreAdj            int     `json:"oom_score_adj"`             // repair 9: value written to /proc/self/oom_score_adj at startup. Magisk su hands down -1000, which makes the colony unkillable and feeds Termux to lmkd instead. 0 = leave untouched.
+	TrimHeapAfterTrain     bool    `json:"trim_heap_after_train"`     // return the C allocator's free pages to the kernel after each warmup or burst. The tape allocates and frees every activation of every step, and glibc keeps those pages once its dynamic mmap threshold has risen: measured 150 MB held with 1 MB in use between bursts on phone-1 at stage 4.
 	CheckpointMinInterval  float64 `json:"checkpoint_min_interval"`   // write-storm throttle: min seconds between DEFAULT-path (periodic) full-model JSON checkpoints (0 = no throttle). Explicit-path saves (mitosis parent ckpt) are never throttled.
 
 	// consciousness: per-token dissonance feedback
@@ -423,6 +424,7 @@ var CFG = Config{
 	GrowthPeakFactorPct:    300,  // a stage step multiplied VmHWM by ~3.3-3.9x on 2026-09-13 (231-240 MB -> 758-928 MB per organism); charge 300% of the current peak for the increment.
 	CoordinateGrowth:       true, // growth + warmup serialized colony-wide; the micro-burst path stays parallel (that is CoordinateWarmup, still off).
 	OomScoreAdj:            300,  // lmkd takes the organism before Termux (which sits at 0). Tunable; 0 = leave untouched.
+	TrimHeapAfterTrain:     true, // one malloc_trim per training phase, where nothing is in flight; false leaves the arena alone.
 	CheckpointMinInterval:  30.0, // throttle periodic full-model checkpoints to ≤1/30s (coalesces the growth/burst storm). Tunable; 0 disables. Mitosis ckpt (explicit path) bypasses.
 
 	// consciousness defaults
@@ -6991,6 +6993,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				model.mu.Unlock()
 			}
 			lastFieldRebuild = tickCount
+			memSnapshot("corpus-rebuild")
 		}
 
 		// Tokenizer evolution
@@ -7110,6 +7113,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 			// notorch: gradient-free delta training (no backward pass, no compute graph)
 			ntBurstTrain(model, tok, docs, CFG.MicroSteps, burstLR)
+			memSnapshot("burst")
 
 			model.mu.Lock()
 			// Measure loss after burst
@@ -7131,6 +7135,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				entropyAfter := postMetrics.Entropy
 				syntracker.LogToDB(db, entropyBefore, entropyAfter, action)
 				SaveCheckpoint(model, tok, "")
+				memSnapshot("ckpt-save")
 				note := fmt.Sprintf("quantum_burst:%s|Δloss=%.4f", action, lossAfter-lossBefore)
 				dbLogGrowth(db, model, tok, docs, 0.0, note)
 			}
@@ -7538,11 +7543,13 @@ func main() {
 	// stale trained checkpoint and the Q-style coherence claim becomes meaningless.
 	var model *GPT
 	var tok *EvolvingTokenizer
+	memSnapshot("pre-load")
 	if CFG.WarmupSteps > 0 {
 		model, tok, err = LoadCheckpoint(docs, "")
 	} else {
 		err = fmt.Errorf("zero-warmup mode: skipping checkpoint load")
 	}
+	memSnapshot("post-load")
 	if err != nil || model == nil || tok == nil {
 		if len(docs) == 0 {
 			docs = []string{"Hello."}
