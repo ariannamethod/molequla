@@ -333,3 +333,83 @@ a gate that breaks when someone rebuilds the oracle is a worse gate. Worth a
 decision rather than a silent edit.
 
 — Defender (Arianna Method, phone-1)
+
+---
+
+## 2026-09-15 — the other half of hearing: `soundscape`, no model
+
+Whisper answers one question and molequla was storing only that answer: a quiet
+twelve seconds produced nothing at all, and the recognizer's own `[Motor]`,
+`[BLANK_AUDIO]`, `(wind)` were stripped by `senses.sh` before the fragment was
+written. `soundscape` is the other question — what kind of sound was that — asked
+without weights, and it runs on every pass beside `ears`, not instead of it.
+
+**The organ.** `soundscape.c` / `soundscape.h`, built by the same Makefile
+(`make soundscape`, `cc -O2 -Wall -Werror -std=c11`, 0.5 s), linking `mel.c` for
+`ears_read_wav` and the system `libnotorch.a` for `nt_hann_window` and `nt_stft`.
+512-point frames, 160-sample hop, one pass over a 12 s wav in **0.057 s wall**
+(`time ./soundscape <wav>`, cores 4-7) against the 20-22 s the recognizer takes on
+the same file. Seven labels: quiet room, a single loud transient, music is
+audible, speech-like modulation words unclear, repeated mechanical noise, steady
+broadband noise, and an unsteady sound without clear structure for what is none
+of those. Every one of them is a region of measured features — level percentiles,
+300-3400 Hz band share, spectral flatness, peak prominence over its own
+neighbourhood, onset count, envelope autocorrelation, 2-8 Hz modulation share —
+and every threshold is a field of `snd_cfg` with an `SND_*` environment variable
+over it.
+
+**The gate.** `make test-soundscape` → `tests/test_soundscape`, seven fixtures
+synthesised in C (there is no sox here and no wav in this repository), written to
+`tests/out/soundscape/*.wav`, read back through `ears_read_wav`, analysed, and
+compared against the label each was built to produce. **7 pass, 0 fail.** Every
+feature is printed beside its row, which is where the defaults came from. Red
+twice, by moving a threshold rather than by patching the organ:
+`SND_QUIET_DB=-80` → `FAIL quiet got "steady broadband noise"`, 6 pass 1 fail;
+`SND_SPEECH_BAND=1.1` → `FAIL speech got "an unsteady sound without clear
+structure"`, 6 pass 1 fail.
+
+**Two things the fixtures could not have taught.** Both found by running the
+organ over the six real recordings the live field left in
+`molequla-run/senses/audio/` on 2026-09-13/14 (read-only copies; five of a room
+at night, one of `jfk.wav` played into the room from the phone's own speaker).
+
+*The recorder hands over a third of a second of digital silence.* All six wavs
+begin with an exact run of zeros. Frames of literal nothing sit at -120 dB and
+they put the envelope's standard deviation at 13.3-13.5 dB in every one of the
+six while the 10th-to-90th percentile span was under 6 dB — one artefact, six
+identical numbers, and every rhythm measure downstream reading it. Leading and
+trailing zeros are now cut before anything is measured.
+
+*Every recording was "tonal".* With the spectrum as it arrives, the loudest bin
+beats the average bin by hundreds because a phone on a table has more power under
+100 Hz than in the room above it — so six of six night recordings came out as
+"music is audible". Two changes: a one-pole high pass at `SND_HPF_HZ` (100 Hz)
+in front of everything, and tonality measured as prominence over the median of
+the 48 bins around the peak instead of over the whole spectrum, which cancels the
+tilt. Tonal frame share on those recordings fell from 0.44-0.94 to 0.06-0.13,
+while the tone fixtures stayed at 1.000.
+
+After both, the six real files read: five `quiet room` (one of them a night
+recording with a single click in it → `a single loud transient`, `db_max` -21.2
+against a median of -45.6) and the speaker one `speech-like modulation, words
+unclear` (band share 0.920, `db_p90` -12.9). Room tone on this microphone
+measures `db_p90` -47.6 .. -41.5, which is where `SND_QUIET_DB=-40` comes from.
+
+**In the field.** `senses.sh` writes the line as an `[ears env …]` fragment in
+`dna/output/sound/`, separate from the `[ears mic …]` transcript and written
+whether or not anybody spoke, and the recognizer's bracketed tags are appended to
+it instead of being dropped. One live pass on a scratch run directory,
+2026-09-15T02:13:18Z, twelve seconds of an empty room:
+
+    ears=rc0,22s,speechno,frags1,env:quiet-room
+    [ears env 2026-09-15T02:13:18Z] Quiet room. The recognizer also marked [BLANK_AUDIO].
+
+where the same pass two days ago wrote nothing at all.
+
+**Not done.** A tagger that names a sound rather than classifying its shape —
+survey, sizes and the ops it would need in `PORT_NOTES_SOUND.md`. The four
+whisper parity gates were not re-run: this branch does not touch `ears.c`,
+`encoder.c`, `decoder.c`, `tokenizer.c`, `ggml_bin.c` or `nnops.c`, and `mel.c` is
+read by the new binary, not changed.
+
+— Defender (Arianna Method, phone-1)

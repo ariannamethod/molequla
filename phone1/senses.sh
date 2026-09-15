@@ -13,9 +13,11 @@
 #                     SENSES_EYE_PATTERN, each described by senses/ocelli/eye
 #                     (SmolVLM2-500M in C), one fragment per sentence and one
 #                     summary line per window.
-#   ears  -> sound/   12 s from the microphone through senses/ears (whisper on
-#                     notorch) on the tiny weights, one fragment, and only when
-#                     there was speech in it.
+#   ears  -> sound/   12 s from the microphone: the transcript through
+#                     senses/ears (whisper on notorch) when somebody spoke, and
+#                     — every pass, speech or not — one environmental line from
+#                     senses/ears/soundscape, which is what a transcript throws
+#                     away.
 #   place -> place/   one fragment: where the phone is, what the sky is doing,
 #                     and whether it moved since the last pass.
 #
@@ -144,6 +146,12 @@ fi
 SENSES_REC_SECONDS="${SENSES_REC_SECONDS:-12}"
 # Shorter than this, after the noise tags are stripped, is not speech.
 SENSES_SPEECH_MIN_CHARS="${SENSES_SPEECH_MIN_CHARS:-8}"
+# The other half of hearing: senses/ears/soundscape, no model, reads the same
+# wav and names what kind of sound it was. It runs on every pass, next to the
+# recognizer and not instead of it — a quiet twelve seconds is evidence too, and
+# it used to produce nothing at all. Empty this variable and the pass is the
+# speech-only pass it was.
+SENSES_SOUNDSCAPE="${SENSES_SOUNDSCAPE-$REPO/senses/ears/soundscape}"
 
 # --- place -----------------------------------------------------------------
 SENSES_MOVE_M="${SENSES_MOVE_M:-50}"
@@ -516,8 +524,52 @@ do_eye() {
 }
 
 # --- the ears --------------------------------------------------------------
-EARS_RC=0; EARS_WALL=0; EARS_FRAGS=0; EARS_SPEECH=no; EARS_NOTE=""
+EARS_RC=0; EARS_WALL=0; EARS_FRAGS=0; EARS_SPEECH=no; EARS_NOTE=""; EARS_ENV=""
 
+# ears_env <wav> <raw transcript> — the half of hearing that is not language.
+# Two things survive here that the transcript dropped on the floor: the sound
+# describer's one line about the recording itself, which is written whether
+# anybody spoke or not, and the recognizer's own bracketed non-speech tags,
+# which used to be stripped and thrown away. The fragment is marked `env` and
+# not `mic`: it is a different kind of evidence about the same twelve seconds
+# and it is not supposed to agree with the transcript (molequla_new_logic.md
+# §15).
+ears_env() {
+    local wav="$1" raw="$2" tags label text
+    tags="$(printf '%s' "$raw" | grep -oE '\[[^]]+\]|\([^)]+\)|\*[^*]+\*' 2>/dev/null \
+            | awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR) printf "\n"}')"
+    if [ -n "$SENSES_SOUNDSCAPE" ] && [ -x "$SENSES_SOUNDSCAPE" ]; then
+        label="$(timeout 60 taskset -c "$CPUS" "$SENSES_SOUNDSCAPE" "$wav" 2>/dev/null | head -1)"
+    else
+        label=""
+        [ -n "$SENSES_SOUNDSCAPE" ] && EARS_NOTE="${EARS_NOTE:+$EARS_NOTE,}no-describer"
+    fi
+    label="$(printf '%s' "$label" | sed 's/^ *//; s/ *$//')"
+    EARS_ENV="$label"
+    [ -n "$label" ] || [ -n "$tags" ] || return 0
+
+    text=""
+    if [ -n "$label" ]; then
+        text="$(printf '%s' "${label:0:1}" | tr '[:lower:]' '[:upper:]')${label:1}"
+        case "$text" in *[.!?]) ;; *) text="$text." ;; esac
+    fi
+    [ -n "$tags" ] && text="${text:+$text }The recognizer also marked $tags."
+    frag_write sound "[ears env $(now_iso)] $text" && EARS_FRAGS=$((EARS_FRAGS + 1))
+    # The same twelve seconds as a fact, beside the fragment, the way every
+    # other organ writes one. The predicate is `soundscape` and not `hearing`:
+    # what the recording sounded like is a different claim from whether anybody
+    # spoke in it, and the ledger should be able to hold both about one window
+    # without either correcting the other (§15). The object is the describer's
+    # line, or the recognizer's tags when there is no describer — whichever of
+    # the two put the fragment on disk.
+    fact_emit ears microphone soundscape "${label:-$tags}" \
+        "$(jq -cn --arg describer "$(basename "${SENSES_SOUNDSCAPE:-none}")" \
+            --arg label "$label" --arg tags "$tags" \
+            --argjson window_s "$SENSES_REC_SECONDS" \
+            --argjson conditions "$(conditions_json)" \
+            '{describer:$describer,label:$label,tags:$tags,window_s:$window_s,
+              conditions:$conditions} | with_entries(select(.value != ""))')"
+}
 
 do_ears() {
     local ts remote wav txt rc t0 t1 clean
@@ -581,6 +633,8 @@ do_ears() {
     clean="$(printf '%s' "$txt" \
         | sed -E 's/\[[^]]*\]//g; s/\([^)]*\)//g; s/\*[^*]*\*//g' \
         | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+    ears_env "$wav" "$txt"
+
     if [ "${#clean}" -lt "$SENSES_SPEECH_MIN_CHARS" ] || ! printf '%s' "$clean" | grep -q '[[:alpha:]]'; then
         say "ears: no speech in ${SENSES_REC_SECONDS}s"
         EARS_SPEECH=no
@@ -589,6 +643,7 @@ do_ears() {
         # has always been quiet is not news (world_ledger.go).
         fact_emit ears microphone hearing silence "$(ears_prov "" "$rc")"
         prune_dir "$AUDIO" "$SENSES_KEEP"
+        prune_dir "$RUN/dna/output/sound" "$SENSES_FRAG_KEEP"
         return 0
     fi
     EARS_SPEECH=yes
@@ -806,7 +861,7 @@ T1="$(date -u +%s)"
 FRAGS=$((EYE_FRAGS + EARS_FRAGS + PLACE_FRAGS))
 LINE="$(now_iso) pass=$MODE cpu=$CPUS mem_mb=${MEM0}->$(mem_avail_mb)"
 LINE="$LINE eye=rc${EYE_RC},${EYE_WALL}s,rss${EYE_RSS}mb,frames${EYE_FRAMES},frags${EYE_FRAGS}${EYE_NOVEL:+,novel$EYE_NOVEL}${EYE_NOTE:+,$EYE_NOTE}"
-LINE="$LINE ears=rc${EARS_RC},${EARS_WALL}s,speech${EARS_SPEECH},frags${EARS_FRAGS}${EARS_NOTE:+,$EARS_NOTE}"
+LINE="$LINE ears=rc${EARS_RC},${EARS_WALL}s,speech${EARS_SPEECH},frags${EARS_FRAGS}${EARS_ENV:+,env:$(printf '%s' "$EARS_ENV" | tr ' ' '-')}${EARS_NOTE:+,$EARS_NOTE}"
 LINE="$LINE place=rc${PLACE_RC},${PLACE_WALL}s,moved${PLACE_MOVED},frags${PLACE_FRAGS}${PLACE_NOTE:+,$PLACE_NOTE}"
 LINE="$LINE world=rc${INGEST_RC},changes${INGEST_LINES}"
 LINE="$LINE frags=$FRAGS total=$((T1 - T0))s"

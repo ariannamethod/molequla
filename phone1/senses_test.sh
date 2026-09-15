@@ -1,11 +1,15 @@
 #!/bin/bash
-# Gate for the sensing window: the eye's short trajectory and the text-overlap
-# metric that decides whether a frame repeated an earlier one.
+# Gate for the sensing window: the eye's short trajectory, the text-overlap
+# metric that decides whether a frame repeated an earlier one, and the two
+# fragments hearing leaves — the transcript when somebody spoke and the
+# environmental line when nobody did.
 #
 # Every case drives the real phone1/senses.sh. What is faked is only the
-# hardware beyond it: an `ssh` that copies a fixture frame where
-# termux-camera-photo would have written one, and an `eye` that prints a
-# scripted sentence. ffmpeg is real — the scaling is part of the path under test.
+# hardware beyond it: an `ssh` that copies fixture files where termux-camera-photo
+# and termux-microphone-record would have written them, an `eye` that prints a
+# scripted sentence, a recognizer that prints a scripted transcript, and a sound
+# describer that prints a scripted label. ffmpeg is real — the scaling and the
+# 16 kHz conversion are part of the path under test.
 #
 #   bash phone1/senses_test.sh
 set -u
@@ -164,6 +168,40 @@ else
     bad "one noun changed is still the same frame: got '$got', want 0.8 <= x < 1.0"
 fi
 
+# --- hearing: the transcript and the environment ----------------------------
+# say <transcript> <label> — one ears pass with a scripted recognizer and a
+# scripted describer.
+say() {
+    rm -rf "$RUN"; mkdir -p "$RUN"
+    printf '#!/bin/bash\nprintf "%%s\\n" %q\n' "$1" > "$TMP/asr.sh"
+    printf '#!/bin/bash\nprintf "%%s\\n" %q\n' "$2" > "$TMP/snd.sh"
+    chmod +x "$TMP/asr.sh" "$TMP/snd.sh"
+    MOLEQULA_RUN="$RUN" \
+    SENSES_SSH="bash $TMP/ssh.sh" \
+    SENSES_ASR="$TMP/asr.sh" SENSES_ASR_KIND=ears SENSES_ASR_MODEL="$TMP/model.bin" \
+    SENSES_SOUNDSCAPE="$TMP/snd.sh" \
+    SENSES_REC_SECONDS=1 SENSES_TERMUX_HOME="$TMP/termux" \
+    bash "$SENSES" ears > "$TMP/ears.out" 2>&1
+}
+
+heads() { for f in "$RUN"/dna/output/sound/*.txt; do [ -e "$f" ] || continue; sed -n 's/^\(\[ears [a-z]*\).*/\1]/p' "$f"; done | sort | tr '\n' ' '; }
+
+say "" "quiet room"
+eq "silence still leaves the environment" "$(heads)" "[ears env] "
+grep -q '^\[ears env .*\] Quiet room\.$' "$RUN"/dna/output/sound/*.txt 2>/dev/null \
+    && ok "the environmental line is the describer's" \
+    || bad "the environmental line is the describer's: got '$(cat "$RUN"/dna/output/sound/*.txt 2>/dev/null)'"
+
+say "And so my fellow Americans, ask not what your country can do for you." "speech-like modulation, words unclear"
+eq "speech leaves the transcript and the environment" "$(heads)" "[ears env] [ears mic] "
+
+# A recognizer that only found a non-speech tag is not speech — and the tag is
+# not thrown away either, because that is the hearing this window is for.
+say "[Motor]" "repeated mechanical noise"
+eq "a bare non-speech tag is not a transcript" "$(heads)" "[ears env] "
+grep -q '\[Motor\]' "$RUN"/dna/output/sound/*.txt 2>/dev/null \
+    && ok "the recognizer's own non-speech tag survives" \
+    || bad "the recognizer's own non-speech tag survives: got '$(cat "$RUN"/dna/output/sound/*.txt 2>/dev/null)'"
 
 printf '\n%d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
