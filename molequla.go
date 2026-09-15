@@ -6056,23 +6056,16 @@ func trainingLockRefreshSeconds() float64 {
 	return ttl / 3.0
 }
 
-// AcquireTrainingLock attempts to acquire the training lock in mesh.db without
-// joining the queue: the turn goes to whoever asks first. Kept for the callers
-// that only need mutual exclusion; the admission gate is AcquireTrainingTurn.
-func (sr *SwarmRegistry) AcquireTrainingLock() bool {
-	return sr.AcquireTrainingTurn(trainTurnBurst, false)
-}
-
 // AcquireTrainingTurn is the burst admission gate of step 1: one training phase
 // in the colony at a time, and the turn goes by the order of §2.3 rather than
-// to whichever process polled first. With queued=false it is the bare lock.
+// to whichever process polled first.
 //
 // One statement, as the lock has always been: a TOCTOU race between "am I the
 // head of the queue" and "take the lock" would hand the tape to two organisms.
 // On success a refresher re-stamps the row until Release, so the TTL bounds a
 // holder that died and not one that is merely slow — the shape AcquireGrowthLock
 // already uses for the minutes-long growth event.
-func (sr *SwarmRegistry) AcquireTrainingTurn(priority int, queued bool) bool {
+func (sr *SwarmRegistry) AcquireTrainingTurn(priority int) bool {
 	if sr.MeshDB == nil {
 		return true // no mesh = solo, always proceed
 	}
@@ -6082,41 +6075,26 @@ func (sr *SwarmRegistry) AcquireTrainingTurn(priority int, queued bool) bool {
 		ttl = 30.0
 	}
 	cutoff := now - ttl
-	if queued {
-		// Join the queue, or re-stamp the row if this organism is already in it.
-		// `since` is written once and never moved while the organism waits: it
-		// is the longest-wait key, and a poll that refreshed it would make a
-		// waiter that polls often the youngest waiter there is.
-		sr.MeshDB.Exec(
-			"INSERT OR IGNORE INTO training_queue(organism_id, since, seen, priority) VALUES(?,?,?,?)",
-			sr.OrganismID, now, now, priority)
-		sr.MeshDB.Exec("UPDATE training_queue SET seen=?, priority=? WHERE organism_id=?",
-			now, priority, sr.OrganismID)
-	}
-	var result sql.Result
-	var err error
-	if queued {
-		result, err = sr.MeshDB.Exec(
-			`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
-			 SELECT ?, ? WHERE NOT EXISTS (
-			   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
-			 ) AND NOT EXISTS (
-			   SELECT 1 FROM training_queue q, training_queue me
-			   WHERE me.organism_id = ? AND q.organism_id != me.organism_id AND q.seen > ?
-			     AND (q.priority > me.priority
-			          OR (q.priority = me.priority AND q.since < me.since))
-			 )`,
-			sr.OrganismID, now, sr.OrganismID, cutoff, sr.OrganismID, cutoff)
-	} else {
-		// Atomic check-and-acquire: single statement prevents TOCTOU race.
-		// INSERT succeeds only if no fresh lock exists from another organism.
-		result, err = sr.MeshDB.Exec(
-			`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
-			 SELECT ?, ? WHERE NOT EXISTS (
-			   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
-			 )`,
-			sr.OrganismID, now, sr.OrganismID, cutoff)
-	}
+	// Join the queue, or re-stamp the row if this organism is already in it.
+	// `since` is written once and never moved while the organism waits: it is
+	// the longest-wait key, and a poll that refreshed it would make a waiter
+	// that polls often the youngest waiter there is.
+	sr.MeshDB.Exec(
+		"INSERT OR IGNORE INTO training_queue(organism_id, since, seen, priority) VALUES(?,?,?,?)",
+		sr.OrganismID, now, now, priority)
+	sr.MeshDB.Exec("UPDATE training_queue SET seen=?, priority=? WHERE organism_id=?",
+		now, priority, sr.OrganismID)
+	result, err := sr.MeshDB.Exec(
+		`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
+		 SELECT ?, ? WHERE NOT EXISTS (
+		   SELECT 1 FROM training_lock WHERE organism_id != ? AND acquired_at > ?
+		 ) AND NOT EXISTS (
+		   SELECT 1 FROM training_queue q, training_queue me
+		   WHERE me.organism_id = ? AND q.organism_id != me.organism_id AND q.seen > ?
+		     AND (q.priority > me.priority
+		          OR (q.priority = me.priority AND q.since < me.since))
+		 )`,
+		sr.OrganismID, now, sr.OrganismID, cutoff, sr.OrganismID, cutoff)
 	if err != nil {
 		return false
 	}
@@ -6195,7 +6173,7 @@ func (sr *SwarmRegistry) WaitTrainingTurn(priority int, what string) bool {
 	}
 	t0 := time.Now()
 	said := false
-	for !sr.AcquireTrainingTurn(priority, true) {
+	for !sr.AcquireTrainingTurn(priority) {
 		if trainAborting() {
 			sr.MeshDB.Exec("DELETE FROM training_queue WHERE organism_id=?", sr.OrganismID)
 			return false

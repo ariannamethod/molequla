@@ -41,14 +41,14 @@ func TestOnlyOneOrganismIsInsideATrainingPhase(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air")
 	earth, air := r[0], r[1]
 
-	if !earth.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !earth.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the first organism to ask was refused the turn")
 	}
-	if air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("two organisms hold the training turn at once — four tapes is exactly what step 1 removes")
 	}
 	earth.ReleaseTrainingLock()
-	if !air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the turn was not freed by the release")
 	}
 }
@@ -60,23 +60,23 @@ func TestTheGrownOrganismGoesToTheHeadOfTheQueue(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air", "water")
 	earth, air, water := r[0], r[1], r[2]
 
-	if !earth.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !earth.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("earth was refused the first turn")
 	}
 	// water asks first and waits; air grows and asks after it.
-	if water.AcquireTrainingTurn(trainTurnBurst, true) {
+	if water.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("water took a held turn")
 	}
 	time.Sleep(5 * time.Millisecond)
-	if air.AcquireTrainingTurn(trainTurnGrown, true) {
+	if air.AcquireTrainingTurn(trainTurnGrown) {
 		t.Fatal("air took a held turn")
 	}
 
 	earth.ReleaseTrainingLock()
-	if water.AcquireTrainingTurn(trainTurnBurst, true) {
+	if water.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the longer wait beat the grown organism — the ordering key of §2.3 is inverted")
 	}
-	if !air.AcquireTrainingTurn(trainTurnGrown, true) {
+	if !air.AcquireTrainingTurn(trainTurnGrown) {
 		t.Fatal("the grown organism did not get the head of the queue")
 	}
 }
@@ -89,22 +89,22 @@ func TestTheLongestWaitGoesFirst(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air", "water")
 	earth, air, water := r[0], r[1], r[2]
 
-	if !earth.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !earth.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("earth was refused the first turn")
 	}
-	if air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("air took a held turn")
 	}
 	time.Sleep(5 * time.Millisecond)
-	if water.AcquireTrainingTurn(trainTurnBurst, true) {
+	if water.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("water took a held turn")
 	}
 
 	earth.ReleaseTrainingLock()
-	if water.AcquireTrainingTurn(trainTurnBurst, true) {
+	if water.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the shorter wait went first")
 	}
-	if !air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the longest waiter was not admitted")
 	}
 	// And the one that just trained goes to the back: its queue row is gone,
@@ -127,10 +127,10 @@ func TestADeadHolderFreesTheTurnAfterTheTTL(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air")
 	earth, air := r[0], r[1]
 
-	if !earth.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !earth.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("earth was refused the first turn")
 	}
-	if air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("air took a held turn")
 	}
 	// kill -9: the process is gone, so the row stops being re-stamped. Age it
@@ -142,7 +142,7 @@ func TestADeadHolderFreesTheTurnAfterTheTTL(t *testing.T) {
 	if _, err := earth.MeshDB.Exec("UPDATE training_queue SET seen=? WHERE organism_id='earth'", stale); err != nil {
 		t.Fatal(err)
 	}
-	if !air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("a dead holder blocks the colony past its TTL")
 	}
 }
@@ -155,7 +155,7 @@ func TestTheRefresherKeepsASlowHolder(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air")
 	earth, air := r[0], r[1]
 
-	if !earth.AcquireTrainingTurn(trainTurnGrown, true) {
+	if !earth.AcquireTrainingTurn(trainTurnGrown) {
 		t.Fatal("earth was refused the first turn")
 	}
 	// The turn has lasted longer than a TTL; the refresher has been running.
@@ -164,7 +164,7 @@ func TestTheRefresherKeepsASlowHolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	earth.RefreshTrainingLock()
-	if air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("a live holder was preempted — the TTL is bounding a slow turn instead of a dead one")
 	}
 	// The refresher only ever touches its own row: a non-holder's refresh
@@ -188,16 +188,16 @@ func TestTheRefresherRunsOnItsOwnClock(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air")
 	earth, air := r[0], r[1]
 
-	if !earth.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !earth.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("earth was refused the first turn")
 	}
 	time.Sleep(500 * time.Millisecond) // more than three TTLs
-	if air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the holder expired while its refresher was running")
 	}
 	earth.ReleaseTrainingLock()
 	time.Sleep(300 * time.Millisecond)
-	if !air.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !air.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("the released turn was not free")
 	}
 }
@@ -206,7 +206,7 @@ func TestTheRefresherRunsOnItsOwnClock(t *testing.T) {
 // be the thing that stops a single organism from training.
 func TestSoloOrganismIsAlwaysAdmitted(t *testing.T) {
 	sr := NewSwarmRegistry("solo", "earth")
-	if !sr.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !sr.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("a solo organism was refused the turn")
 	}
 	if !sr.WaitTrainingTurn(trainTurnBurst, "burst") {
@@ -224,7 +224,7 @@ func TestWaitTrainingTurnBlocksUntilTheTurnIsFree(t *testing.T) {
 	r := trainingTurnMesh(t, "earth", "air")
 	earth, air := r[0], r[1]
 
-	if !earth.AcquireTrainingTurn(trainTurnBurst, true) {
+	if !earth.AcquireTrainingTurn(trainTurnBurst) {
 		t.Fatal("earth was refused the first turn")
 	}
 	done := make(chan time.Duration, 1)
