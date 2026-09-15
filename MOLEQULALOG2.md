@@ -3654,3 +3654,63 @@ replaying it is the only one that is actually wrong — or the long phases
 publishing their own.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the third session: the training turn, and one bar that fitted nobody
+
+The 20:00Z session ran on `1a1be0b` — the first with `SerialBursts` and
+`peak_rss_mb` from steps 0 and 1 of the resonator design, and the first that
+began with two adults. Scheduler line: `dur=7200 elapsed=7315 reason=overran
+mem_mb=3804->4273 prekill_mb=3739->3801 hwm_mb=earth:1691,air:1185,water:1295,
+fire:1305,witness:15 samples=237`. All five down on the signal, nothing left
+running.
+
+**The training turn, live.** Fifteen bursts waited for the colony's turn out
+of 109 completed (earth 24, air 30, water 20, fire 35): median wait 42.6 s,
+minimum 2.0 s, maximum 1005.4 s, 3426 s of waiting in total across four
+organisms over two hours. The long waits are not the lock's doing but the
+adults' turn length — a stage-5 burst is ~85 s (`earth.stdout` 20:27:21.648Z →
+20:28:47.304Z) and a stage-5 warmup is ~83 minutes in one piece. The queue is
+`grown-and-unwarmed` then longest-wait; nothing in it yet says a long warmup
+must not park three teens behind it, and after this session that belongs in the
+resonator's step 4.
+
+**What the peaks do and do not say.** Per-organism VmHWM rose against the
+12:00Z session (earth 1416→1691, air 861→1185, water 1356→1295, fire
+1037→1305), which is expected: the lock does not shrink one organism's peak,
+it stops four peaks from standing at the same moment, and the organisms went
+on growing. What is measured is that the colony never fell below 1 GB free
+(the watch never fired its `LOW MEM` line, and a 20:41Z sample read 1630 MB
+with earth at VmHWM 1691 and VmRSS 604). The simultaneity claim itself is not
+measured by these numbers and wants a sampler that records the sum of resident
+sets, not the per-process high-water marks.
+
+**One absolute bar fitted nobody.** This session ran the cafeteria's fixed
+thresholds for the last time, and they behaved differently for every organism:
+declined of measured — air 5/163 (3 %), earth 10/184 (5 %), fire 43/184
+(23 %), water 217/235 (92 %). The same 0.965/0.620 pair let air eat nearly
+everything and starved water of nearly everything, which is the argument the
+quantile rule (`1d29460`, merged at 17:23Z) was already built on: the bar has
+to be each organism's own. That rule is in the binary from this rebuild, not
+in the numbers above.
+
+**The mesh stopped dropping writes.** Six `mesh refused the heartbeat` lines
+over two hours (earth 1, air 2, water 2, fire 2) were the visible tip: with no
+`busy_timeout` anywhere in the tree, a measurement on a copy of this database
+put the refusal rate at 37.9 % of heartbeats under six writers, and the repair
+(`e6e0b7f`) sets 5000 ms from the worst measured wait of 441.5 ms. Also from
+this session: the witness's `peak_rss_mb` for earth read 490 MB at 20:31Z
+while `/proc` held 1691 MB — understated 3.45×, unmoved for 401 witness lines,
+because the fresh peak is read every tenth tick and one stage-5 tick is an
+85-second burst. The sleep policy reads that column; it is to be fixed before
+step 5.
+
+**DNA and the field.** Written: fire 417 (21 empty), air 294 (9), water 205
+(3), earth 190 (70); `eligible=1` on 264, 202, 47 and 110 of them. Growth was
+deferred 87 times in all and no organism grew. The ledger stood at `world 72
+facts/10 open` with 72 fragments in `dna/output/world`.
+
+**After the session.** `daily/2026-09-15.md` appended. `build.sh` at 22:12Z put
+`e6e0b7f` into `molequla-run`, so 04:00Z is the first session with the
+cafeteria's own-quantile bars and the mesh timeout both live.
+
+— Defender (Arianna Method, phone-1)
