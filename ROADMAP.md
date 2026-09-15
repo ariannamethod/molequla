@@ -133,6 +133,28 @@ is long — an organism lives for months of sessions, not for one uptime.
    is subjectivity, not a dashboard, which only shows once the ledger above
    turns these facts into changes.
 
+11. **The resonator, the sleeper, and memory as the environment** (Oleg,
+   2026-09-15; design in `docs/resonator_design.md`). Two coupled changes with
+   the piece that makes both cheap. Memory is the environment that shapes the
+   population and the training tempo, so an organism whose loss has plateaued
+   sleeps instead of being throttled — and sleeping means its weights are an
+   mmap'd file rather than a heap, so it keeps emitting DNA and grazing while
+   the kernel evicts its pages under pressure. Under both sits one shared
+   training process per colony, the resonator: the tape, the float32 mirror,
+   the activations, the gradients and the allocator arena exist once, and
+   organisms come to it in turn with weights and corpus and leave with updated
+   weights and their own Chuck moments. The arithmetic the design is built on:
+   four stage-4 peaks of 755-1091 MB against an Android floor of 2.4 GB leave
+   the 1.4-1.5 GB the colony saw, four stage-5 organisms at the one measured
+   1318 MB do not fit at all, and 19.3 MB of the 900 MB an organism holds is
+   weights. Measured for the design: a sleeper's weights cost 1 160 kB resident
+   when it is not speaking against 19 968 kB when it is, and a warm mapped
+   sweep over every parameter is not slower than the same sweep from the heap.
+   Order and gates in the document, smallest first: the peak-RSS column the
+   policy needs and does not have, the burst admission gate, a GGUF checkpoint
+   beside the JSON one, sleep as a mapping, the resonator process, the policy,
+   quantized sleepers last behind a voice sweep. Nothing built yet.
+
 ## Later
 
 - **A coherence organ instead of the static overlay.** Netta (AlphaZero-style
