@@ -42,12 +42,15 @@ FILE="$RUN/daily/$DAY.md"
     # Element:` banner it prints on boot — and not over the whole file, because
     # a decline rate is a property of a field and a corpus that both move
     # between sessions. admitted is the sum of its four reasons, declined of its
-    # one; passes counts the dnaRead calls that judged anything at all.
+    # two; passes counts the dnaRead calls that judged anything at all. band and
+    # warming are separate columns because they mean opposite things: band is a
+    # judgement against the organism's own coverage quantiles, warming is a ring
+    # too short to have any (experience_routing.go).
     echo "Cafeteria decisions since each organism's last start:"
     echo
     echo '```'
-    printf '%-6s %6s %8s %6s %9s %7s %10s %8s %5s %8s %8s\n' \
-        org passes admitted owner resonance novelty unmeasured declined band measured declined%
+    printf '%-6s %6s %8s %6s %9s %7s %10s %8s %5s %8s %8s %8s\n' \
+        org passes admitted owner resonance novelty unmeasured declined band warming measured declined%
     for e in $ELEMENTS; do
         out="$RUN/$e/$e.stdout"
         if [ ! -f "$out" ]; then
@@ -55,7 +58,7 @@ FILE="$RUN/daily/$DAY.md"
             continue
         fi
         tr -d '\000' < "$out" | awk -v E="$e" '
-            $1 == "[ecology]" && $2 == "Element:" { p=a=o=r=n=u=d=b=m=0; next }
+            $1 == "[ecology]" && $2 == "Element:" { p=a=o=r=n=u=d=b=w=m=0; next }
             $1 == "[cafeteria]" && $2 == E {
                 p++
                 for (i = 3; i <= NF; i++) {
@@ -67,12 +70,13 @@ FILE="$RUN/daily/$DAY.md"
                     else if (kv[1] == "unmeasured") u += v
                     else if (kv[1] == "declined")   d += v
                     else if (kv[1] == "band")       b += v
+                    else if (kv[1] == "warming")    w += v
                     else if (kv[1] == "measured")   m += v
                 }
             }
             END {
                 share = (a + d > 0) ? sprintf("%.1f%%", 100 * d / (a + d)) : "-"
-                printf "%-6s %6d %8d %6d %9d %7d %10d %8d %5d %8d %8s\n", E, p, a, o, r, n, u, d, b, m, share
+                printf "%-6s %6d %8d %6d %9d %7d %10d %8d %5d %8d %8d %8s\n", E, p, a, o, r, n, u, d, b, w, m, share
             }'
     done
     echo '```'
