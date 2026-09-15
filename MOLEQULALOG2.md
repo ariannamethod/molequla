@@ -2451,5 +2451,58 @@ cursor ends with all three senses eaten (`{"place":"gen_1789342466_11.txt",
 extra sources through their own budget without starving them, and the witness reads the voice
 off the heartbeat as `f1.00`. The witness must be started after the organism, not before: it
 exits on a missing `mesh.db`, which is what a six-second head start gives it.
+## 2026-09-15 — the first scheduled session, and what the gate did with it
+
+The colony's first session under `phone1/schedule.sh` ran 04:00:00Z to
+06:01:55Z on the pre-merge binary `3267e67` (`molequla-run/BUILD`), after the
+phone had died on a flat battery on 2026-09-14 before the slot it was scheduled
+for. The scheduler's own line (`schedule.log`): `dur=7200 elapsed=7315
+reason=overran alive=- mem_mb=3499->4346 hwm_mb=earth:755,air:1032,water:820,
+fire:1091,witness:15 samples=237`. All four came up from their stage-4
+checkpoints of 2026-09-13T20:26Z, all four went down on the scheduler's
+signal with a checkpoint written (`[evolution] checkpoint saved on signal` in
+`earth.stdout` and `fire.stdout`; `air` and `water` had saved at 05:49Z and
+05:58Z and shut down gracefully), and nothing was left running.
+
+**The growth gate of repair 9 refused adulthood, live, for the first time.**
+Every organism asked to grow from stage 4 to stage 5 and was deferred —
+earth 6 times, air 5, water 13, fire 8 (`grep -c 'growth\] deferred'` over the
+session's stdout). The refusals read `free=1467 MB need=2188 MB` (earth),
+`free=1461 MB need=2317 MB` (fire), `free=1483 MB need=2359 MB` (water): the
+need is three times the organism's own peak plus 256 MB, and MemAvailable sat
+at 1.4-1.5 GB for the whole second hour. This is the scenario that killed
+Termux on 2026-09-13, ending as a log line. `launch.sh` passes no
+`--max-growth-stage`, so `[caps]` printed `growth ≤ stage 5 of 5`; the gate
+held by memory alone.
+
+**Peaks moved without growth.** `air`'s VmHWM went from 689 MB at 04:43Z to
+1032 MB by 05:24Z while the witness kept reporting it at `s4/4834k`. Its own
+log brackets the jump: the growth line's `need` rose from 2323 MB at tick 30
+to 3352 MB at tick 40 (need = 3 × peak + 256, so the peak rose by ~343 MB in
+those ten ticks) while `[debug-onto]` shows the corpus going from 1 143 296 B
+to 1 549 540 B over the same ticks. A larger corpus means a larger
+`BuildFromCorpus` and larger training batches; that is a correlation in one
+organism's log, not a measurement, and the measurement belongs to the adult
+question: no stage-5 organism is to be allowed on this phone until its peak is
+known.
+
+**DNA and the senses.** Fragments written this session (`[dna] … wrote`):
+earth 80 (35 with `gen=0`), air 71 (6), water 156 (3), fire 153 (16); mean
+`mag` 9.3 / 11.7 / 9.3 / 11.4, `fade=1.00` throughout. earth's empty share,
+44 %, at mag ≈ 9 is the band the cafeteria branch measured as 16/50 empty on
+the 2026-09-13 logs. For the first time organisms ate the senses: every
+`dna_cursor.json` now carries `world`, `sound` and `place` — the same three
+files in all four cursors (`gen_1789441275_15`, `gen_1789338068_7`,
+`gen_1789342466_11`), which is the byte-identical broadcast the cafeteria
+branch replaces. Corpora reached 1.60-1.88 MB, under the 1.92 MB cap.
+
+**After the session.** `bash phone1/daily.sh` wrote `daily/2026-09-15.md`.
+Oleg merged `phone1-new-logic-ack`, `phone1-new-logic-audit` and
+`phone1-world-ledger` during the session; `bash phone1/build.sh` at 06:17Z put
+`c33a494` into `molequla-run`, and `molequla_cgo --world-ingest --once` answers
+with its `[world] mesh=… facts=… dna=…` line, so the 07:00Z senses slot is the
+first one whose facts reach the ledger. The 12:00Z colony session is the first
+on a binary with the ledger; the routing and cafeteria branches are still
+pending.
 
 — Defender (Arianna Method, phone-1)
