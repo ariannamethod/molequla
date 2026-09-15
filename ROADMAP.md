@@ -38,6 +38,24 @@ is long — an organism lives for months of sessions, not for one uptime.
   told to eat the result with `--dna-extra-sources world,sound,place`. Waiting
   on the merge: the daemon still runs the old conf and the binary in
   `$MOLEQULA_RUN` predates the flag.
+- **A ledger of change, not a stream of facts** (`claude/phone1-world-ledger`,
+  2026-09-15). The bitemporal `world_facts(source, subject, predicate, object,
+  valid_from, valid_to, recorded_at, provenance)` is in mesh.db; `senses.sh`
+  writes one JSON line per observation beside every fragment; `molequla
+  --world-ingest` files them, closes what a newer observation contradicts and
+  leaves only the changes in `dna/output/world/` — the phone moved from A to B,
+  the sky changed from fog to overcast, a person entered the front camera's
+  frame, speech was heard for 12 s. Organisms eat the changes of the world and
+  not its state. The writer is its own process because the witness's mesh
+  handle is `query_only` and stays that way; the witness reads the table and
+  prints `world <n> facts/<m> open`. The shape is borrowed from Utopia
+  (deeplethe/utopia); the product itself stays outside. Numbers and the
+  red→green runs in `MOLEQULALOG2.md`. Still open: the eye and the ears write
+  one observation per pass rather than the short trajectory of §2, the
+  `sees_person` reading is lexical and will miss what a sentence does not name,
+  and routing — which organism eats which change, §12's cafeteria — is a wave
+  of its own.
+
 ## Next
 
 1. **First scheduled sessions and the numbers they leave.** Per session: stage
@@ -95,19 +113,8 @@ is long — an organism lives for months of sessions, not for one uptime.
    per pass into `dna/output/place/`, and a haversine against
    `senses/place.last` that says whether the phone moved more than 50 m. Still
    open: headlines for the region, and the point of the whole item — that this
-   is subjectivity, not a dashboard, which only shows once the ledger below
+   is subjectivity, not a dashboard, which only shows once the ledger above
    turns these facts into changes.
-10. **A ledger of change, not a stream of facts.** What makes the senses one
-    field: a bitemporal table `world_facts(source, subject, predicate, object,
-    valid_from, valid_to, recorded_at, provenance)` in mesh.db, written by
-    place, eye and ears; the witness closes a fact when a newer one contradicts
-    it and emits the change as a line into `dna/output/world/` — the fog
-    lifted, the phone moved 300 m, a person entered the frame, English speech
-    for eleven seconds. Organisms eat the changes of the world, not its state.
-    The shape is borrowed from Utopia (deeplethe/utopia: facts carry when they
-    held and when they were learned, corrections close rather than erase, an
-    append-only decision ledger); the product itself stays outside — later, a
-    mirror on polygon fed from the same table, never an organ.
 
 ## Later
 
