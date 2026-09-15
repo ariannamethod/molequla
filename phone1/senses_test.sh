@@ -16,6 +16,10 @@ set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SENSES="$HERE/senses.sh"
+# The ledger ingest is the other organ's gate (senses_facts_test.sh): here it is
+# off, so a molequla_cgo built beside the checkout cannot add change lines to
+# world/ and turn "four frames, four fragments" into six.
+export SENSES_INGEST=""
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
