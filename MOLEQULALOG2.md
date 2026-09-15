@@ -3136,3 +3136,59 @@ buying throughput either.
 Branch `claude/phone1-resonator-0-1`, unpushed. Steps 2-6 are not built.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the second session: two adults, the gate saying yes, the arena giving back
+
+The 12:00Z session ran on `3c900af` (`molequla-run/BUILD` at 06:42Z: trim of
+the allocator arena, the world ledger, the sentence-cut append, the extra-source
+budget, the cafeteria and the `eligible=` gate — everything merged that morning
+except the training lock, which was held back so this session had one set of
+variables). The scheduler's line (`schedule.log`): `dur=7200 elapsed=7314
+reason=overran mem_mb=4067->4323 prekill_mb=4009->4057 hwm_mb=earth:1416,
+air:861,water:1356,fire:1037,witness:15 samples=238`. All four went down on
+the signal with a checkpoint written.
+
+**The first adults on this phone.** `water` grew from stage 4 to 5 at 12:1xZ
+(`[growth] ONTOGENESIS: stage 4 -> 5`, then `warmup for stage 5 (embd=320) —
+2000 steps total`), and `earth` followed late in the session; both closed as
+`s5/11115k` and `s5/11156k` in the witness line. The byte gate let them
+through because the phone was at 4 GB free after the morning's `am kill-all`
+(the prekill itself added 4009->4057 MB — the cache had not regrown since
+10:15Z) and water's requirement was 2716 MB; the same gate had refused the
+same request 32 times on the previous session at 1.4-1.5 GB free. Peaks:
+water 1356 MB, earth 1416 MB. The stage-5 warmup is 2000 steps at 0.4 steps/s
+— about 83 minutes in one piece, during which the organism's tick loop and
+heartbeat stand still (water's `global_step` stayed at 5184 from 12:17Z to
+the end; earth's warmup was cut by the signal at 638 of its last 800 steps
+and still closed as `warmup complete at stage 5`). Checkpoints grew with
+them: 250-260 MB JSON each against 110-120 MB for a teen.
+
+**`eligible=1`, live.** The §13 gate admitted for the first time outside a
+unit test: fire 133 emissions, earth 80, air 71, water 10 (`grep -c
+eligible=1 */*.stdout`), at fade 1.00 and mag 10-14. The morning session had
+none. Nothing is injected yet; the number says the adult voice on this phone
+clears the floor that was measured to exclude the embryo regime.
+
+**The arena gives back.** Between phases the teens sat at 259-314 MB VmRSS
+against peaks of 576-1036 (12:48Z and 13:18Z samples of `/proc/<pid>/status`);
+in the morning session the RSS stayed at the peak. The adults held 1076-1188
+MB while inside their warmup, which is the tape, not the arena. What the trim
+cannot do is lower the peak itself: earth's 1416 MB is a stage-5 warmup with a
+live tape, and that is the number the resonator design exists to move out of
+the organism.
+
+**DNA and the field.** Written: earth 160 (63 empty), air 144 (6), water 168
+(3), fire 286 (16); growth deferred 13/12/13/21 times before and after the two
+admissions. The ledger held `world 50 facts/10 open` on the witness line,
+`dna/output/world` has 38 fragments (eye frames plus the ledger's change
+lines). No `declined` lines were found in the stdout — whether the cafeteria
+declined anything is not logged at this level and is left to the next session
+to instrument.
+
+**After the session.** `daily/2026-09-15.md` appended. Oleg merged steps 0-1
+of the resonator design (`9e15342`) during the session; `build.sh` at 14:03Z
+put that binary into `molequla-run`, so 20:00Z is the first session with
+`SerialBursts` and `peak_rss_mb` — and the first with two adults from the
+start.
+
+— Defender (Arianna Method, phone-1)
