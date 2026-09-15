@@ -169,11 +169,6 @@ func sortedKeys(m map[string]bool) []string {
 // The half of the gate that catches an allocator which is asymmetric by
 // refusing everybody. Every fragment must reach at least one organism, and the
 // hash owner is what makes that true without cross-process coordination.
-// ── §12 gate 2: nothing starves ─────────────────────────────────────────────
-//
-// The half of the gate that catches an allocator which is asymmetric by
-// refusing everybody. Every fragment must reach at least one organism, and the
-// hash owner is what makes that true without cross-process coordination.
 func TestCafeteriaEveryFragmentIsEaten(t *testing.T) {
 	saved := CFG
 	defer func() { CFG = saved }()
@@ -205,11 +200,6 @@ func TestCafeteriaEveryFragmentIsEaten(t *testing.T) {
 	}
 }
 
-// ── §12 gate 3: current state decides, not the element name ─────────────────
-//
-// The brief is explicit that the elemental corpus is a birth condition and not
-// a profession. Swap an organism's field for another's and its plate must
-// change: if it does not, the allocation was keyed on the label.
 // ── §12 gate 3: current state decides, not the element name ─────────────────
 //
 // The brief is explicit that the elemental corpus is a birth condition and not
@@ -273,8 +263,6 @@ func TestExperienceCoverageSeparatesOwnFromForeign(t *testing.T) {
 	}
 	t.Logf("earth field: own %.3f (%d pairs), foreign %.3f (%d pairs)", co, po, cf, pf)
 }
-
-// ── §14 gate: the probe comes from the meal ─────────────────────────────────
 
 // ── §12 gate 4: a declined plate costs no read ──────────────────────────────
 //
@@ -365,3 +353,103 @@ func TestCafeteriaDeclineDoesNotSpendTheReadBudget(t *testing.T) {
 	}
 	t.Logf("measurement cap 1: %d bytes; cap 64: %d bytes", len(b2), len(body))
 }
+
+// ── §14 gate: the probe comes from the meal ─────────────────────────────────
+func TestProbeComesFromWhatWasEaten(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	CFG.ExperienceProbeFromMeals = true // off by default, see the CFG comment
+	st := &experienceState{}
+	if p := st.probe(0); p != "" {
+		t.Fatalf("an organism that has eaten nothing returned a probe %q; the round robin is the fallback", p)
+	}
+	st.remember("air", splitCorpusLine("pressure falls and the whole sky leans toward the falling. and then it rises.", CFG.MaxLineChars), false)
+	p := st.probe(0)
+	if p == "" || !strings.HasPrefix("pressure falls and the whole sky leans toward the falling.", p) {
+		t.Fatalf("probe %q does not come from the sibling fragment just eaten", p)
+	}
+	// A sense fragment outranks a sibling fragment: it is the only food that
+	// has not been metabolized by anybody yet (§14).
+	sense := "[place 2026-09-13T22:10:52Z] The phone is at Neve Menachem. Local time 01:00."
+	st.remember("place", splitCorpusLine(sense, CFG.MaxLineChars), true)
+	p = st.probe(0)
+	if !strings.HasPrefix(sense, p) || p == "" {
+		t.Fatalf("probe %q is not the sense fragment just eaten", p)
+	}
+	if len(p) > CFG.ExperienceProbeMaxChars {
+		t.Fatalf("probe is %d chars, over the %d bound", len(p), CFG.ExperienceProbeMaxChars)
+	}
+	t.Logf("probe from the meal: %q", p)
+}
+
+// The §14 rule that raw outside experience does not become collective DNA by
+// byte copy. dnaWrite pads its fragment with lines drawn from `docs`, and the
+// sense fragment is in `docs` because dnaRead appended it to the corpus. The
+// emitted fragment must not contain it.
+// The §14 rule that raw outside experience does not become collective DNA by
+// byte copy. dnaWrite pads its fragment with lines drawn from `docs`, and the
+// sense fragment is in `docs` because dnaRead appended it to the corpus. The
+// emitted fragment must not contain it.
+func TestSenseFragmentIsNotEmittedVerbatim(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	root := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(cwd)
+	// dnaWrite emits to ../dna/output/<element>, relative to the organism's
+	// own working directory — the layout launcher.sh builds.
+	if err := os.MkdirAll(filepath.Join(root, "dna", "output", "earth"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "earth"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(filepath.Join(root, "earth")); err != nil {
+		t.Fatal(err)
+	}
+
+	model, tok, field, docs := grazeTestModel(t)
+	CFG.MaxGenTokens = 8
+	CFG.DNAFragmentTargetBytes = 1200
+	CFG.DNAMinFragmentBytes = 5
+	CFG.DNARetainSeconds = 0
+	CFG.DNARetainFiles = 0
+
+	sense := "[eye cam0 2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl, a spoon, and a plate, with a background that looks like a kitchen counter."
+	// The organism ate it: it is in the corpus, therefore in docs, and it is
+	// remembered as raw experience.
+	experienceRouting = &experienceState{}
+	// dnaRead appends a fragment as the lines splitCorpusLine cuts it into, and
+	// those lines are what loadCorpusLines hands back as docs — so that is what
+	// the padding has to refuse.
+	senseLines := splitCorpusLine(sense, CFG.MaxLineChars)
+	docs = append(docs, senseLines...)
+	experienceRouting.remember("world", senseLines, true)
+
+	for step := 0; step < 6; step++ {
+		dnaWrite("earth", model, tok, field, docs, step)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "dna", "output", "earth"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("dnaWrite emitted nothing; the gate cannot run")
+	}
+	for _, e := range entries {
+		b, err := os.ReadFile(filepath.Join(root, "dna", "output", "earth", e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), sense) {
+			t.Fatalf("%s carries the eaten sense fragment byte for byte; the world reached collective DNA without passing through the organism", e.Name())
+		}
+	}
+	t.Logf("%d emitted fragments, none containing the eaten sense line", len(entries))
+	experienceRouting = &experienceState{}
+}
+
+// ── §13 gate: eligibility read from the voice ───────────────────────────────

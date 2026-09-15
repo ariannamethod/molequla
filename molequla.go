@@ -293,6 +293,11 @@ type Config struct {
 	ExperienceMinPairs            int     `json:"experience_min_pairs"`             // fewer measured token pairs than this = unmeasurable = food
 	ExperienceMaxMeasuredPerTick  int     `json:"experience_max_measured_per_tick"` // coverage measurements one dnaRead may spend; a decline costs no read budget, only this
 	ExperienceMealMemory          int     `json:"experience_meal_memory"`           // fragments kept as "what was just eaten"
+	ExperienceProbeFromMeals      bool    `json:"experience_probe_from_meals"`      // false = the fixed six-question round robin
+	ExperienceProbeMaxChars       int     `json:"experience_probe_max_chars"`       // bound on a probe taken from a meal
+	ExperienceProbeMinChars       int     `json:"experience_probe_min_chars"`       // below this a meal probe is degenerate; the round robin answers instead
+	ExperienceProbeMinWords       int     `json:"experience_probe_min_words"`       // and it must be this many words
+	ExperienceRecentPadLines      int     `json:"experience_recent_pad_lines"`      // padding lines drawn from recent meals before random corpus draws
 }
 
 var CFG = Config{
@@ -442,6 +447,19 @@ var CFG = Config{
 	ExperienceMinPairs:            16,    // below this the coverage of a fragment is noise; a shorter fragment is eaten, not judged
 	ExperienceMaxMeasuredPerTick:  8,     // 8 x 21.7 ms of coverage against a 250 ms tick; the two read budgets are 8 + 4, so this is already fewer measurements than they were making. Tunable; 0 disables.
 	ExperienceMealMemory:          16,    // two ticks of the sibling read budget (DNAMaxReadsPerTick 8)
+	// Off, and the number says why: over 300 s scratch colonies the emission
+	// line's gen/bytes went 0.00285 (origin/main, n=623) -> 0.00238 (n=373) when
+	// the probe came from the meal. The §18 order's gate for this step is that
+	// the share must not fall; it fell, so the mechanism lands switched off with
+	// the measurement beside it rather than as a regression. Both runs were
+	// embryo-capped colonies where the overlay is the whole voice — the regime
+	// this is meant for is a stage-3 organism at mag 8.66, which a scratch probe
+	// cannot reach. See MOLEQULALOG2.md, 2026-09-15.
+	ExperienceProbeFromMeals:      false,
+	ExperienceProbeMaxChars:       120, // one sentence; the six fixed probes are 6-24 chars, a place fragment's first sentence is 118
+	ExperienceProbeMinChars:       12,  // "Speak." is 6 and "What matters?" is 13; an embryo's fragment opens with 2-3 bytes and a full stop
+	ExperienceProbeMinWords:       3,
+	ExperienceRecentPadLines:      4,
 }
 
 // headTypesForNHead returns the head type list for a given number of heads.
@@ -6232,7 +6250,14 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 		"What is truth?", "What matters?",
 		"Speak.", "What do you remember?",
 	}
-	probe := probes[step%len(probes)]
+	// §14: the world must be metabolized by somebody before it becomes culture.
+	// The probe is where that happens — the organism is asked about what it
+	// just ate and answers in its own voice. The six fixed questions remain the
+	// fallback for an organism that has not eaten yet.
+	probe := experienceRouting.probe(step)
+	if probe == "" {
+		probe = probes[step%len(probes)]
+	}
 
 	// GenerateResonant takes model.mu.Lock internally — do NOT double-lock
 	answer := GenerateResonant(model, tok, field, probe, docs, true)
@@ -6245,9 +6270,25 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	// share of the fragment rises on its own.
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(answer))
+	// The padding leads with what this organism has eaten most recently from
+	// its siblings, so the fragment carries the organism's current diet and not
+	// an arbitrary slice of its whole corpus. Sense lines are not in that list
+	// and are skipped when a random draw lands on one: §14 forbids raw outside
+	// experience from entering collective DNA without passing through an
+	// organism, and a padded line is a byte copy, not a passage. The world
+	// reaches the ecology through `answer` above, which was generated from it.
+	for _, line := range experienceRouting.recentPadding(CFG.ExperienceRecentPadLines) {
+		if b.Len() >= CFG.DNAFragmentTargetBytes {
+			break
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(line)
+	}
 	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 600; i++ {
 		line := strings.TrimSpace(docs[rand.Intn(len(docs))])
-		if line == "" {
+		if line == "" || experienceRouting.isRawExperience(line) {
 			continue
 		}
 		if b.Len() > 0 {

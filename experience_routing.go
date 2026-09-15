@@ -233,3 +233,121 @@ func experienceIsExtraSource(src string) bool {
 	}
 	return true
 }
+
+// experienceFirstSentence takes the leading sentence of a line, bounded, for use as a
+// probe. Sentence enough: the first terminator, else the whole bounded line.
+func experienceFirstSentence(s string, max int) string {
+	s = strings.TrimSpace(strings.Join(strings.Fields(s), " "))
+	if s == "" {
+		return ""
+	}
+	if i := strings.IndexAny(s, ".!?"); i > 0 && i+1 < len(s) {
+		s = s[:i+1]
+	}
+	if len(s) > max {
+		s = strings.TrimSpace(s[:max])
+	}
+	return s
+}
+
+// probe returns the question this organism is asked next. §14: the world must
+// be metabolized by somebody before it becomes culture, and the probe is where
+// that happens — the organism is asked about what it just ate and answers in
+// its own voice, instead of the fixed six-question round robin that made the
+// emission independent of the meal. Sense food is preferred over sibling food
+// because it is the only food that has not been metabolized by anybody yet.
+// `step` rotates over the ring so consecutive ticks do not repeat one line.
+// Returns "" when there is nothing eaten to ask about; the caller keeps its
+// round robin then.
+func (s *experienceState) probe(step int) string {
+	if s == nil || !CFG.ExperienceProbeFromMeals {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.meals) == 0 {
+		return ""
+	}
+	if step < 0 {
+		step = -step
+	}
+	pick := func(extra bool) string {
+		var cands []experienceMeal
+		for _, m := range s.meals {
+			if m.extra == extra {
+				cands = append(cands, m)
+			}
+		}
+		// A degenerate fragment must not yield a degenerate probe — the risk
+		// the §18 order names against this step. An embryo's emitted fragment
+		// opens with two or three bytes of its own speech and a full stop, so
+		// its leading "sentence" can be "A." or "is a."; walk back through the
+		// ring until a probe with substance appears, and hand the round robin
+		// back if none has.
+		for i := 0; i < len(cands); i++ {
+			m := cands[len(cands)-1-(step+i)%len(cands)]
+			p := experienceFirstSentence(m.lines[0], CFG.ExperienceProbeMaxChars)
+			if len(p) >= CFG.ExperienceProbeMinChars && len(strings.Fields(p)) >= CFG.ExperienceProbeMinWords {
+				return p
+			}
+		}
+		return ""
+	}
+	if p := pick(true); p != "" {
+		return p
+	}
+	return pick(false)
+}
+
+// recentPadding returns up to `n` recently eaten SIBLING lines, newest first,
+// for the padding of an emitted fragment. Sense lines are deliberately absent:
+// §14 forbids raw outside experience from entering collective DNA without
+// passing through an organism, and padding is a byte copy, not a passage.
+func (s *experienceState) recentPadding(n int) []string {
+	if s == nil || n <= 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, n)
+	for i := len(s.meals) - 1; i >= 0 && len(out) < n; i-- {
+		if s.meals[i].extra {
+			continue
+		}
+		for _, ln := range s.meals[i].lines {
+			if len(out) >= n {
+				break
+			}
+			out = append(out, ln)
+		}
+	}
+	return out
+}
+
+// isRawExperience reports whether a corpus line is a sense fragment this
+// organism ate verbatim. dnaRead appends a fragment to the corpus as one line
+// and loadCorpusLines hands that line back truncated to CFG.MaxLineChars, so a
+// random padding draw can re-emit outside experience byte for byte. This is the
+// predicate that stops it.
+func (s *experienceState) isRawExperience(line string) bool {
+	if s == nil {
+		return false
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.meals {
+		if !m.extra {
+			continue
+		}
+		for _, ln := range m.lines {
+			if line == ln || strings.HasPrefix(ln, line) || strings.HasPrefix(line, ln) {
+				return true
+			}
+		}
+	}
+	return false
+}
