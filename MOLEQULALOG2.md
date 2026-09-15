@@ -1925,3 +1925,33 @@ tagger that would name a sound rather than classify its shape is a survey, not a
 port: `senses/ears/PORT_NOTES_SOUND.md`.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — routing: the witness is told about the senses, the senses get their own queue, and a fragment reaches the field whole
+
+Four of the ten items the audit of `molequla_new_logic.md` proposed for §18
+(`reports/2026-09-15_new_logic_audit/README.md` §4, branch
+`claude/phone1-new-logic-audit` at `9464b81`): its 1, 2, 3 and 6. All four are
+routing over paths that already run, and each one landed behind a gate that was
+watched going red on the code it repairs before it was made green.
+
+**1. The witness was never told the senses exist.** `phone1/launch.sh` handed
+`--dna-extra-sources world,sound,place` to each of the four organisms and
+nothing to the witness, so `dnaSources("")` in the witness process
+(`witness.go:458`) was built from an empty `CFG.DNAExtraSources` and
+`witnessScanDNA` counted four element directories and never looked into
+`dna/output/{world,sound,place}`. The list is now one variable, `SENSES_ARG`,
+declared once beside `SENSES_SOURCES` and passed to both readers, so the witness
+counts exactly what the organisms eat.
+
+The gate is `phone1/launch_test.sh`, in the shape of `phone1/schedule_test.sh`:
+it drives the real `launch.sh` against a stub binary that records its own argv,
+asserts that the recorded witness argv carries the same list as the recorded
+earth argv, then takes that recorded argv — not a copy of it — and runs the real
+`molequla_cgo` with it over a scratch tree holding one `world` fragment, with a
+mesh written by two seconds of a real organism rather than by a fixture. A third
+stage builds a copy of `launch.sh` with the argument removed and requires the
+first stage to fail on it, so the check is known to fail on the thing it exists
+for. On `origin/main`'s `launch.sh` the gate reads 1 passed, 4 failed, the
+witness argv being `--witness --witness-interval 5` and its snapshot carrying no
+`dna` key at all; on the repaired script, 5 passed, 0 failed
+(`MOLEQULA_BIN=$PWD/molequla_cgo bash phone1/launch_test.sh`, cores 4-7).
