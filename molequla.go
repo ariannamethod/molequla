@@ -6568,6 +6568,8 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 	// deciding rather than eating; when it is spent the loop stops with the
 	// cursors where they are and the rest is examined next tick.
 	measured := 0
+	// What this pass decided, printed once at the end (experience_routing.go).
+	var cafe cafeteriaTally
 	measuredCap := CFG.ExperienceMaxMeasuredPerTick
 	if measuredCap <= 0 {
 		measuredCap = 1 << 30
@@ -6609,6 +6611,7 @@ reading:
 			// decline does cost is a coverage measurement, and that is what
 			// ExperienceMaxMeasuredPerTick bounds instead.
 			ok, why, _ := experienceRouting.admits(element, src, name, text)
+			cafe.record(why)
 			if why != "owner" && why != "broadcast" {
 				measured++
 			}
@@ -6675,6 +6678,13 @@ reading:
 	}
 	if moved {
 		cur.save()
+	}
+	// The decision before the meal: what was offered and on what ground it was
+	// taken or refused, whether or not anything was eaten. Silent when the
+	// cafeteria is off or when nothing was offered to judge.
+	if CFG.ExperienceRouting && cafe.decisions() > 0 {
+		cafe.measured = measured
+		fmt.Print(cafe.line(element))
 	}
 	if added > 0 {
 		fmt.Printf("[dna] %s consumed %d bytes from %d files: %v\n",

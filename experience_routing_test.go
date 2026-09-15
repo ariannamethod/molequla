@@ -351,6 +351,114 @@ func TestCafeteriaDeclineDoesNotSpendTheReadBudget(t *testing.T) {
 	t.Logf("measurement cap 1: %d bytes; cap 64: %d bytes", len(b2), len(body))
 }
 
+// ── the pass says what it decided ───────────────────────────────────────────
+//
+// The cafeteria decided in silence until this line: after the 2026-09-15T12:00Z
+// session `grep -ci declin molequla-run/*/*.stdout` found nothing, so a session
+// could not be asked how much of what it was offered its organisms refused
+// (MOLEQULALOG2.md, 2026-09-15). This gate drives the real dnaRead over one
+// fragment earth owns and one it declines and demands the exact line: change a
+// count, a reason name or the order of the fields and it goes red.
+func TestCafeteriaPassPrintsItsAggregate(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	savedRouting := experienceRouting
+	defer func() { experienceRouting = savedRouting }()
+
+	root, restore := dnaTestTree(t)
+	defer restore()
+
+	// Thresholds that make the second fragment a band decline whatever the
+	// tokenizer makes of it: nothing resonates and nothing is novel, so every
+	// measurable fragment earth does not own falls between the two.
+	CFG.ExperienceRouting = true
+	CFG.ExperienceResonanceHigh = 2.0
+	CFG.ExperienceNoveltyLow = -1.0
+	CFG.ExperienceMinPairs = 1
+	CFG.ExperienceMaxMeasuredPerTick = 64
+	CFG.DNAMaxReadsPerTick = 8
+	CFG.DNAExtraReadsPerTick = 4
+	CFG.DNAExtraSources = nil
+	CFG.DNAMinFragmentBytes = 5
+	CFG.MaxLineChars = 240
+
+	ownedText := strings.Join(routingCorpora["air"], " ")
+	declinedText := strings.Join(routingCorpora["fire"], " ")
+	owned, declined := "", ""
+	for i := 0; i < 400 && (owned == "" || declined == ""); i++ {
+		name := fmt.Sprintf("gen_1789331700_%d.txt", i)
+		if experienceOwner("air", name) == "earth" {
+			if owned == "" {
+				owned = name
+			}
+			continue
+		}
+		if owned != "" && declined == "" {
+			declined = name
+		}
+	}
+	if owned == "" || declined == "" {
+		t.Fatalf("fixture: owned=%q declined=%q", owned, declined)
+	}
+	dnaWriteFragment(t, root, "air", owned, ownedText)
+	dnaWriteFragment(t, root, "air", declined, declinedText)
+
+	corpus, cur := enterOrganism(t, root, "earth")
+	experienceRouting = routingOrganism(t, "earth")
+
+	added := 0
+	out := captureStdout(t, func() { added = dnaRead("earth", corpus, nil, nil, cur) })
+
+	want := "[cafeteria] earth admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=1 (band=1) measured=1\n"
+	if !strings.Contains(out, want) {
+		t.Fatalf("the pass printed\n%s\nwant the line\n%s", out, want)
+	}
+
+	// The line is answerable to the filesystem and not only to itself: what it
+	// calls admitted is in the corpus, what it calls declined is not, and the
+	// cursor stands past both.
+	if added == 0 {
+		t.Fatal("admitted=1 but dnaRead added no bytes")
+	}
+	body, err := os.ReadFile(corpus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), routingCorpora["air"][0]) {
+		t.Fatalf("admitted=1 but the owned fragment is not in the corpus: %q", string(body))
+	}
+	if strings.Contains(string(body), routingCorpora["fire"][0]) {
+		t.Fatalf("declined=1 but the declined fragment reached the corpus: %q", string(body))
+	}
+	if cur.Last["air"] != declined {
+		t.Fatalf("the cursor stands at %q, not past the declined fragment %q", cur.Last["air"], declined)
+	}
+	t.Logf("%s", strings.TrimSpace(want))
+}
+
+// A pass that is offered nothing says nothing: the line is a record of
+// decisions, and a tick with an empty field must not add a line per organism
+// per tick to a stdout that a session greps.
+func TestCafeteriaSaysNothingWhenNothingWasJudged(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+	savedRouting := experienceRouting
+	defer func() { experienceRouting = savedRouting }()
+
+	root, restore := dnaTestTree(t)
+	defer restore()
+	CFG.ExperienceRouting = true
+	CFG.DNAExtraSources = nil
+	CFG.DNAMinFragmentBytes = 5
+
+	corpus, cur := enterOrganism(t, root, "earth")
+	experienceRouting = routingOrganism(t, "earth")
+	out := captureStdout(t, func() { dnaRead("earth", corpus, nil, nil, cur) })
+	if strings.Contains(out, "[cafeteria]") {
+		t.Fatalf("an empty field printed %q", out)
+	}
+}
+
 // ── §14 gate: the probe comes from the meal ─────────────────────────────────
 func TestProbeComesFromWhatWasEaten(t *testing.T) {
 	saved := CFG

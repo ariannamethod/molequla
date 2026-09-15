@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"hash/fnv"
 	"strings"
 	"sync"
@@ -195,6 +196,67 @@ func (s *experienceState) admits(element, src, name, text string) (bool, string,
 		return true, "novelty", cov
 	}
 	return false, "refused", cov
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WHAT A PASS DECIDED, IN ONE LINE
+//
+// admits is taken up to twelve times a tick and until this tally left no trace:
+// after the 2026-09-15T12:00Z session `grep -ci declin molequla-run/*/*.stdout`
+// found nothing, so whether the cafeteria had refused anything at all could not
+// be read out of a session (MOLEQULALOG2.md, 2026-09-15, "the second session").
+// A routing change that cannot be counted per session cannot be judged.
+//
+// It is its own line and not a widening of `[dna] … consumed` because that line
+// is printed only when bytes were added (molequla.go:6680), and a pass that
+// declines everything it was offered adds none — which is exactly the pass this
+// tally exists to show. Making `consumed` print on those passes would put a
+// `consumed 0 bytes from 0 files: []` line on the tick and change what the byte
+// and event totals daily.sh already sums out of it mean. One line, one grep
+// target, printed only when at least one fragment was judged.
+//
+// Aggregates only. At the read budgets (8 sibling + 4 extra) a line per
+// fragment is up to twelve lines a tick, and there is no debug flag in this
+// binary for the per-fragment source and coverage to hide behind — the only
+// os.Getenv switch on this path is MOLEQULA_GPU_DEBUG, which is the bridge's —
+// so the per-fragment detail is not printed at all rather than printed always.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// cafeteriaTally is what one dnaRead pass decided, counted by the branch of
+// admits that decided it. "broadcast" is absent on purpose: with
+// CFG.ExperienceRouting off there is no cafeteria, every fragment is food, and
+// the caller prints nothing.
+type cafeteriaTally struct {
+	owner, resonance, novelty, unmeasured int // admitted, per branch
+	band                                  int // declined: coverage between the two thresholds
+	measured                              int // coverage measurements the pass spent (the ExperienceMaxMeasuredPerTick budget)
+}
+
+// record charges one fragment's decision to the tally.
+func (t *cafeteriaTally) record(why string) {
+	switch why {
+	case "owner":
+		t.owner++
+	case "resonance":
+		t.resonance++
+	case "novelty":
+		t.novelty++
+	case "unmeasured":
+		t.unmeasured++
+	case "refused":
+		t.band++
+	}
+}
+
+func (t *cafeteriaTally) admitted() int  { return t.owner + t.resonance + t.novelty + t.unmeasured }
+func (t *cafeteriaTally) decisions() int { return t.admitted() + t.band }
+
+// line is the pass's line, newline included. admitted is the sum of the four
+// bracketed reasons and declined the sum of the one, so the line can be checked
+// against itself by whoever reads it.
+func (t *cafeteriaTally) line(element string) string {
+	return fmt.Sprintf("[cafeteria] %s admitted=%d (owner=%d resonance=%d novelty=%d unmeasured=%d) declined=%d (band=%d) measured=%d\n",
+		element, t.admitted(), t.owner, t.resonance, t.novelty, t.unmeasured, t.band, t.band, t.measured)
 }
 
 // remember keeps an accepted fragment in the meal ring as the corpus lines it
