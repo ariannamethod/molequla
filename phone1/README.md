@@ -265,6 +265,8 @@ action and alerts.
 `bash phone1/daily.sh` appends a dated, timed section to
 `$MOLEQULA_RUN/daily/<UTC date>.md`: the status screen, per-organism DNA traffic
 (`wrote` lines and bytes, `consumed` bytes) over the whole stdout history — launches append, so a restart keeps it —
-the newest three `[dna] … wrote` lines verbatim, the witness's last five lines,
+the cafeteria table (passes, admitted by reason, declined, measured, decline
+share) summed from the `[cafeteria]` lines since each organism's last
+`[ecology] Element:` banner, the newest three `[dna] … wrote` lines verbatim, the witness's last five lines,
 and `df -h` of the run root. Run it as often as you like; every run adds a
 section.

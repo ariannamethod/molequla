@@ -37,6 +37,46 @@ FILE="$RUN/daily/$DAY.md"
     done
     echo '```'
     echo
+    # The cafeteria (experience_routing.go): what each organism was offered and
+    # what it took. Counted from the organism's last start — the `[ecology]
+    # Element:` banner it prints on boot — and not over the whole file, because
+    # a decline rate is a property of a field and a corpus that both move
+    # between sessions. admitted is the sum of its four reasons, declined of its
+    # one; passes counts the dnaRead calls that judged anything at all.
+    echo "Cafeteria decisions since each organism's last start:"
+    echo
+    echo '```'
+    printf '%-6s %6s %8s %6s %9s %7s %10s %8s %5s %8s %8s\n' \
+        org passes admitted owner resonance novelty unmeasured declined band measured declined%
+    for e in $ELEMENTS; do
+        out="$RUN/$e/$e.stdout"
+        if [ ! -f "$out" ]; then
+            printf '%-6s no stdout\n' "$e"
+            continue
+        fi
+        tr -d '\000' < "$out" | awk -v E="$e" '
+            $1 == "[ecology]" && $2 == "Element:" { p=a=o=r=n=u=d=b=m=0; next }
+            $1 == "[cafeteria]" && $2 == E {
+                p++
+                for (i = 3; i <= NF; i++) {
+                    t = $i; gsub(/[()]/, "", t); split(t, kv, "="); v = kv[2] + 0
+                    if      (kv[1] == "admitted")   a += v
+                    else if (kv[1] == "owner")      o += v
+                    else if (kv[1] == "resonance")  r += v
+                    else if (kv[1] == "novelty")    n += v
+                    else if (kv[1] == "unmeasured") u += v
+                    else if (kv[1] == "declined")   d += v
+                    else if (kv[1] == "band")       b += v
+                    else if (kv[1] == "measured")   m += v
+                }
+            }
+            END {
+                share = (a + d > 0) ? sprintf("%.1f%%", 100 * d / (a + d)) : "-"
+                printf "%-6s %6d %8d %6d %9d %7d %10d %8d %5d %8d %8s\n", E, p, a, o, r, n, u, d, b, m, share
+            }'
+    done
+    echo '```'
+    echo
     echo "Newest three \`[dna] ... wrote\` lines (per-file order earth air water fire):"
     echo
     echo '```'
