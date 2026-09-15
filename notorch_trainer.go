@@ -510,6 +510,9 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		lossIdx, _ := ntBuildForward(m, tokIdx, tgtIdx, maskIdx, seqLen, vocab)
 		loss := ntEntryScalar(lossIdx)
 		ntTapeBackward(lossIdx)
+		if step == 0 || step == steps-1 {
+			memTapeSnapshot(fmt.Sprintf("step%d", step), seqLen, model.NEmbd, model.NLayer, vocab)
+		}
 		if guard.check() {
 			ntTapeClipGrads(1.0)
 			ntTapeChuckStep(lrFor(step), loss)

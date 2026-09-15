@@ -6678,6 +6678,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				model.mu.Unlock()
 			}
 			lastFieldRebuild = tickCount
+			memSnapshot("corpus-rebuild")
 		}
 
 		// Tokenizer evolution
@@ -6797,6 +6798,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 
 			// notorch: gradient-free delta training (no backward pass, no compute graph)
 			ntBurstTrain(model, tok, docs, CFG.MicroSteps, burstLR)
+			memSnapshot("burst")
 
 			model.mu.Lock()
 			// Measure loss after burst
@@ -6818,6 +6820,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				entropyAfter := postMetrics.Entropy
 				syntracker.LogToDB(db, entropyBefore, entropyAfter, action)
 				SaveCheckpoint(model, tok, "")
+				memSnapshot("ckpt-save")
 				note := fmt.Sprintf("quantum_burst:%s|Δloss=%.4f", action, lossAfter-lossBefore)
 				dbLogGrowth(db, model, tok, docs, 0.0, note)
 			}
@@ -7221,11 +7224,13 @@ func main() {
 	// stale trained checkpoint and the Q-style coherence claim becomes meaningless.
 	var model *GPT
 	var tok *EvolvingTokenizer
+	memSnapshot("pre-load")
 	if CFG.WarmupSteps > 0 {
 		model, tok, err = LoadCheckpoint(docs, "")
 	} else {
 		err = fmt.Errorf("zero-warmup mode: skipping checkpoint load")
 	}
+	memSnapshot("post-load")
 	if err != nil || model == nil || tok == nil {
 		if len(docs) == 0 {
 			docs = []string{"Hello."}
