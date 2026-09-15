@@ -298,6 +298,10 @@ type Config struct {
 	ExperienceProbeMinChars       int     `json:"experience_probe_min_chars"`       // below this a meal probe is degenerate; the round robin answers instead
 	ExperienceProbeMinWords       int     `json:"experience_probe_min_words"`       // and it must be this many words
 	ExperienceRecentPadLines      int     `json:"experience_recent_pad_lines"`      // padding lines drawn from recent meals before random corpus draws
+
+	// the §13 gate — eligibility for sentence-boundary injection, read from the voice
+	InjectionFadeMin float64 `json:"injection_fade_min"` // 1 - lastOverlayWeight must reach this
+	InjectionMagMin  float64 `json:"injection_mag_min"`  // mean |logit| of the raw output must reach this
 }
 
 var CFG = Config{
@@ -460,6 +464,11 @@ var CFG = Config{
 	ExperienceProbeMinChars:       12,  // "Speak." is 6 and "What matters?" is 13; an embryo's fragment opens with 2-3 bytes and a full stop
 	ExperienceProbeMinWords:       3,
 	ExperienceRecentPadLines:      4,
+
+	// The §13 gate. 130 `[dna] wrote` lines, live colony, session ending
+	// 2026-09-13T20:29:30Z: fade 1.00 on all 130; mag 2.82..16.35, median 8.66.
+	InjectionFadeMin: 1.0, // the overlay must be gone before the organism's own voice can be said to carry
+	InjectionMagMin:  6.0, // below 6.00, 10 of 10 observed generations emitted gen=0; at or above, 92 of 120 emitted text
 }
 
 // headTypesForNHead returns the head type list for a given number of heads.
@@ -6317,7 +6326,15 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 		fade = 1 - model.lastOverlayWeight
 		model.mu.Unlock()
 	}
-	fmt.Printf("[dna] %s wrote %d bytes to ecology | gen=%d mag=%.2f fade=%.2f\n", element, len(frag), gen, mag, fade)
+	// eligible is the §13 gate (experience_routing.go): whether this organism's
+	// voice is its own enough to receive sentence-boundary knowledge injection.
+	// The injection itself is not implemented — the decision is printed so it
+	// can be read back out of the logs before anything is built on it.
+	eligible := 0
+	if ok, _ := injectionEligible(fade, mag); ok {
+		eligible = 1
+	}
+	fmt.Printf("[dna] %s wrote %d bytes to ecology | gen=%d mag=%.2f fade=%.2f eligible=%d\n", element, len(frag), gen, mag, fade, eligible)
 	// The writer is the only one that deletes: readers keep cursors (repair 3).
 	dnaPruneOwn(element, time.Duration(CFG.DNARetainSeconds*float64(time.Second)), CFG.DNARetainFiles)
 }

@@ -29,6 +29,7 @@ WHAT THIS IS:
 - DNA exchange: organisms write generated text for others to consume. The tree is a field, not a queue: readers keep cursors, the writer prunes its own output to the last 30 min and at most 256 fragments, and every organism's corpus is a reservoir capped at `max_corpus_lines` (8000) lines and `max_corpus_lines × max_line_chars` bytes in every mode, `--evolution` included. A tick reads at most `dna_max_reads_per_tick` (8) fragments from the sibling elements and, under a second budget, `dna_extra_reads_per_tick` (4) from the read-only sources the senses write, so neither half of the field can starve the other; an eaten fragment is appended cut into sentences, none longer than `max_line_chars`, so the whole of it survives the corpus read instead of its first 240 bytes
 - The cafeteria: reading is per organism, not a broadcast. A fragment is eaten by the one organism its file name hashes to, and by any other whose own co-occurrence field says the fragment resonates (bigram coverage ≥ `experience_resonance_high`) or that it is news (coverage ≤ `experience_novelty_low`); the band between is declined and the cursor steps past it. Nothing is coordinated between the processes — both halves are computed from the file name, the bytes, and the reader's own field — and the hash owner is what makes every fragment reach somebody. Coverage rises as an organism eats, so the same file routes differently as its life goes on, and the element corpus stays a birth condition rather than a profession
 - §14 in the emission: the padding of an emitted fragment leads with the sibling lines this organism has just eaten, and a sense fragment it ate is never copied into the fragment byte for byte — outside experience reaches collective DNA through what the organism says about it, not by passage. `experience_probe_from_meals` would also take the probe from the meal; it is off, and `MOLEQULALOG2.md` 2026-09-15 has the number that keeps it off
+- Sentence-boundary injection eligibility is read from the voice, not the stage label: `eligible=0|1` on the `[dna] … wrote` line is `fade ≥ injection_fade_min` and mean |logit| `≥ injection_mag_min`. The injection itself is not implemented
 - Consciousness: 5 implemented features (dissonance, pattern breaking,
   self-prediction error, conscience, immune system)
 - Self-meta-learning: organism tracks which actions improve loss,
@@ -833,7 +834,7 @@ metaweights_seeding.go   124 lines    gamma->epsilon embedding seeding from co-o
 spa_coherence.go         164 lines    Pure-Go SPA helper (sentence connectedness + weak-sentence gate)
 cross_graze.go           181 lines    Dario-style cross-organism logit injection (sibling DNA → rank-decay boost), cursor per sibling
 dna_field.go             215 lines    The DNA tree as a field: sources, cursors, numeric fragment order, writer-side pruning
-experience_routing.go    353 lines    The cafeteria (§12) and the emission shaped by the meal (§14): who eats which fragment, what was just eaten, and what may be padded into DNA
+experience_routing.go    395 lines    The cafeteria (§12/§14): who eats which fragment, what was just eaten, what may be padded into DNA, and the §13 eligibility gate read from fade and logit magnitude
 governor_phone.go        247 lines    Byte gates before division and before growth, oom_score_adj, heartbeat keeper, the evolution wait and its train abort
 witness.go               534 lines    The mycelium as a witness (`--witness`): reads mesh.db + the DNA field, says what it sees, writes nothing back
 world_ledger.go          778 lines    The world ledger (`--world-ingest`): facts.jsonl -> the bitemporal world_facts, and only a change becomes a fragment
@@ -877,7 +878,7 @@ growth_budget_test.go    841 lines    growth byte gate, the two declared ceiling
 parity_test.go           150 lines    train ≡ infer: tape loss vs LossOnSequence, delta adapters trained (3)
 notorch_trainer_test.go  73 lines     the positional table is trained (1)
 dna_field_test.go        262 lines    every reader eats every fragment, per-tick cap, extra sources, writer pruning by age and count (5)
-experience_routing_test.go 455 lines  the four plates differ pairwise, nothing starves, a declined plate costs no read, the allocation follows state not the label, the probe comes from the meal, no sense fragment is emitted verbatim (7)
+experience_routing_test.go 508 lines  the four plates differ pairwise, nothing starves, a declined plate costs no read, the allocation follows state not the label, the probe comes from the meal, no sense fragment is emitted verbatim, the §13 gate follows the voice where a stage gate is blind (9)
 corpus_cap_test.go       83 lines     the corpus reservoir cap holds without REPL messages, on lines and bytes (1)
 graze_overlay_test.go    234 lines    cross-graze reaches sampling under the overlay, the overlay fades, penalty sign, pasture cursor (4)
 witness_test.go          281 lines    the witness reads what Go writes, schema errors surface, deltas across ticks, harmonics vs DFT, never writes back (6)

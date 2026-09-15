@@ -2195,3 +2195,261 @@ diagnosed mechanism is closed and the test is not yet proven deterministic.
 **Tests, final.** 193 pass, 2 skip. `phone1/launch_test.sh`: 5 pass, 0 fail.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the cafeteria: reading becomes per organism, the probe comes from the meal, and eligibility is read from the voice
+
+Three routing repairs from the §18 order in `reports/2026-09-15_new_logic_audit/README.md`
+(`9464b81`), items 4, 5 and 7: the cafeteria of the brief's §12, the probe of §14, and the
+§13 gate keyed on demonstrated coherence rather than on the stage label. Everything below
+is on `claude/phone1-cafeteria`, rebased onto `claude/phone1-routing-food` at `48d9581` so
+that the two branches' changes to the same `dnaRead` loop hold together. New file
+`experience_routing.go` and its test; the rest is a `CFG` block, three calls inside
+`dnaWrite`, two inside `dnaRead`, and this entry.
+
+### What the cafeteria decides, and on what
+
+`dnaSources(element)` still returns the same list of directories to all four organisms, and
+that is deliberate: routing by directory name would be the `flowers -> Earth` rule §12
+forbids, and `cross_graze.go:60` reads the same list for the logit path, which is not part
+of this allocation. The decision is per fragment instead, taken inside `dnaRead` after the
+bytes are read and before they are appended:
+
+- **owner** — `fnv64a(src + "/" + name) mod` the elements allowed to read that source picks
+  exactly one guaranteed eater. Content-blind: a lottery over file names. It is what makes
+  "every fragment reaches at least one organism" true without any process asking another.
+  A mitosis child carries its parent's `--element` (`molequla.go:5985-5988`), so both eat
+  what the slot owns.
+- **resonance** — the share of the fragment's adjacent token pairs that this organism's own
+  `CooccurField` has already seen is at or above `experience_resonance_high`.
+- **novelty** — that same share is at or below `experience_novelty_low`.
+- the band between is declined; the cursor steps past it and the fragment is not revisited.
+
+Coverage is state: it moves as the organism eats, so the same file routes differently later
+in a life than earlier. Nothing is shared between the processes but the file name and the
+bytes.
+
+### The coverage distribution the defaults come from
+
+Measured on the live run: the four corpora of `molequla-run/{earth,air,water,fire}/` and all
+133 fragments then sitting in `molequla-run/dna/output/` (8 `world`, 4 `place`, 1 `sound`,
+20 each for earth, air and water, 70 for fire of which the first 20 were taken), copied to
+scratch. Each organism was rebuilt the way boot rebuilds it — `loadCorpusLines`,
+`NewEvolvingTokenizer`, `MaybeEnableBPE`, `BuildFromCorpus` — giving vocab 643 with BPE on
+in all four, and 439-456 distinct bigram first-tokens. Whole-fragment token-bigram coverage,
+each fragment against each organism that is allowed to read it:
+
+| fragment source | earth | air | water | fire |
+|---|---|---|---|---|
+| world (8) | .675 - .739 | .578 - .643 | .610 - .663 | .598 - .652 |
+| place (4) | .589 - .607 | .433 - .440 | .450 - .456 | .427 - .434 |
+| sound (1) | .676 | .595 | .630 | .611 |
+| earth DNA (20) | — | .890 - .935 | .899 - .944 | .903 - .937 |
+| air DNA (20) | .964 - .979 | — | .957 - .973 | .955 - .977 |
+| water DNA (20) | .975 - .985 | .966 - .979 | — | .967 - .978 |
+| fire DNA (20) | .966 - .978 | .959 - .980 | .960 - .975 | — |
+
+Two populations that do not overlap. Pooled, at the sample size the code actually uses:
+sibling DNA read by a foreign organism, n=120 — min 0.909, p25 0.952, **med 0.965**, p75
+0.975, max 0.996. Senses read by anybody, n=52 — min 0.427, p25 0.578, **med 0.620**, p75
+0.651, max 0.736.
+
+`experience_resonance_high = 0.965` and `experience_novelty_low = 0.620` are those two
+medians. Each threshold splits its own population in half, which is the most a threshold can
+say and the least a threshold can be taste; both are `CFG` fields and both are gated.
+
+**Why novelty admits at all.** With a resonance branch only, the senses — coverage 0.427 to
+0.736 against a bar of 0.965 — would be eaten by nobody but their hash owner, and the only
+food that is new by construction would reach one organism in four. An organism would be
+sealed inside what it already knows. The measurement is what settles it: the two populations
+are disjoint, so the two branches do not compete, and today the resonance branch admits only
+sibling speech while the novelty branch admits only the world.
+
+**Sibling DNA is routed too, not left as broadcast.** Its distribution has real spread
+(0.909 to 0.996) and the four organisms disagree about the same fragment — `air/gen_…_1.txt`
+scores .973 under earth, .968 under fire, .964 under water, which the 0.965 bar splits. The
+cost is named: each organism now owns about a third of each foreign source and admits about
+half the rest, so sibling intake falls to roughly two thirds of the broadcast, and
+`corpusIngestedTotal`, the growth clock, slows in proportion. `experience_resonance_high` is
+the knob that buys it back.
+
+**Sampling.** `tok.Encode` is O(bytes × merges) and a whole 5 KB fragment cost 143.5 ms on
+cores 4-7 — more than half a tick, eight times per tick at the read cap. Coverage is
+therefore taken over `experience_coverage_sample_bytes = 480`, four 120-byte windows spread
+across the fragment: 21.7 ms, with the sibling quartiles preserved to within 0.006 (p25
+0.952 against 0.956, med 0.965 against 0.968, p75 0.975 against 0.974). The windows are
+strided and not a head on purpose — a head of 240 bytes is the writer's own generated answer,
+whose bigrams everyone has, and it drove sibling coverage to 1.000 for 15 of 20 fragments
+and destroyed the signal. A strided 240 was also too short (sibling median 0.978).
+
+### The probe comes from what was eaten
+
+`dnaWrite` picked `probes[step%6]` from six fixed questions and padded the fragment with
+random `docs` lines. Both are now fed by a bounded ring of what this organism has just
+accepted (`experience_meal_memory = 16`, two ticks of the read cap, each line cut to
+`MaxLineChars` because that is all `loadCorpusLines` will hand back anyway):
+
+- the probe is the first sentence of the most recent meal, sense food before sibling food
+  because sense food is the only food nobody has metabolized yet (§14). The six questions
+  remain the fallback for an organism that has eaten nothing. This half ships switched off
+  — see the emission gate below.
+- a degenerate fragment must not yield a degenerate probe — the risk the §18 order names
+  against this step. An embryo's fragment opens with two or three bytes of its own speech
+  and a full stop, so its leading sentence can be `A.`; the ring is walked back until a
+  probe of at least `experience_probe_min_chars = 12` and
+  `experience_probe_min_words = 3` appears, and the round robin answers if none does.
+- the padding leads with `experience_recent_pad_lines = 4` recently eaten **sibling** lines,
+  and any random `docs` draw that is a sense line this organism ate is skipped. That is §14
+  as a rule the code can enforce: a padded line is a byte copy, not a passage through an
+  organism. The world reaches collective DNA through the generated answer, which was
+  produced from it.
+
+`experience_probe_max_chars = 120` is one sentence, against 6-24 characters for the fixed
+probes and 118 for the first sentence of a place fragment. A paired sweep of the bound (12,
+20, 30, 40, 60, 120 characters; 75 prompts each, 4 rounds, one organism, same weights) put
+every setting within ±4 % of the fixed round robin with no ordering, so the bound is set by
+what a sentence is and not by the number.
+
+### The §13 gate, and why it cannot read the stage
+
+`injectionEligible(fade, mag float64) (bool, string)` — `fade = 1 - lastOverlayWeight` must
+reach `injection_fade_min = 1.0`, and `lastGenMag`, the mean |logit| of the raw output at the
+first generated step, must reach `injection_mag_min = 6.0`. Nothing else; the stage is not
+read. The decision is printed on the emission line as `eligible=0|1`; the injection itself is
+not implemented, so the next session can read the gate's behaviour out of the logs before
+anything is built on it.
+
+The defaults come from the 130 `[dna] wrote` lines under `molequla-run/*/*.stdout`, session
+ending `2026-09-13T20:29:30Z`. `fade` is 1.00 on all 130 — the overlay is gone everywhere in
+this colony, so fade is a necessary condition that refuses nobody today and binds only while
+the overlay is running below its fade width. `mag` runs 2.82 to 16.35, median 8.66, and it is
+what separates:
+
+| mean \|logit\| | emissions | of them gen=0 | mean gen |
+|---|---|---|---|
+| < 6.00 | 10 | 10 | 0.0 |
+| 6.00 - 8.00 | 23 | 7 | 31.1 |
+| 8.00 - 10.00 | 50 | 16 | 23.0 |
+| ≥ 10.00 | 47 | 5 | 36.7 |
+
+Below 6.00 every observed generation emitted nothing at all. That is the floor, and it is a
+knob.
+
+All four organisms sat at `stage=3` across that whole range. A gate on the label returns one
+answer for organisms that spoke 197 bytes and for organisms that spoke none, and it refuses a
+mitosis child that loaded its parent's checkpoint and woke with a mature voice at a stage that
+says nothing about it. That is the red in `TestStageGateGoesRedWhereTheVoiceGateDoesNot`.
+
+### Gates
+
+Nine new tests, and each was watched failing on the behaviour it replaces before it was
+believed. With `experience_routing` off, `experience_probe_from_meals` off,
+`experience_recent_pad_lines` 0 and `isRawExperience` neutered — the pre-cafeteria code —
+`TestCafeteriaPlatesDifferPairwise`, `TestCafeteriaAllocationFollowsState`,
+`TestProbeComesFromWhatWasEaten` and `TestSenseFragmentIsNotEmittedVerbatim` all fail.
+`TestCafeteriaEveryFragmentIsEaten` passes there, and must: a broadcast starves nobody. Its
+red is the opposite failure — with `experienceOwner` returning nothing and both thresholds
+pushed outside their range it reports `earth/gen_1789330000_0.txt reached nobody`.
+
+Suite: `claude/phone1-routing-food` at `48d9581` gives 193 pass, 2 skip, 0 fail; this branch
+on top of it gives 202 pass, 2 skip, 0 fail (`CGO_ENABLED=1 taskset -c 4-7 go test -count=1
+./...`, 3.9 s). The two skips are the same two as always, `TestCheckpointMemoryProfile` and
+`TestStage4SavePeak`. Nine tests, not eight: the ninth is the one the rebase needed, below.
+
+### What the rebase onto the extra-source budget changed
+
+`dnaRead` now carries both branches' repairs, and the order they sit in is the decision. The
+two read budgets (`DNAMaxReadsPerTick` 8, `DNAExtraReadsPerTick` 4) bound how much an
+organism EATS in a tick, so a declined plate spends neither: a colony that refuses a third of
+what it is offered would otherwise consume its budget on refusals and leave the fragments it
+wanted behind them. What a decline does cost is one coverage measurement at 21.7 ms, and that
+is bounded on its own by `experience_max_measured_per_tick = 8` — eight measurements against
+a 250 ms tick, and fewer than the 12 the two read budgets would have allowed. When the cap is
+spent the pass stops with the cursors where they are and the rest is examined next tick.
+`TestCafeteriaDeclineDoesNotSpendTheReadBudget` writes three fragments earth does not own and
+then one it does, sets the read budget to two, and requires the cursor to reach the owned
+one; charging a decline to `*left` — the pre-rebase arrangement — makes it red, with `one
+dnaRead over [three declines] + gen_1789331000_6.txt added nothing`.
+
+The meal ring also changed shape. `splitCorpusLine` (routing repair 3) means a fragment is
+appended as several corpus lines rather than truncated to one, and those lines are what
+`loadCorpusLines` hands back as `docs`. So `remember` takes the appended lines, `probe` reads
+the first of them, `recentPadding` returns them, and `isRawExperience` matches against each —
+otherwise the padding would be refusing a fragment that no longer appears in `docs` in that
+form, and a sense sentence would pass through.
+
+### The emission gate, live
+
+The §18 order asks that the `gen=` share of the emission line not fall. Baseline and
+candidate were run as four organisms for 300 s each on cores 4-7, capped at
+`--max-growth-stage 0` so the run reaches the tick loop instead of spending its whole life in
+stage warmups, out of a scratch `MOLEQULA_RUN` seeded with the repo corpora and the 13 live
+senses fragments; `origin/main` built into one binary, this branch into another.
+
+| run | emissions | mean gen | median gen | gen=0 | gen/bytes | total generated bytes |
+|---|---|---|---|---|---|---|
+| origin/main, pair 1 | 310 | 15.45 | 14 | 12 | 0.00305 | 4791 |
+| origin/main, pair 2 | 313 | 13.51 | 14 | 0 | 0.00266 | 4230 |
+| this branch, pair 1 | 449 | 11.78 | 13 | 27 | 0.00232 | 5291 |
+| this branch, pair 2 | 347 | 13.50 | 14 | 29 | 0.00266 | 4684 |
+
+The `gen=0` count was the first thing to move, and it moved the wrong way: 27 and 29
+emissions with nothing said, against 12 and 0 on `origin/main`. That is exactly the
+degenerate-probe risk the §18 order names against this step — an embryo's fragment opens with
+two or three bytes and a full stop, so its leading sentence is `A.` — and it is what
+`experience_probe_min_chars` and `experience_probe_min_words` were then added for. A third
+300 s run with the guard in place: 373 emissions, **4 of them empty (1.1 %)**, below the
+pooled baseline's 1.9 %. The guard works.
+
+It did not restore the share. Pooled:
+
+| | emissions | mean gen | median | gen=0 | gen/bytes |
+|---|---|---|---|---|---|
+| `origin/main`, both runs | 623 | 14.48 | 14 | 12 (1.9 %) | **0.00285** |
+| this branch, probe on, no guard | 796 | 12.53 | 13 | 56 (7.0 %) | 0.00247 |
+| this branch, probe on, guarded | 373 | 12.08 | 12 | 4 (1.1 %) | **0.00238** |
+
+**So the gate for step 5 is red, and the probe lands switched off.**
+`experience_probe_from_meals` defaults to `false`; the mechanism, its guard and its
+measurement are in the tree, and one `CFG` field turns it on when a run says it pays. A gate
+that cannot refuse is decoration, and this one refused.
+
+What the number does not settle: both arms were embryo-capped colonies
+(`--max-growth-stage 0`), where the overlay is the entire voice and the answer is a
+continuation of the prompt, so a long declarative probe legitimately continues shorter than
+`Speak.` does. The regime this step is for is a stage-3 organism at mean |logit| 8.66 with the
+transformer carrying the voice, and a scratch probe cannot reach it in 300 s from a cold
+corpus. That measurement belongs to a scheduled session, not to this branch.
+
+The padding half of step 5 is on, and is not what moved the number: `gen` is the length of the
+answer, and padding is everything after it. Its own gate — no sense fragment appearing byte
+for byte in an emitted fragment — is green and red on the code it replaces.
+
+Total generated bytes per session is higher on this branch in every pair (4791 → 5291,
+4230 → 4684), because a colony that declines a third of what it is offered spends less of each
+tick appending and ticks more often: 623 emissions in 600 s of baseline against 796 with the
+cafeteria.
+
+`eligible=` prints: all 75 earth emissions of the third run read `eligible=0`, which is
+correct — an embryo sits at mean |logit| around 0.3 against a floor of 6.00. No live organism
+reached `eligible=1` in a scratch run; the admitting side of that gate is covered by
+`TestInjectionGateFollowsTheVoice` and is unverified in a session.
+
+### The rebased branch, run once
+
+One organism and the witness, 180 s, scratch `HOME` and `MOLEQULA_RUN`, cores 4-7 and 0-3,
+`--max-growth-stage 0`, the 13 live senses fragments seeded and no `--corpus-overlay` (so the
+transformer speaks alone and the fade is 1.00 by definition):
+
+    [dna] earth wrote 5009 bytes to ecology | gen=10 mag=2.94 fade=1.00 eligible=0
+    [dna] earth consumed 942 bytes from 3 files: [place/gen_1789337964_6.txt place/gen_1789340468_10.txt place/gen_1789342466_11.txt]
+    [witness] step=20 organisms=1 action=sustain(0.10) H=1.401 S=-0.428 trend=+0.000 target=earth harm=k7:-0.000 conf=0.48 pulse=0.00/0.00/0.00 | earth:s0/26k/1.40/432/f1.00
+
+245 emissions, every one carrying `eligible=`, and every one refused: `mag` ran 2.94 to 5.31
+against a floor of 6.00, which is the embryo regime the floor was measured to exclude. The
+cursor ends with all three senses eaten (`{"place":"gen_1789342466_11.txt",
+"sound":"gen_1789338068_7.txt","world":"gen_1789347647_13.txt"}`) — the cafeteria fed the
+extra sources through their own budget without starving them, and the witness reads the voice
+off the heartbeat as `f1.00`. The witness must be started after the organism, not before: it
+exits on a missing `mesh.db`, which is what a six-second head start gives it.
+
+— Defender (Arianna Method, phone-1)

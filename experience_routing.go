@@ -351,3 +351,45 @@ func (s *experienceState) isRawExperience(line string) bool {
 	}
 	return false
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// THE §13 GATE — eligibility read from the voice, not from the label
+//
+// §13: "Eligibility for this shouldn't be tied mechanically to the label adult.
+// It should depend on demonstrated coherence." The two numbers that say whether
+// a fragment is the organism speaking or the corpus speaking through it already
+// exist in the process and are already printed: model.lastGenMag, the mean
+// |logit| of the raw output at the first step of the last generation, and
+// fade = 1 - model.lastOverlayWeight (molequla.go:1843-1844, 6083-6091).
+//
+// Defaults from the live colony, 130 `[dna] wrote` lines under
+// molequla-run/*/*.stdout, session ending 2026-09-13T20:29:30Z:
+//
+//   fade  = 1.00 on all 130 lines — the overlay is gone everywhere, so fade is
+//           a necessary condition that refuses nobody in this colony today. It
+//           still binds whenever the overlay is running below its own fade
+//           width (overlayFadeProgress, metaweights_overlay.go:53).
+//   mag   = 2.82 .. 16.35, median 8.66. Below 6.00 every one of 10 observed
+//           generations produced gen=0 — the organism emitted no text at all.
+//           At or above 6.00, 92 of 120 produced text. 6.00 is that floor.
+//
+// All four organisms were at stage=3 across that whole range, which is why the
+// gate must not read the stage: one label covers organisms that spoke 197 bytes
+// and organisms that spoke none.
+//
+// This function only decides. The injection itself is not implemented here; the
+// decision is printed as eligible=0|1 on the `[dna] wrote` line so the next
+// session can read it out of the logs.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// injectionEligible reports whether this organism's voice is its own enough to
+// receive sentence-boundary knowledge injection, and why not when it is not.
+func injectionEligible(fade, mag float64) (bool, string) {
+	if fade < CFG.InjectionFadeMin {
+		return false, "overlay"
+	}
+	if mag < CFG.InjectionMagMin {
+		return false, "mute"
+	}
+	return true, "voice"
+}

@@ -244,9 +244,6 @@ func TestCafeteriaAllocationFollowsState(t *testing.T) {
 // The coverage measure itself: a fragment in the organism's own language must
 // score above one in a language it has never read. Runtime against runtime, no
 // expectation hardcoded beside the code.
-// The coverage measure itself: a fragment in the organism's own language must
-// score above one in a language it has never read. Runtime against runtime, no
-// expectation hardcoded beside the code.
 func TestExperienceCoverageSeparatesOwnFromForeign(t *testing.T) {
 	saved := CFG
 	defer func() { CFG = saved }()
@@ -386,10 +383,6 @@ func TestProbeComesFromWhatWasEaten(t *testing.T) {
 // byte copy. dnaWrite pads its fragment with lines drawn from `docs`, and the
 // sense fragment is in `docs` because dnaRead appended it to the corpus. The
 // emitted fragment must not contain it.
-// The §14 rule that raw outside experience does not become collective DNA by
-// byte copy. dnaWrite pads its fragment with lines drawn from `docs`, and the
-// sense fragment is in `docs` because dnaRead appended it to the corpus. The
-// emitted fragment must not contain it.
 func TestSenseFragmentIsNotEmittedVerbatim(t *testing.T) {
 	saved := CFG
 	defer func() { CFG = saved }()
@@ -453,3 +446,63 @@ func TestSenseFragmentIsNotEmittedVerbatim(t *testing.T) {
 }
 
 // ── §13 gate: eligibility read from the voice ───────────────────────────────
+func TestInjectionGateFollowsTheVoice(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	// An organism still carrying the overlay is refused, whatever else is true.
+	// fade < 1 means overlayFadeProgress has not completed, i.e. the corpus is
+	// still speaking through it.
+	for _, mag := range []float64{0.5, 6.0, 12.0} {
+		fade := overlayFadeProgress(1.5) // 0.5: halfway through the fade band
+		if ok, why := injectionEligible(fade, mag); ok {
+			t.Fatalf("an organism at fade %.2f mag %.2f was admitted (%s); the overlay is still speaking for it", fade, mag, why)
+		}
+	}
+
+	// A mitosis child inherits the parent's checkpoint (molequla.go:5945-5948),
+	// so it wakes with a mature voice at a stage label that says nothing about
+	// it. fade = 1, mag at the live colony's median: admitted.
+	const childMag = 8.66 // median of 130 live `[dna] wrote` lines
+	if ok, why := injectionEligible(1.0, childMag); !ok {
+		t.Fatalf("a mitosis child at fade 1.00 mag %.2f was refused (%s)", childMag, why)
+	}
+
+	// And the organism that speaks nothing is refused at the same fade. The
+	// live colony had 10 generations below mag 6.00 and every one of them
+	// emitted gen=0.
+	if ok, _ := injectionEligible(1.0, 2.82); ok {
+		t.Fatalf("an organism at fade 1.00 mag 2.82 was admitted; it emitted no text at all in the live run")
+	}
+}
+
+// The red the §13 gate exists to produce: a gate keyed on the developmental
+// label cannot separate the live colony, because all four organisms sat at
+// stage=3 while their magnitudes ran from 2.82 to 16.35 and 38 of 130
+// generations emitted nothing. A stage gate also refuses a mitosis child that
+// inherited a mature voice but not the label.
+func TestStageGateGoesRedWhereTheVoiceGateDoesNot(t *testing.T) {
+	saved := CFG
+	defer func() { CFG = saved }()
+
+	// The label gate the brief rejects: "adult" is the last growth stage.
+	stageGate := func(stage int) bool { return stage >= CFG.MaxGrowthStage }
+
+	const childStage = 3 // the live colony's stage, and a child inherits its parent's dims
+	if stageGate(childStage) {
+		t.Fatalf("the test's stage gate admits stage %d; it was meant to model the adult label", childStage)
+	}
+	if ok, _ := injectionEligible(1.0, 10.39); !ok {
+		t.Fatal("the voice gate refused an organism at fade 1.00 mag 10.39")
+	}
+	// Same stage, opposite voices: the stage gate returns one answer for both,
+	// the voice gate separates them.
+	mute, speaking := 2.82, 10.39
+	okMute, _ := injectionEligible(1.0, mute)
+	okSpeaking, _ := injectionEligible(1.0, speaking)
+	if stageGate(childStage) != stageGate(childStage) || okMute == okSpeaking {
+		t.Fatalf("the voice gate gave the same answer to mag %.2f and mag %.2f", mute, speaking)
+	}
+	t.Logf("stage %d: stage gate %v for both; voice gate %v at mag %.2f, %v at mag %.2f",
+		childStage, stageGate(childStage), okMute, mute, okSpeaking, speaking)
+}
