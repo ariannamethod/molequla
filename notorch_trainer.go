@@ -470,6 +470,9 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 		seqLen = model.BlockSize
 	}
 	m := ntNewMirror(model, seqLen)
+	// Defers run last-in-first-out: registering the release first means it runs
+	// after m.free(), with the tape clear and every mirrored tensor gone.
+	defer releaseTrainingHeap()
 	defer m.free()
 
 	// Post-growth: wipe positional Chuck slots before the first step (S1).
