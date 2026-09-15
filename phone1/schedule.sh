@@ -18,6 +18,8 @@
 #        schedule.sh in-window <HH:MM|epoch> — is that moment inside a colony
 #                                              window (exit 0) or not (exit 1)
 #        MOLEQULA_SCHED_NOW=<epoch>        — pretend it is that moment (tests)
+#        schedule.sh __slot colony|senses [epoch] — run one slot now, without
+#                                              the daemon, for the gate
 # Configuration: phone1/schedule.conf, or SCHEDULE_CONF=<file>, or the same
 # names in the environment, which win over the file.
 set -u
@@ -39,6 +41,7 @@ env_grace="${SCHEDULE_GRACE:-}"
 env_sample="${SCHEDULE_SAMPLE:-}"
 env_catchup="${SCHEDULE_CATCHUP:-}"
 env_oom="${SCHEDULE_OOM_ADJ:-}"
+env_prekill="${SCHEDULE_PREKILL:-}"
 env_senses_slots="${SENSES_SLOTS:-}"
 env_senses_cmd="${SENSES_CMD:-}"
 env_senses_timeout="${SENSES_TIMEOUT:-}"
@@ -49,6 +52,7 @@ SCHEDULE_GRACE=90
 SCHEDULE_SAMPLE=30
 SCHEDULE_CATCHUP=1800
 SCHEDULE_OOM_ADJ=500
+SCHEDULE_PREKILL="android am kill-all"
 SENSES_SLOTS=""
 SENSES_CMD=""
 SENSES_TIMEOUT=600
@@ -60,6 +64,7 @@ SENSES_TIMEOUT=600
 [ -n "$env_sample" ] && SCHEDULE_SAMPLE="$env_sample"
 [ -n "$env_catchup" ] && SCHEDULE_CATCHUP="$env_catchup"
 [ -n "$env_oom" ] && SCHEDULE_OOM_ADJ="$env_oom"
+[ -n "$env_prekill" ] && SCHEDULE_PREKILL="$env_prekill"
 [ -n "$env_senses_slots" ] && SENSES_SLOTS="$env_senses_slots"
 [ -n "$env_senses_cmd" ] && SENSES_CMD="$env_senses_cmd"
 [ -n "$env_senses_timeout" ] && SENSES_TIMEOUT="$env_senses_timeout"
@@ -207,6 +212,42 @@ set_oom_adj() {
     echo "[schedule] oom_score_adj=$SCHEDULE_OOM_ADJ on $done_ organism(s)"
 }
 
+# prekill: hand the organisms back the memory Android is sitting on, immediately
+# before a colony session. Measured on this phone 2026-09-15: `am kill-all` drops
+# the cached bin — 595 MB of cached app PSS — and MemAvailable rose 3 812 -> 4 130
+# MB at once and was still 4 025 MB eleven minutes later, +213 MB sustained, with
+# fifteen of the nineteen killed processes never coming back
+# (reports/2026-09-15_phone1_android_memory/README.md §4).
+#
+# Colony slots only. The senses burst is 955 MB of anonymous memory held for
+# forty seconds (§3.1); it fit in free memory without moving a single page to
+# swap, the eye reads MemAvailable itself before it opens, and a pass is short
+# enough that everything killed for it would be paged back in by the colony
+# window an hour later. The cost of the kill — cold app starts, the media
+# indexers rescanning — buys nothing there. Before four organisms that hold
+# 758-1091 MB each for two hours it buys the whole difference.
+#
+# A prekill never costs a slot: a missing command, a non-zero exit, anything —
+# it is logged and the session launches anyway. PREKILL_MB carries "A->B" for
+# the session line, or "-" when nothing ran.
+PREKILL_MB="-"
+prekill() {
+    local before after out rc
+    PREKILL_MB="-"
+    [ -n "$SCHEDULE_PREKILL" ] || return 0
+    before="$(mem_avail_mb)"
+    out="$($SCHEDULE_PREKILL 2>&1)"; rc=$?
+    after="$(mem_avail_mb)"
+    PREKILL_MB="${before}->${after}"
+    if [ "$rc" -ne 0 ]; then
+        PREKILL_MB="${PREKILL_MB}!rc$rc"
+        echo "[schedule] prekill '$SCHEDULE_PREKILL' failed rc=$rc (${out:-no output}) — the session runs anyway"
+    else
+        echo "[schedule] prekill '$SCHEDULE_PREKILL': MemAvailable ${before}->${after} MB"
+    fi
+    return 0
+}
+
 # run_session <slot-epoch>: launch, watch, cap, confirm down, log one line.
 run_session() {
     local slot="$1" t0 t1 mem0 mem1 out rc reason elapsed left samples=0
@@ -221,6 +262,9 @@ run_session() {
     fi
 
     t0="$(date -u +%s)"
+    # Before the reading, not after it: mem0 is what the session actually starts
+    # with, and the prekill's own before/after is logged separately.
+    prekill
     mem0="$(mem_avail_mb)"
     echo "[schedule] slot $(hhmm "$slot") at $(iso "$t0"): launching for ${SCHEDULE_DUR}s, MemAvailable ${mem0} MB"
     out="$(bash "$HERE/launch.sh" "$SCHEDULE_DUR" 2>&1)"; rc=$?
@@ -236,7 +280,7 @@ run_session() {
         fi
         t1="$(date -u +%s)"
         left="$(live_names)"
-        log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$((t1 - t0)) reason=$reason alive=${left:--} mem_mb=${mem0}->$(mem_avail_mb) hwm_mb=- samples=0"
+        log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$((t1 - t0)) reason=$reason alive=${left:--} mem_mb=${mem0}->$(mem_avail_mb) prekill_mb=$PREKILL_MB hwm_mb=- samples=0"
         return 0
     fi
 
@@ -268,7 +312,7 @@ run_session() {
     t1="$(date -u +%s)"
     mem1="$(mem_avail_mb)"
     elapsed=$((t1 - t0))
-    log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$elapsed reason=$reason alive=${left:--} mem_mb=${mem0}->${mem1} hwm_mb=$(hwm_field) samples=$samples"
+    log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$elapsed reason=$reason alive=${left:--} mem_mb=${mem0}->${mem1} prekill_mb=$PREKILL_MB hwm_mb=$(hwm_field) samples=$samples"
     echo "[schedule] slot $(hhmm "$slot") done: reason=$reason elapsed=${elapsed}s MemAvailable ${mem0}->${mem1} MB"
     return 0
 }
@@ -452,5 +496,15 @@ case "${1:-}" in
     next)      cmd_next "${2:-}" ;;
     in-window) cmd_in_window "${2:-}" ;;
     __loop)    loop ;;
+    # One slot, run now, with no daemon around it: what the gate drives so that
+    # run_session and run_senses are the code under test and not a copy.
+    __slot)
+        mkdir -p "$PIDDIR" || exit 1
+        case "${2:-colony}" in
+            colony) run_session "${3:-$(date -u +%s)}" ;;
+            senses) run_senses  "${3:-$(date -u +%s)}" ;;
+            *) die "__slot: want colony or senses, got '${2:-}'" ;;
+        esac
+        ;;
     *) echo "usage: schedule.sh start|stop|status|next [--epoch|--kind]|in-window <HH:MM|epoch>" >&2; exit 2 ;;
 esac

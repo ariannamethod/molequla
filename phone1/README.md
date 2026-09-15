@@ -85,6 +85,27 @@ reboot, a session that starts hours late is not the session that was scheduled.
 `/usr/local/bin/defender-services.sh` calls `schedule.sh start` so the daemon
 comes back after a reboot.
 
+`SCHEDULE_PREKILL` (default `android am kill-all`) is run in the real Android
+environment immediately before a colony session, and its MemAvailable before
+and after go into the session line as `prekill_mb=A->B`. Android's cached bin
+looks free in its own accounting and is not: dropping it on 2026-09-15 took 595
+MB of cached app PSS, moved MemAvailable 3 812 → 4 130 MB at once and left it at
+4 025 MB eleven minutes later — **+213 MB sustained** — with fifteen of the
+nineteen killed processes never coming back
+(`reports/2026-09-15_phone1_android_memory/README.md`, §4). Only the `cch` bin
+is touched, so the red line is safe by construction: at the moment of that
+measurement the keyboard was Perceptible, Termux Foreground, Tailscale Visible,
+telephony and Bluetooth Persistent. The senses slots deliberately do not get
+this. Their burst is 955 MB of anonymous memory held for forty seconds (§3.1),
+it fit in free memory without pushing one page into swap, the eye reads
+MemAvailable itself before it opens, and everything killed for a two-hundred-
+second pass would only be paged back in before the colony window an hour later;
+the cost — cold app starts and the media indexers rescanning — buys nothing
+there and buys the whole difference before four organisms that hold 758-1091 MB
+each for two hours. Empty the value and nothing runs. A prekill that is missing
+or exits non-zero never costs the slot: it is logged, `prekill_mb` carries the
+return code, and `launch.sh` starts anyway.
+
 `bash phone1/senses.sh [eye|ears|place|all]` is the other thing the schedule
 runs, and the reason the phone has organs at all. The colony is down sixteen
 hours a day; the senses are not. One pass takes a short window of camera frames,
@@ -198,8 +219,9 @@ fragments to the organism's own corpus, and `NewCrossField` takes its sibling
 list from the same `dnaSources()`, so the senses also reach the logit overlay.
 Without the flag the directories exist and are simply never read.
 
-`bash phone1/schedule_test.sh` is the gate for the slot arithmetic: 36 cases
-through the real `schedule.sh` with a fake now. Twenty-one drive
+`bash phone1/schedule_test.sh` is the gate: 46 cases through the real
+`schedule.sh`. Thirty-six are the slot arithmetic, with a fake now. Twenty-one
+drive
 `next --epoch` on colony slots — before, at and after a boundary, across
 midnight and across a month, unsorted lists, single slots, base-ten hours, a
 non-UTC host time zone, and five malformed configurations that must be refused.
@@ -208,6 +230,15 @@ The other fifteen are the two kinds together: eight drive `next --epoch` and
 empty senses list, and seven drive `schedule.sh in-window`, the predicate that
 keeps the senses out of a colony session — its opening moment, its closing
 moment, and a session long enough to reach past midnight into the next day.
+The last ten are the prekill, and they run a whole slot: a stub `android` on
+`PATH` records its argv while stub `launch.sh` and `stop.sh` sit beside a
+symlink to the real `schedule.sh`, and `schedule.sh __slot colony|senses`
+drives one session with no daemon around it. A colony slot must call the stub
+exactly once, with `am kill-all`, before `launch.sh` and not after, and write
+`prekill_mb=A->B`; a senses slot must not call it at all; an empty
+`SCHEDULE_PREKILL` in the conf must not call it and must still run the session;
+and a stub that exits 3, or a command that does not exist, must leave the
+session running and the failure in the console.
 
 `bash phone1/senses_test.sh` is the gate for the pass itself: 20 cases through
 the real `senses.sh` with the hardware faked and nothing else — an `ssh` that

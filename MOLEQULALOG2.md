@@ -2883,3 +2883,70 @@ work of the same day — the suite is **216 PASS, 2 SKIP, 0 FAIL**.
    for the format-compatibility reason repair 10 gave.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the scheduler takes Android's cached memory back before a session
+
+The memory report of this morning (`reports/2026-09-15_phone1_android_memory/README.md`)
+measured what Android's cached bin is worth to the colony: `am kill-all` at
+06:37:32Z dropped 595 MB of cached app PSS, MemAvailable went 3 812 → 4 130 MB
+at once and was still 4 025 MB eleven minutes later — **+213 MB sustained** —
+and fifteen of the nineteen killed processes never came back (§4). The report's
+own ranking put it second, and said where it belongs: at the start of a colony
+session, not in a one-off command somebody remembers to type.
+
+**What was added.** `SCHEDULE_PREKILL`, default `android am kill-all`, read
+from `phone1/schedule.conf` or the environment on the same pattern as
+`SCHEDULE_OOM_ADJ` — empty disables. `run_session` calls it immediately before
+`launch.sh` and before it reads `mem0`, so the MemAvailable in the session line
+is what the organisms actually start with, and the prekill's own before and
+after go into the same line as `prekill_mb=A->B`, or `A->B!rc<N>` when the
+command failed. A prekill that is missing, or exits non-zero, is logged to
+`schedule.out` and the session launches anyway: the memory is an improvement to
+the slot, never a condition of it.
+
+**Colony slots only, and that is an argument, not an omission.** The senses
+burst is 955 MB of anonymous memory held for forty seconds, and §3.1 measured
+the thing that decides it: `SwapFree` did not move across the burst — the peak
+fit in free memory without pushing one page out. The eye reads MemAvailable
+itself before it opens, a pass is about 200 s in the worst case, and whatever
+were killed for it would be paged back in well before the next colony window.
+The kill's cost — cold app starts, the media indexers rescanning — buys nothing
+there. Before four organisms holding 758–1091 MB each for two hours it buys the
+whole difference.
+
+**The gate.** `phone1/schedule_test.sh` grew from 36 cases to 46, and the ten
+run a whole slot rather than slot arithmetic: a stub `android` on `PATH` records
+its argv, stub `launch.sh` and `stop.sh` sit beside a symlink to the real
+`schedule.sh` — a symlink, so the code under test is the file that runs at
+12:00 and not a copy of it — and a new hidden `schedule.sh __slot colony|senses`
+drives one session with no daemon around it. A colony slot must call the stub
+exactly once, with `am kill-all`, ordered before `launch.sh` in the console, and
+must write `prekill_mb=`; a senses slot must not call it; an empty
+`SCHEDULE_PREKILL` in the conf must not call it and must still run the session;
+a stub exiting 3 and a command that does not exist must both leave the session
+running with the failure logged. Written first and run against the unchanged
+scheduler: **6 red, 40 green**, and the four that were already green were the
+must-nots. After the change: **46 pass, 0 fail**. `phone1/senses_test.sh` is
+unchanged at 20 pass, 0 fail; both files pass `bash -n`.
+
+**One live attempt, and what it showed instead.** `android 'am kill-all'` at
+10:10:43Z returned rc=2 with `cmd: Failure calling service activity: Failed
+transaction (2147483646)`, and MemAvailable moved 3 624 736 → 3 648 360 kB,
+which is noise and not a kill. The same sampler's third reading, five minutes
+later at 10:15:51Z, was 4 006 672 kB — 382 MB above the first — and that number
+is written down here precisely so nobody later reads it as the prekill's
+effect. Nothing was killed; the phone drifted by that much on its own while
+idle, which is the whole reason a single pair of readings around a kill proves
+nothing and the report's eleven-minute sample is the one that counts. Read-only calls to the same service failed the
+same way a minute later while `service list` answered with 429 services, so
+binder itself was reachable; by 10:14Z every one of those calls succeeded again,
+with and without a redirected stdin. The cause is not established and no code
+was written for it — a transient the measurement caught and could not
+reproduce. It does make the failure path concrete rather than defensive: this
+command has been seen to fail on this phone, and the slot must not care. The
++213 MB stands on the report's measurement, not on this one. The live daemon
+(pid 14678) and its checkout were not touched, so the 12:00–14:05Z window runs
+the scheduler it started with; the branch is `claude/phone1-schedule-prekill`,
+unpushed.
+
+— Defender (Arianna Method, phone-1)

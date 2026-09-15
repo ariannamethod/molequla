@@ -12,6 +12,14 @@ trap 'rm -rf "$TMP"' EXIT
 
 pass=0; fail=0
 
+ok()  { pass=$((pass + 1)); printf 'ok   %s\n' "$1"; }
+bad() { fail=$((fail + 1)); printf 'FAIL %s\n' "$1"; }
+
+# eq <name> <got> <want>
+eq() {
+    if [ "$2" = "$3" ]; then ok "$1"; else bad "$1: got '$2', want '$3'"; fi
+}
+
 # e <UTC timestamp> -> epoch
 e() { date -u -d "$1" +%s; }
 
@@ -140,6 +148,84 @@ window "a minute before it opens"             "$D" 7200 "03:59" outside
 window "the configured senses slots clear the colony" "$D" 7200 "23:00" outside
 # A session long enough to run past midnight still covers 01:00 the next day.
 window "yesterday's session reaches into today" "20:00" 21600 "01:00" inside
+
+# ── the prekill before a colony session ─────────────────────────────────────
+# SCHEDULE_PREKILL runs in the real Android environment immediately before
+# launch.sh, to hand the organisms back the memory Android is sitting on in its
+# cached bin. Here `android` is a stub on PATH that records its argv, and
+# launch.sh / stop.sh are stubs beside a symlink to the real schedule.sh, so the
+# slot under test is run_session itself, driven by `schedule.sh __slot`.
+
+STUB="$TMP/phone1"
+mkdir -p "$STUB" "$TMP/bin"
+ln -s "$SCHED" "$STUB/schedule.sh"
+printf '#!/bin/bash\necho launched\nexit 0\n' > "$STUB/launch.sh"
+printf '#!/bin/bash\necho stopped\nexit 0\n' > "$STUB/stop.sh"
+cat > "$TMP/bin/android" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$TMP/android.seen"
+exit \${ANDROID_STUB_RC:-0}
+EOF
+chmod +x "$TMP/bin/android"
+
+# slot <kind> <env assignments...> -> runs one slot, leaves stdout in $TMP/slot.out
+# and the session line in $TMP/run/schedule.log. The android stub's argv, one
+# call per line, lands in $TMP/android.seen.
+slot() {
+    local kind="$1"; shift
+    rm -rf "$TMP/run"; mkdir -p "$TMP/run"
+    rm -f "$TMP/android.seen"
+    env -u ANDROID_STUB_RC PATH="$TMP/bin:$PATH" MOLEQULA_RUN="$TMP/run" \
+        SCHEDULE_CONF=/dev/null SCHEDULE_SLOTS="$D" SCHEDULE_DUR=5 \
+        SCHEDULE_SAMPLE=1 SCHEDULE_GRACE=1 SENSES_CMD='true' "$@" \
+        bash "$STUB/schedule.sh" __slot "$kind" > "$TMP/slot.out" 2>&1
+}
+
+# calls -> how many times the android stub was invoked
+calls() { [ -f "$TMP/android.seen" ] && wc -l < "$TMP/android.seen" || echo 0; }
+
+slot colony
+eq "a colony slot calls the prekill once" "$(calls | tr -d ' ')" "1"
+eq "and calls it with am kill-all" "$(cat "$TMP/android.seen" 2>/dev/null)" "am kill-all"
+if grep -q 'launched' "$TMP/slot.out" && \
+   grep -q 'am kill-all' "$TMP/slot.out" && \
+   [ "$(grep -c 'am kill-all' "$TMP/slot.out")" -ge 1 ] && \
+   [ "$(awk '/am kill-all/{k=NR} /launched/{l=NR} END{print (k && l && k < l) ? "yes" : "no"}' "$TMP/slot.out")" = yes ]; then
+    ok "the prekill runs before launch.sh, not after"
+else
+    bad "the prekill runs before launch.sh, not after: $(tr '\n' '|' < "$TMP/slot.out")"
+fi
+line="$(cat "$TMP/run/schedule.log" 2>/dev/null)"
+case "$line" in
+    *prekill_mb=[0-9]*-\>[0-9]*) ok "the session line carries prekill_mb=A->B" ;;
+    *) bad "the session line carries prekill_mb=A->B: got '$line'" ;;
+esac
+
+slot senses
+eq "a senses slot does not call the prekill" "$(calls | tr -d ' ')" "0"
+
+printf 'SCHEDULE_PREKILL=""\n' > "$TMP/noprekill.conf"
+slot colony SCHEDULE_CONF="$TMP/noprekill.conf"
+eq "an empty SCHEDULE_PREKILL disables it" "$(calls | tr -d ' ')" "0"
+grep -q 'launched' "$TMP/slot.out" && ok "and the slot still runs" \
+    || bad "and the slot still runs: $(tr '\n' '|' < "$TMP/slot.out")"
+
+slot colony ANDROID_STUB_RC=3
+if grep -q 'launched' "$TMP/slot.out"; then
+    ok "a failing prekill does not cost the slot"
+else
+    bad "a failing prekill does not cost the slot: $(tr '\n' '|' < "$TMP/slot.out")"
+fi
+grep -qi 'prekill.*fail' "$TMP/slot.out" && ok "and the failure is logged" \
+    || bad "and the failure is logged: $(tr '\n' '|' < "$TMP/slot.out")"
+
+# A command that is not there at all is the same promise: log it, run the slot.
+slot colony SCHEDULE_PREKILL="no-such-command-for-the-gate"
+if grep -q 'launched' "$TMP/slot.out" && grep -qi 'prekill.*fail' "$TMP/slot.out"; then
+    ok "a missing prekill command is logged and the slot runs"
+else
+    bad "a missing prekill command is logged and the slot runs: $(tr '\n' '|' < "$TMP/slot.out")"
+fi
 
 printf '\n%d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
