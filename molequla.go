@@ -30,6 +30,7 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 )
@@ -3312,6 +3313,70 @@ func loadCorpusLines(path string) []string {
 	return lines
 }
 
+// splitCorpusLine cuts one eaten text into corpus lines, none longer than
+// maxChars. Routing repair 3: loadCorpusLines truncates every line at
+// CFG.MaxLineChars and a DNA fragment is padded toward
+// CFG.DNAFragmentTargetBytes and was appended as one line, so a fragment
+// reached `docs` only as its first 240 bytes — measured on the live run,
+// 4.7-4.8 % of a 5 KB sibling fragment and 76.7 % of a place fragment, where
+// the quarter that fell off was exactly the clause saying whether the phone had
+// moved. Cutting on sentence ends instead leaves the byte bound
+// MaxCorpusLines × MaxLineChars untouched (the line count becomes the binding
+// cap) while the whole fragment reaches the field.
+//
+// A sentence ends at '.', '!' or '?' followed by a space or by the end of the
+// text, so "22.5 °C" and "2026-09-14T18:48" stay whole. A run with no sentence
+// end inside maxChars is cut at the last space before the bound, or at the
+// bound on a rune boundary — which is what loadCorpusLines would have done to
+// it anyway, only without the rune care.
+func splitCorpusLine(text string, maxChars int) []string {
+	text = strings.TrimSpace(strings.ReplaceAll(text, "\n", " "))
+	if text == "" {
+		return nil
+	}
+	if maxChars <= 0 {
+		return []string{text}
+	}
+	var out []string
+	emit := func(s string) {
+		s = strings.TrimSpace(s)
+		for len(s) > maxChars {
+			cut := maxChars
+			for cut > 0 && !utf8.RuneStart(s[cut]) {
+				cut--
+			}
+			if sp := strings.LastIndexByte(s[:cut], ' '); sp > maxChars/2 {
+				cut = sp
+			}
+			if cut == 0 {
+				break
+			}
+			if head := strings.TrimSpace(s[:cut]); head != "" {
+				out = append(out, head)
+			}
+			s = strings.TrimSpace(s[cut:])
+		}
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	start := 0
+	for i := 0; i < len(text); i++ {
+		if c := text[i]; c != '.' && c != '!' && c != '?' {
+			continue
+		}
+		if i+1 < len(text) && text[i+1] != ' ' && text[i+1] != '\t' {
+			continue
+		}
+		emit(text[start : i+1])
+		start = i + 1
+	}
+	if start < len(text) {
+		emit(text[start:])
+	}
+	return out
+}
+
 func saveCorpusLines(path string, lines []string) {
 	f, err := os.Create(path)
 	if err != nil {
@@ -6203,14 +6268,31 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 				moved = true
 				continue
 			}
-			// Append to own corpus — the organism eats another's words
+			// Append to own corpus — the organism eats another's words, cut
+			// into corpus lines so that the whole fragment survives
+			// loadCorpusLines instead of its first CFG.MaxLineChars bytes
+			// (routing repair 3).
+			lines := splitCorpusLine(text, CFG.MaxLineChars)
+			if len(lines) == 0 {
+				cur.Last[src] = name
+				moved = true
+				continue
+			}
 			f, err := os.OpenFile(corpusPath, os.O_APPEND|os.O_WRONLY, 0644)
 			if err != nil {
 				continue
 			}
-			f.WriteString(text + "\n")
+			wrote := 0
+			for _, ln := range lines {
+				f.WriteString(ln + "\n")
+				wrote += len(ln)
+			}
 			f.Close()
-			added += len(text)
+			// The growth clock counts what reached the field, not what was
+			// offered to it. Before repair 3 the two were the same number by
+			// accident of the append and different by 20× in fact; now they
+			// differ only by the whitespace between sentences.
+			added += wrote
 			consumed = append(consumed, fmt.Sprintf("%s/%s", src, name))
 			if qbuf != nil && tok != nil {
 				qbuf.Feed(text, tok)

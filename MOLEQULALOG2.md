@@ -1991,3 +1991,81 @@ exactly `DNAExtraReadsPerTick` times. Reverted to the single shared counter both
 go red, and they name the mechanism as they fall — `corpus holds 9 lines, cursor:
 map[air:gen_1789337000_7.txt]`, the whole budget spent inside air, and in the
 mirror `world was read 7 times, want 4`.
+
+**3. The 240-character ceiling, measured before it was touched.** Every source
+was measured on copies of the live run taken 2026-09-15, counting for each line
+how many of its bytes survive `loadCorpusLines`, which truncates at
+`CFG.MaxLineChars = 240` on every read. First the four corpora as the trainer
+sees them:
+
+| corpus | lines | over 240 B | bytes | reach `docs` | share | longest line |
+|---|---|---|---|---|---|---|
+| earth | 1101 | 592 | 687953 | 158793 | 23.1 % | 5406 |
+| air | 1083 | 156 | 540830 | 138428 | 25.6 % | 5221 |
+| water | 1672 | 90 | 579634 | 144924 | 25.0 % | 5223 |
+| fire | 1590 | 60 | 425086 | 134006 | 31.5 % | 5233 |
+
+Then the fragments standing in the DNA field, each counted the way `dnaRead`
+appended it, as one line:
+
+| source | fragments | over 240 B | bytes | reach `docs` | share | longest |
+|---|---|---|---|---|---|---|
+| earth | 20 | 20 | 102697 | 4800 | 4.7 % | 5233 |
+| air | 20 | 20 | 101916 | 4800 | 4.7 % | 5223 |
+| water | 20 | 20 | 100867 | 4800 | 4.8 % | 5108 |
+| fire | 70 | 70 | 353255 | 16800 | 4.8 % | 5126 |
+| world | 8 | 0 | 977 | 977 | 100 % | 156 |
+| sound | 1 | 0 | 100 | 100 | 100 % | 100 |
+| place | 4 | 4 | 1251 | 960 | 76.7 % | 317 |
+
+The eye and the ears write inside the ceiling and lose nothing. Place does not,
+and what it loses is not its last quarter in general but the same clause every
+time: the cut lands mid-timestamp in `, sunset 2026-09-14T` and drops
+`18:48. And it has not moved more than 50 m since the last pass (2 m from it).`
+That sentence is the only part of a place fragment that reports a change rather
+than a state, which is the thing ROADMAP item 10 exists for, and it was the part
+being discarded.
+
+Then the cost, since the 30-tick rebuild throttle is there to contain it.
+`BuildFromCorpus` over the earth corpus on cores 4-7, two builds per shape:
+
+| shape of `docs` | lines | bytes | build 1 | build 2 |
+|---|---|---|---|---|
+| truncated at 240 (today) | 1101 | 158793 | 239.9 ms | 246.0 ms |
+| split into sentences | 13813 | 675007 | 1076.6 ms | 1100.7 ms |
+| whole lines, no ceiling | 1101 | 687953 | 1088.3 ms | 1283.8 ms |
+| split, at the 8000-line cap | 8000 | 410290 | 604.0 ms | 649.1 ms |
+
+The cost is in bytes, not in lines: splitting and raising the ceiling cost the
+same 1.08 s at the same 680 KB. So the rebuild clock does not choose between the
+two fixes — the byte bound does. `updateReservoirCorpus` holds the corpus file
+under `MaxCorpusLines × MaxLineChars` = 8000 × 240 = 1.92 MB. Raising
+`MaxLineChars` to the fragment size would raise that bound to 40 MB, and at the
+measured 1.58 µs/byte that is about 63 s per rebuild against a rebuild interval
+of 30 ticks ≈ 7.5 s — the throttle would stop being a throttle. Splitting leaves
+`MaxLineChars` where it is and lets the line count become the binding cap
+instead: at 8000 sentences the reservoir is 410 KB and rebuilds in 604-649 ms,
+against 159 KB and 240-246 ms today. That is 2.5× the rebuild for 2.6× the
+field, 8 % of wall instead of 3 %, and it is the change that was made —
+`splitCorpusLine` in `molequla.go`, called from `dnaRead` on append, cutting at
+`.`, `!` or `?` followed by a space so that `22.5 °C` and `2026-09-14T18:48`
+survive, and falling back to a cut at the last space before the bound for a run
+with no sentence end in it.
+
+`corpusIngestedTotal`, the monotonic growth clock the ontogenesis gate reads,
+now counts the bytes actually written as corpus lines instead of the length of
+the offered fragment. Before this repair those two numbers differed by about
+20×: the clock was reading 5 KB of growth for 240 bytes of field. After it they
+differ only by the whitespace the cuts fall on, so the clock is measuring the
+thing it is named after, and the ontogenesis thresholds keep the meaning they
+were tuned with rather than gaining one.
+
+Gates in `corpus_line_split_test.go`: the unit cases on `splitCorpusLine` (a
+decimal and a timestamp are not sentence ends, a 3600 B run with no sentence end
+is cut under the bound without losing content, a multi-byte run is never cut
+inside a rune), and the one the audit asked for — a 5073 B fragment eaten
+through `dnaRead`, then `loadCorpusLines` → `NewEvolvingTokenizer` →
+`BuildFromCorpus`, with every bigram of the fragment's last sentence required to
+be in `cf.BigramByFirst`. Appending the fragment whole again, it goes red at the
+first step of that sentence with `docs hold 2 lines, 261 bytes, the fragment was
+5073 B`.
