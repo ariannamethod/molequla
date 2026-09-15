@@ -591,6 +591,12 @@ func ntBurstTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, 
 	}
 	model.mu.Lock()
 	defer model.mu.Unlock()
+	// The wall clock around the whole phase, not the step loop ms beside it:
+	// the mirror in and out is tape memory too, and the gate of step 1 in
+	// docs/resonator_design.md is that no two of these intervals overlap across
+	// the colony. A line with only a duration cannot be checked for overlap by
+	// anything except the process that printed it.
+	tStart := time.Now()
 	embryoEmbd := CFG.GrowthStages[0][1]
 	lr := burstLR * float64(embryoEmbd) / float64(model.NEmbd)
 	avg, n, ms := ntTrainCore(model, tok, docs, steps, model.BlockSize, func(int) float64 { return lr })
@@ -601,10 +607,15 @@ func ntBurstTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, 
 		}
 	}
 	if n > 0 {
-		fmt.Printf("[notorch] burst complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d\n",
-			steps, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount())
+		fmt.Printf("[notorch] burst complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d | start=%s end=%s\n",
+			steps, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount(),
+			tStart.UTC().Format(ntBurstStamp), time.Now().UTC().Format(ntBurstStamp))
 	}
 }
+
+// ntBurstStamp is the wall-clock form on the burst line: UTC to the
+// millisecond, which is three orders finer than the 7 400 ms burst it bounds.
+const ntBurstStamp = "2006-01-02T15:04:05.000Z"
 
 // ntStepsPerSec — steps/sec from a counted-step total and wall ms (criterion 2).
 func ntStepsPerSec(n int, ms float64) float64 {

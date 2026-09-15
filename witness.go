@@ -74,6 +74,9 @@ type witnessOrganism struct {
 	// faded out of it — 1 means the overlay is gone.
 	GenMag      float64 `json:"gen_mag"`
 	OverlayFade float64 `json:"overlay_fade"`
+	// The organism's own high-water resident set in MB (resonator design,
+	// step 0). 0 means the organism has not beaten since the column was added.
+	PeakRSSMB int64 `json:"peak_rss_mb"`
 }
 
 type witnessDNASource struct {
@@ -183,7 +186,7 @@ func witnessOpenMesh(path string) (*sql.DB, error) {
 func witnessReadField(db *sql.DB, now float64) ([]witnessOrganism, error) {
 	rows, err := db.Query(`SELECT id, pid, stage, n_params, syntropy, entropy, last_heartbeat,
 		COALESCE(parent_id,''), status, COALESCE(element,''), COALESCE(global_step,0),
-		COALESCE(gen_mag,0), COALESCE(overlay_fade,0)
+		COALESCE(gen_mag,0), COALESCE(overlay_fade,0), COALESCE(peak_rss_mb,0)
 		FROM organisms WHERE status='alive' AND last_heartbeat > ? ORDER BY id`, now-witnessLiveWindow)
 	if err != nil {
 		return nil, fmt.Errorf("witness: mesh schema: %w", err)
@@ -193,7 +196,7 @@ func witnessReadField(db *sql.DB, now float64) ([]witnessOrganism, error) {
 	for rows.Next() {
 		var o witnessOrganism
 		if err := rows.Scan(&o.ID, &o.PID, &o.Stage, &o.NParams, &o.Syntropy, &o.Entropy, &o.Heartbeat,
-			&o.ParentID, &o.Status, &o.Element, &o.GlobalStep, &o.GenMag, &o.OverlayFade); err != nil {
+			&o.ParentID, &o.Status, &o.Element, &o.GlobalStep, &o.GenMag, &o.OverlayFade, &o.PeakRSSMB); err != nil {
 			return nil, fmt.Errorf("witness: mesh row: %w", err)
 		}
 		out = append(out, o)
@@ -447,10 +450,12 @@ func (s witnessSnapshot) line() string {
 	if len(s.Organisms) > 0 {
 		b.WriteString(" |")
 		for _, o := range s.Organisms {
-			// …/entropy/step/fade — the fade is the organism's own voice
-			// against the corpus overlay carrying it (routing repair 6).
-			fmt.Fprintf(&b, " %s:s%d/%dk/%.2f/%d/f%.2f",
-				o.ID, o.Stage, o.NParams/1000, o.Entropy, o.GlobalStep, o.OverlayFade)
+			// …/entropy/step/fade/peak — the fade is the organism's own voice
+			// against the corpus overlay carrying it (routing repair 6), and the
+			// peak is its own VmHWM in MB (resonator design, step 0): the four
+			// numbers the colony's memory arithmetic is made of, on one line.
+			fmt.Fprintf(&b, " %s:s%d/%dk/%.2f/%d/f%.2f/p%d",
+				o.ID, o.Stage, o.NParams/1000, o.Entropy, o.GlobalStep, o.OverlayFade, o.PeakRSSMB)
 		}
 	}
 	if len(s.DNA) > 0 {

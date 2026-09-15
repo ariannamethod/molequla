@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -38,8 +39,8 @@ func TestWitnessReadsWhatGoWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.MeshDB.Close()
-	a.Heartbeat(2, 262144, 0.10, 1.25, 4200, 3.25, 0.40)
-	b.Heartbeat(3, 1100000, -0.05, 0.80, 9800, 7.90, 1.00)
+	a.Heartbeat(2, 262144, 0.10, 1.25, 4200, 3.25, 0.40, 231)
+	b.Heartbeat(3, 1100000, -0.05, 0.80, 9800, 7.90, 1.00, 412)
 
 	db, err := witnessOpenMesh(filepath.Join(dir, "mesh.db"))
 	if err != nil {
@@ -206,7 +207,7 @@ func TestWitnessNeverWritesBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.MeshDB.Close()
-	a.Heartbeat(2, 1000, 0, 1.0, 10, 0, 0)
+	a.Heartbeat(2, 1000, 0, 1.0, 10, 0, 0, 0)
 
 	base := filepath.Join(t.TempDir(), "dna", "output")
 	if err := os.MkdirAll(filepath.Join(base, "earth"), 0755); err != nil {
@@ -330,7 +331,7 @@ func TestMeshCarriesTheVoiceOnAFreshDatabase(t *testing.T) {
 		}
 	}
 
-	a.Heartbeat(4, 4100000, 0.2, 0.9, 12000, 7.90, 1.00)
+	a.Heartbeat(4, 4100000, 0.2, 0.9, 12000, 7.90, 1.00, 755)
 	db, err := witnessOpenMesh(filepath.Join(dir, "mesh.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -419,7 +420,7 @@ func TestMeshMigratesAPreRepair7Database(t *testing.T) {
 			water.GenMag, water.OverlayFade)
 	}
 	// And a heartbeat on the migrated database fills them in.
-	sr.Heartbeat(3, 1100000, -0.05, 0.80, 9800, 3.25, 0.40)
+	sr.Heartbeat(3, 1100000, -0.05, 0.80, 9800, 3.25, 0.40, 412)
 	orgs, err = witnessReadField(db, nowSec())
 	if err != nil {
 		t.Fatal(err)
@@ -485,7 +486,7 @@ func TestHeartbeatSaysWhenTheMeshRefusesTheWrite(t *testing.T) {
 	}
 	sr := &SwarmRegistry{OrganismID: "earth", Element: "earth", MeshDB: db}
 
-	out := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) })
+	out := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40, 231) })
 	if !strings.Contains(out, "[ecology]") || !strings.Contains(out, "earth") {
 		t.Fatalf("a refused heartbeat said nothing: %q", out)
 	}
@@ -501,7 +502,7 @@ func TestHeartbeatSaysWhenTheMeshRefusesTheWrite(t *testing.T) {
 	// Ten more beats of the same failure say nothing further.
 	again := captureStdout(t, func() {
 		for i := 0; i < 10; i++ {
-			sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40)
+			sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40, 231)
 		}
 	})
 	if again != "" {
@@ -513,16 +514,164 @@ func TestHeartbeatSaysWhenTheMeshRefusesTheWrite(t *testing.T) {
 	for _, step := range []struct{ alter, want string }{
 		{"ALTER TABLE organisms ADD COLUMN global_step INTEGER", "gen_mag"},
 		{"ALTER TABLE organisms ADD COLUMN gen_mag REAL", "overlay_fade"},
+		{"ALTER TABLE organisms ADD COLUMN overlay_fade REAL", "peak_rss_mb"},
 	} {
 		db.Exec(step.alter)
-		next := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) })
+		next := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40, 231) })
 		if !strings.Contains(next, step.want) {
 			t.Fatalf("after %q the mesh error was swallowed as a repeat: %q", step.alter, next)
 		}
 	}
 	// And once the schema is whole, the beat is silent again.
-	db.Exec("ALTER TABLE organisms ADD COLUMN overlay_fade REAL")
-	if quiet := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) }); quiet != "" {
+	db.Exec("ALTER TABLE organisms ADD COLUMN peak_rss_mb INTEGER")
+	if quiet := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40, 231) }); quiet != "" {
 		t.Fatalf("a heartbeat the mesh accepted still said %q", quiet)
+	}
+}
+
+// Step 0 of docs/resonator_design.md: the organism's own high-water RSS on the
+// heartbeat. §4.2 checked the schema rather than assuming it and found that
+// `organisms` carries no resident-set figure at all, so the sleep policy of
+// §4.2 — and the growth gate it reuses — can only read the peak of the process
+// they run in. ownPeakRSSMB() already reads VmHWM for the growth gate; this is
+// that value beside gen_mag and overlay_fade, one idempotent ALTER and one more
+// argument to Heartbeat.
+
+func TestMeshCarriesThePeakOnAFreshDatabase(t *testing.T) {
+	dir := witnessTestMesh(t)
+	a := NewSwarmRegistry("earth", "earth")
+	if err := a.Register(); err != nil {
+		t.Fatal(err)
+	}
+	defer a.MeshDB.Close()
+
+	if !meshColumns(t, filepath.Join(dir, "mesh.db"))["peak_rss_mb"] {
+		t.Fatalf("a fresh mesh has no peak_rss_mb column: %v", meshColumns(t, filepath.Join(dir, "mesh.db")))
+	}
+
+	a.Heartbeat(4, 4100000, 0.2, 0.9, 12000, 7.90, 1.00, 755) // earth's measured peak, schedule.log 2026-09-15T06:01:55Z
+	db, err := witnessOpenMesh(filepath.Join(dir, "mesh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	orgs, err := witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatalf("witness: mesh schema alert: %v", err)
+	}
+	if len(orgs) != 1 || orgs[0].PeakRSSMB != 755 {
+		t.Fatalf("peak read back as %+v, want one organism at 755 MB", orgs)
+	}
+	if line := (witnessSnapshot{Organisms: orgs}).line(); !strings.Contains(line, "/f1.00/p755") {
+		t.Fatalf("the witness line does not carry the peak: %s", line)
+	}
+}
+
+// The database four processes hold open predates the column. A mesh written
+// before step 0 has every repair-7 and routing-6 column and no peak_rss_mb;
+// initMeshDB must add it without losing the row already there, and the witness
+// must read that row rather than raising the schema alert.
+func TestMeshMigratesADatabaseWithoutThePeakColumn(t *testing.T) {
+	dir := witnessTestMesh(t)
+	path := filepath.Join(dir, "mesh.db")
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`CREATE TABLE organisms(
+		id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER,
+		n_params INTEGER, syntropy REAL, entropy REAL,
+		last_heartbeat REAL, parent_id TEXT,
+		status TEXT DEFAULT 'alive', element TEXT, global_step INTEGER,
+		gen_mag REAL, overlay_fade REAL)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(
+		"INSERT INTO organisms(id,pid,stage,n_params,syntropy,entropy,last_heartbeat,status,element,global_step,gen_mag,overlay_fade) "+
+			"VALUES('water',4242,4,4834408,0.05,1.10,?,'alive','water',12000,7.9,1.0)", nowSec()); err != nil {
+		t.Fatal(err)
+	}
+	old.Close()
+
+	if meshColumns(t, path)["peak_rss_mb"] {
+		t.Fatalf("the fixture is not a pre-step-0 database: it already has peak_rss_mb")
+	}
+
+	sr := NewSwarmRegistry("earth", "earth")
+	if err := sr.Register(); err != nil {
+		t.Fatal(err)
+	}
+	defer sr.MeshDB.Close()
+
+	if !meshColumns(t, path)["peak_rss_mb"] {
+		t.Fatalf("migration did not add peak_rss_mb: %v", meshColumns(t, path))
+	}
+	db, err := witnessOpenMesh(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	orgs, err := witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatalf("witness: mesh schema alert after migration: %v", err)
+	}
+	var water *witnessOrganism
+	for i := range orgs {
+		if orgs[i].ID == "water" {
+			water = &orgs[i]
+		}
+	}
+	if water == nil {
+		t.Fatalf("the row written before the migration is gone: %+v", orgs)
+	}
+	if water.PeakRSSMB != 0 {
+		t.Fatalf("an organism that never reported a peak reads back as %d MB, want 0", water.PeakRSSMB)
+	}
+}
+
+// The gate of step 0 as the design states it: four live organisms, four
+// non-zero peaks on the witness line. The numbers are the four measured in the
+// 2026-09-15 session (hwm_mb=earth:755,air:1032,water:820,fire:1091,
+// molequla-run/schedule.log). A missing ALTER makes every one of them 0, which
+// is what turns this red.
+func TestTheWitnessLineShowsFourNonZeroPeaks(t *testing.T) {
+	dir := witnessTestMesh(t)
+	peaks := map[string]int64{"earth": 755, "air": 1032, "water": 820, "fire": 1091}
+	for _, e := range []string{"earth", "air", "water", "fire"} {
+		sr := NewSwarmRegistry(e, e)
+		if err := sr.Register(); err != nil {
+			t.Fatal(err)
+		}
+		defer sr.MeshDB.Close()
+		sr.Heartbeat(4, 4834408, 0.1, 1.2, 12000, 7.9, 1.0, peaks[e])
+	}
+	db, err := witnessOpenMesh(filepath.Join(dir, "mesh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	orgs, err := witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatalf("witness: mesh schema alert: %v", err)
+	}
+	if len(orgs) != 4 {
+		t.Fatalf("witness sees %d organisms, want 4", len(orgs))
+	}
+	line := (witnessSnapshot{Organisms: orgs}).line()
+	var sum int64
+	for _, o := range orgs {
+		if o.PeakRSSMB <= 0 {
+			t.Fatalf("%s reports peak %d MB — a live organism with no peak is the red state of step 0", o.ID, o.PeakRSSMB)
+		}
+		if o.PeakRSSMB != peaks[o.ID] {
+			t.Fatalf("%s read back %d MB, want %d", o.ID, o.PeakRSSMB, peaks[o.ID])
+		}
+		sum += o.PeakRSSMB
+		if !strings.Contains(line, fmt.Sprintf("/p%d", o.PeakRSSMB)) {
+			t.Fatalf("the witness line does not carry %s's peak: %s", o.ID, line)
+		}
+	}
+	if sum != 3698 {
+		t.Fatalf("the four peaks sum to %d MB, want the measured 3698", sum)
 	}
 }

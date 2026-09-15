@@ -2950,3 +2950,189 @@ the scheduler it started with; the branch is `claude/phone1-schedule-prekill`,
 unpushed.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the peak on the heartbeat, and one tape in the colony at a time
+
+Steps 0 and 1 of `docs/resonator_design.md`, on `claude/phone1-resonator-0-1`
+from `62ef7ff`. Both are routing over machinery that already exists, which is
+why the design puts them first; neither is the resonator.
+
+### Step 0 — `peak_rss_mb` (`31f2d25`)
+
+§4.2 of the design read the mesh schema instead of assuming it and found what
+was missing: `organisms` carries `id, stage, n_params, syntropy, entropy,
+last_heartbeat, parent_id, status, element, global_step, gen_mag,
+overlay_fade` (`molequla.go`, `initMeshDB`) and no column anywhere holds a
+resident-set figure. So every memory decision in the tree reads the process it
+is made in — `growthGateDecision` charges three times *this* organism's VmHWM
+with no sibling's in view — while the arithmetic the design is built on is a
+colony sum: `hwm_mb=earth:755,air:1032,water:820,fire:1091`
+(`molequla-run/schedule.log`, `2026-09-15T06:01:55Z`, 237 samples), 3 698 MB
+against an Android floor of about 2 400 MB.
+
+`ownPeakRSSMB()` already reads `VmHWM` from `/proc/self/status`
+(`governor_phone.go:67`), so the change is that number published: one
+idempotent `ALTER TABLE organisms ADD COLUMN peak_rss_mb INTEGER` beside the
+four already there, one more argument to `Heartbeat`, the `beatKeeper` carrying
+it so an organism inside a multi-minute warmup does not report zero exactly
+while it is at its largest, and the witness reading it with `COALESCE` and
+printing it per organism after the fade: `…/f1.00/p755`.
+
+Three gates, each written before the code and each seen red:
+- a fresh mesh has the column and a heartbeat of 755 reads back through the
+  witness as `/f1.00/p755`;
+- a mesh created without the column keeps its row and gains it, and the witness
+  reads that row rather than raising the schema alert — an organism that never
+  reported a peak reads back 0, which is not an error;
+- four live organisms show four non-zero peaks summing to the measured 3 698.
+
+Red proven by deleting the `ALTER` and the `CREATE` column: the first gate says
+`a fresh mesh has no peak_rss_mb column`, the third says
+`witness: mesh schema: SQL logic error: no such column: peak_rss_mb (1)`.
+The column decides nothing on its own. It is the input to steps 4 and 5.
+
+### Step 1 — the training lock as burst admission (`ea35094`, `bcc6bdc`)
+
+`CoordinateGrowth` already keeps two stage transitions apart. The micro-bursts
+did not go through anything: four organisms each built their own tape, 139.7 MB
+of live C tensors at the backward apiece over an arena measured at 214 MB at
+the first burst peak and 352 MB at the second (design §1.1 and §1.3, tape
+census and `mallinfo2`), and used it for a few seconds per tick.
+
+`CFG.SerialBursts` (default on) puts every training phase — micro-burst and
+post-growth warmup — through `training_lock`, so one tape exists in the colony
+at a time. Three things the lock did not have before:
+
+**A queue.** `training_queue` carries one row per waiter with when it asked and
+how badly, and the lock statement admits only its head, in one statement,
+because a TOCTOU race between "am I the head" and "take the lock" hands the tape
+to two organisms. The order is §2.3's first key — an organism that has grown and
+stands at stage N+1 untrained — then longest wait. §2.3's middle key, the
+steepest loss trend, **is not implemented**, and the reason is the schema rather
+than a preference: the ordering key it names is the mean of the last eight burst
+deltas, which lives in `SyntropyTracker.BurstHistory` inside each process, and
+the mesh column that looks like it, `syntropy`, is the entropy trend
+(`SyntropyTrend = oldMean - newMean` over `EntropyHistory`), not the loss trend.
+Publishing the loss trend is another column and step 0 is the only column this
+work adds.
+
+**A refresher**, the growth lock's shape: the holder re-stamps three times
+inside `CFG.TrainingLockTTLSeconds` (30 s, the value the lock has always
+carried, about four times the design's measured stage-4 burst of 7 400 ms), so
+the TTL bounds a holder that died and not one that is slow.
+
+**A place.** The gate is around `ntBurstTrain` and nothing else, and it blocks
+instead of skipping. The 2026-06-03 wall was this same lock's `continue`
+skipping the whole tick — DNA exchange and the ontogenesis clock with it —
+freezing 3 of 4 organisms for twelve minutes (`git show
+8203d5d^:PROJECT_LOG.md`, "Two more walls past the GPU fix"). Placement was
+measured here too, and the first version of this commit had it wrong: with the
+gate around the whole burst block, including the syntropy measurement and the
+110 MB checkpoint write, `air` waited **224.0 s for a burst of 10.4 s** on this
+phone (`[trainer] burst admitted after 224.0s of waiting`, probe stdout
+2026-09-15T10:38Z). Around the tape alone, the wait is the tape.
+
+`[notorch] burst complete` now carries `start=` and `end=` in UTC milliseconds
+around the whole phase, mirror in and out included, because a line that reports
+only a duration cannot be checked for overlap by anything but the process that
+printed it.
+
+### The gates, on this phone
+
+Two organisms from copies of the live `earth` and `air` stage-4 checkpoints
+(110 599 980 B and 114 304 521 B, `molequla-run/{earth,air}/molequla_ckpt.json`),
+their corpora, and a copy of the colony's own DNA tree so the queue buffers fill
+at the rate a running colony's do. Scratch `HOME` and `MOLEQULA_RUN` under
+`/data/local/tmp/res01probe`, `--max-organisms 2 --max-growth-stage 4
+--dna-extra-sources world,sound,place --evolution --cross-graze
+--corpus-overlay`, `timeout -s INT` per arm, `taskset -c 4-7`, outside the
+12:00-14:05Z colony window, nothing else of molequla running.
+
+
+**(a) With the lock on, no two burst intervals overlap.** But but a 540 s window is
+too short for that to mean much live, and this is the honest limit of the gate
+as the design states it. An adult's burst cadence is one in several minutes:
+`earth` produced exactly one burst in the whole arm
+(`start=2026-09-15T11:15:48.640Z end=…T11:16:07.124Z`, 18.5 s) and `air`
+produced none, so the colony offered no chance to overlap. The design's own
+phrasing — "no two `[notorch] burst complete` lines overlap in wall time across
+the four stdout files in one session" — needs the two-hour session to have any
+power, and a gate nobody re-runs when they change the lock is not a gate.
+`TestNoTwoTrainingPhasesOverlap` is that gate over the admission code instead:
+four organisms on one mesh, three timed phases each, the same interval
+arithmetic as reading `start=`/`end=` off four stdout files. Gated: **0
+overlapping cross-organism pairs in 12 phases, 3 turns each, nobody starved.**
+Its own control arm runs the identical schedule without the gate and asserts
+that it *does* overlap — **30 overlapping pairs in 12 phases** — so a gate that
+cannot tell the two apart fails instead of passing.
+
+**(b) With the lock off, they do overlap, on the phone.** Same two organisms,
+same corpora, same warm DNA field, `--no-serial-bursts`:
+
+    air    11:26:52.888Z .. 11:27:24.711Z  (31.8 s)
+    earth  11:27:16.001Z .. 11:27:39.084Z  (23.1 s)
+    OVERLAP air/earth for 8.7s
+
+Two tapes alive together for 8.7 s, which is the thing step 1 removes. The same
+pair of bursts under the lock is 18.5 s and 23.1 s of tape one after the other;
+the concurrent pair also ran slower per burst — 31.8 s and 23.1 s against 18.5 s
+— on four big cores they were already sharing.
+
+**(c) A holder killed with `kill -9`.** `earth` was inside a burst and holding the turn, `air` was waiting for it.
+`kill -9` on `earth` at 11:41:49.374Z: the process is gone, so nothing releases
+the row and nothing re-stamps it, and the TTL is the only thing left. `air`
+printed `[trainer] burst admitted after 27.9s of waiting`, observed **28.4 s
+after the kill against a TTL of 30 s**. This is the same arithmetic
+`AcquireGrowthLock` has used for a killed grower since repair 9, reused rather
+than rewritten; the unit form is `TestADeadHolderFreesTheTurnAfterTheTTL`, and
+its opposite — a slow holder that is alive and must NOT be preempted — is
+`TestTheRefresherKeepsASlowHolder` and `TestTheRefresherRunsOnItsOwnClock`.
+
+**High-water mark per organism, 540 s per arm, `VmHWM` sampled every 3 s:**
+
+| arm | earth | air | sum | bursts |
+|---|---|---|---|---|
+| `--serial-bursts` (on) | 537 MB | 312 MB | **849 MB** | earth 1, air 0 |
+| `--no-serial-bursts` (off) | 523 MB | 610 MB | **1 133 MB** | earth 1, air 1 |
+
+The two sums are not a clean before/after and saying so is the point: in the
+locked arm `air` never reached a burst inside the window, so its 312 MB is an
+organism that never built a tape and the 849 MB is a colony in which one
+organism trained. What the four numbers do measure is the two states an organism
+is in: **about 523-610 MB while its tape is alive, about 312 MB while it is
+not**, on the same stage-4 shape, on this phone, today. From those two measured
+states the colony arithmetic follows, and it is an **(estimate)** because it is
+scaled and not run: four organisms training concurrently is 4 × ~570 = 2 280 MB,
+four organisms with one tape at a time is 3 × 312 + 570 = **1 506 MB**, a
+difference of about 774 MB. The design's own step-1 line estimates the serialized
+colony at 3 × 272 + 599 = 1 415 MB against the measured four-way sum of 3 698 MB;
+this measurement lands in the same region from a different direction, with the
+non-training figure higher (312 against 272) because these two organisms had
+just loaded their checkpoints and had not yet had a `malloc_trim` after a burst.
+
+### What this does not do, and what is next
+
+Serialising the bursts does not make the colony fit; it makes the peaks stop
+coinciding. Four stage-5 organisms still do not fit on this phone under the
+present architecture, and the honest statement of repair 9 stands. Nor does the
+gate remove the cost the design removes: with one tape at a time there is still
+one tape *per organism*, built and torn down on every turn, and the arena that
+holds its freed chunks still ratchets in four processes. That is step 4.
+
+What it does buy is the state step 3 and step 5 need: the colony's memory now
+has one peak at a time instead of four, `peak_rss_mb` makes those peaks a query
+rather than four stdout files, and a waiting organism keeps ticking — DNA read
+and written, ontogenesis clock advanced, generation done — while it waits.
+
+Two measurements worth writing down that were not the point. A 5 ms poll on the
+turn costs 2.5 s per turn on this phone: four handles writing three statements
+each into one WAL file at ~600 writes/s is slower than the phase it guards, and
+at 50 ms the same twelve turns take 1.05 s. `CFG.TrainingTurnPollSeconds`
+defaults to 0.5 s, which is eight writes a second for a colony of four. And a
+burst of 32 steps at stage 4 took 18.5 s alone against 31.8 s beside a sibling's
+burst on the same four big cores — the concurrency the lock removes was not
+buying throughput either.
+
+Branch `claude/phone1-resonator-0-1`, unpushed. Steps 2-6 are not built.
+
+— Defender (Arianna Method, phone-1)
