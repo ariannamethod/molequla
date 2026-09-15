@@ -5,14 +5,19 @@
 # world of the last eight hours is already food in ../dna/output/.
 #
 #   senses.sh [eye|ears|place|all]      (default: all)
+#   senses.sh overlap "<a>" "<b>"       the text metric below, for the gate
 #
 # Three organs, three directories under $MOLEQULA_RUN/dna/output/:
-#   eye   -> world/   one camera frame each from the back and the front camera,
-#                     through senses/ocelli/eye (SmolVLM2-500M in C), one
-#                     fragment per sentence.
-#   ears  -> sound/   12 s from the microphone through senses/ears (whisper on
-#                     notorch) on the tiny weights, one fragment, and only when
-#                     there was speech in it.
+#   eye   -> world/   a short trajectory: SENSES_EYE_WINDOW frames taken
+#                     SENSES_EYE_SPACING apart, cameras in the order of
+#                     SENSES_EYE_PATTERN, each described by senses/ocelli/eye
+#                     (SmolVLM2-500M in C), one fragment per sentence and one
+#                     summary line per window.
+#   ears  -> sound/   12 s from the microphone: the transcript through
+#                     senses/ears (whisper on notorch) when somebody spoke, and
+#                     — every pass, speech or not — one environmental line from
+#                     senses/ears/soundscape, which is what a transcript throws
+#                     away.
 #   place -> place/   one fragment: where the phone is, what the sky is doing,
 #                     and whether it moved since the last pass.
 #
@@ -70,7 +75,34 @@ SENSES_EYE_MODELS="${SENSES_EYE_MODELS:-$HOME_TERMUX/models/ocelli}"
 SENSES_EYE_MODEL="${SENSES_EYE_MODEL:-$SENSES_EYE_MODELS/yent_eye_ours_q6_k.gguf}"
 SENSES_EYE_MMPROJ="${SENSES_EYE_MMPROJ:-$SENSES_EYE_MODELS/yent_eye_smolvlm2_lora_v2_mmproj_q8_0.gguf}"
 SENSES_EYE_PROMPT="${SENSES_EYE_PROMPT:-Describe this image in one sentence.}"
-SENSES_EYE_CAMS="${SENSES_EYE_CAMS:-0 1}"
+# A sensing episode is a window, not a sample (molequla_new_logic.md §2). The
+# pattern is the camera order, cycled to the length of the window; the window is
+# how many frames that pass takes; the spacing is the seconds between the starts
+# of two consecutive captures, so a frame that runs longer than the spacing does
+# not push the next one back.
+#
+# The defaults are measured on this phone, cores 4-7, 2026-09-15, two runs each
+# (MOLEQULALOG2.md, "the sensing window"): n=1 15-18 s, n=2 46-49 s, n=4 104-107 s,
+# peak RSS 1020 MB whatever n is — one eye process per frame, nothing accumulates.
+# Novelty was 1.000 at n=1 and n=2 and 0.750 at n=4 in both runs. n=4 is the
+# default anyway: at n=2 the two frames come from different cameras and can only
+# be new, so 1.000 there is arithmetic and not a discovery, while n=4 puts two
+# rear frames a minute apart and one of them repeated in both runs — which is the
+# window noticing that the scene held still. 107 s is 18 % of the 600 s slot cap.
+# Spacing comes out of the eye's own period: a frame occupies 15-18 s of it, so
+# under ~20 s there is no spacing at all; 30 s leaves 12-15 s of world between two
+# frames and spreads n=4 over 90 s. SENSES_EYE_CAMS is the old name of the
+# pattern and still works.
+SENSES_EYE_PATTERN="${SENSES_EYE_PATTERN:-${SENSES_EYE_CAMS:-0 1 0 0}}"
+SENSES_EYE_WINDOW="${SENSES_EYE_WINDOW:-4}"
+SENSES_EYE_SPACING="${SENSES_EYE_SPACING:-30}"
+# Two descriptions this close, token for token, are the same observation.
+# Measured on the six windows of 2026-09-15: a rear frame repeating an earlier
+# rear frame scores 1.000 (the eye says the same sentence word for word), two
+# different scenes from the same camera 0.350-0.368, the two cameras of one
+# window 0.154. Nothing measured lands between 0.4 and 1.0, so the threshold sits
+# in the middle of the empty space.
+SENSES_EYE_SAME="${SENSES_EYE_SAME:-0.8}"
 # The eye resizes the longest edge to 2048 before it does anything else
 # (senses/ocelli/vision.c:55-66). A 4080x3060 camera jpeg would be decoded to
 # 150 MB of float first; 1024 costs 9 MB and, with one global frame, ends up
@@ -114,6 +146,12 @@ fi
 SENSES_REC_SECONDS="${SENSES_REC_SECONDS:-12}"
 # Shorter than this, after the noise tags are stripped, is not speech.
 SENSES_SPEECH_MIN_CHARS="${SENSES_SPEECH_MIN_CHARS:-8}"
+# The other half of hearing: senses/ears/soundscape, no model, reads the same
+# wav and names what kind of sound it was. It runs on every pass, next to the
+# recognizer and not instead of it — a quiet twelve seconds is evidence too, and
+# it used to produce nothing at all. Empty this variable and the pass is the
+# speech-only pass it was.
+SENSES_SOUNDSCAPE="${SENSES_SOUNDSCAPE-$REPO/senses/ears/soundscape}"
 
 # --- place -----------------------------------------------------------------
 SENSES_MOVE_M="${SENSES_MOVE_M:-50}"
@@ -151,6 +189,37 @@ stamp()   { date -u +%Y%m%dT%H%M%SZ; }
 say()     { echo "[senses] $*"; }
 
 mem_avail_mb() { awk '/^MemAvailable:/{printf "%.0f", $2/1024}' /proc/meminfo; }
+
+# Battery, straight off sysfs — the same two files termux-battery-status reads,
+# without the round trip into Android. Charge in percent, current in mA (the
+# kernel reports µA and signs it by direction of flow).
+batt_pct() { cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo ""; }
+batt_ma()  { awk '{printf "%.0f", $1/1000}' /sys/class/power_supply/battery/current_now 2>/dev/null || echo ""; }
+
+# text_overlap <a> <b> -> 0.000..1.000, how much of two descriptions is the same
+# words. Lowercased, everything that is not a letter or a digit is a separator,
+# and the score is the intersection of the distinct tokens over their union — 1
+# for the same sentence however it is punctuated, 0 for two sentences with no
+# word in common. This is what decides whether a frame of a window repeated an
+# earlier frame of the same window; `senses.sh overlap a b` is the same code the
+# gate drives.
+text_overlap() {
+    awk -v a="$1" -v b="$2" '
+    function norm(s,   t) {
+        t = tolower(s); gsub(/[^a-z0-9]+/, " ", t);
+        gsub(/^ +/, "", t); gsub(/ +$/, "", t); return t
+    }
+    BEGIN {
+        na = split(norm(a), A, " "); nb = split(norm(b), B, " ")
+        for (i = 1; i <= na; i++) if (A[i] != "") SA[A[i]] = 1
+        for (i = 1; i <= nb; i++) if (B[i] != "") SB[B[i]] = 1
+        inter = 0; uni = 0
+        for (k in SA) { uni++; if (k in SB) inter++ }
+        for (k in SB) if (!(k in SA)) uni++
+        if (uni == 0) { printf "1.000\n"; exit }   # two silences are one silence
+        printf "%.3f\n", inter / uni
+    }'
+}
 
 # The colony owns the big cores while it is up; the senses take the little ones
 # then, and the big ones when the phone is otherwise asleep.
@@ -298,6 +367,9 @@ prune_dir() {
 
 # --- the eye ---------------------------------------------------------------
 EYE_RC=0; EYE_WALL=0; EYE_RSS=0; EYE_FRAGS=0; EYE_FRAMES=0; EYE_NOTE=""
+EYE_SAID=()          # one description per frame of this window, in order
+EYE_REPEAT=0         # frames whose description repeated an earlier one
+EYE_NOVEL=""         # share of the descriptions that were new
 
 # eye_one <camera-id> -> frames, fragments, wall, peak RSS
 eye_one() {
@@ -362,6 +434,7 @@ eye_one() {
         EYE_NOTE="${EYE_NOTE:+$EYE_NOTE,}cam$cam:silent"
         return 1
     fi
+    EYE_SAID+=("$said")
     while IFS= read -r line; do
         line="$(printf '%s' "$line" | sed 's/^ *//; s/ *$//')"
         [ "${#line}" -ge 8 ] || continue
@@ -375,33 +448,128 @@ eye_one() {
     return 0
 }
 
+# How much of the window was new. A frame repeats when its description overlaps
+# an earlier frame of the same window by SENSES_EYE_SAME or more; novelty is the
+# share of the descriptions that did not. One frame is trivially all new, which
+# is exactly why the number only means something across a window.
+eye_novelty() {
+    local i j o
+    EYE_REPEAT=0; EYE_NOVEL=""
+    [ "${#EYE_SAID[@]}" -gt 0 ] || return 0
+    for ((i = 1; i < ${#EYE_SAID[@]}; i++)); do
+        for ((j = 0; j < i; j++)); do
+            o="$(text_overlap "${EYE_SAID[$i]}" "${EYE_SAID[$j]}")"
+            if awk -v o="$o" -v t="$SENSES_EYE_SAME" 'BEGIN{exit !(o >= t)}'; then
+                EYE_REPEAT=$((EYE_REPEAT + 1)); break
+            fi
+        done
+    done
+    EYE_NOVEL="$(awk -v n="${#EYE_SAID[@]}" -v r="$EYE_REPEAT" 'BEGIN{printf "%.3f", (n - r) / n}')"
+}
+
 do_eye() {
-    local mem cam
+    local mem cam i n t_start waited b0 b1 c0 c1 t0 t1
+    local -a pat
     mkdir -p "$FRAMES" || return 1
     if [ ! -x "$SENSES_EYE" ]; then
         say "eye: no wrapper at $SENSES_EYE"
         EYE_RC=127; EYE_NOTE="no-engine"; return 1
     fi
-    mem="$(mem_avail_mb)"
-    if [ "$mem" -lt "$SENSES_EYE_MIN_MB" ]; then
-        say "eye: MemAvailable ${mem} MB < ${SENSES_EYE_MIN_MB} MB — the eye does not open"
-        EYE_RC=0; EYE_NOTE="skip-mem:${mem}"
-        return 0
+    read -r -a pat <<< "$SENSES_EYE_PATTERN"
+    if [ "${#pat[@]}" -eq 0 ]; then
+        say "eye: SENSES_EYE_PATTERN is empty — no camera to open"
+        EYE_RC=2; EYE_NOTE="no-pattern"; return 1
     fi
-    # Both cameras every pass: cam0 looks at the room the phone lies in, cam1
-    # at the ceiling above it. Two frames cost ~40 s together, which the slot
-    # affords, and one of them is usually in the dark — taking both means the
-    # pass still sees something when one of them is black.
-    for cam in $SENSES_EYE_CAMS; do
+    n="$SENSES_EYE_WINDOW"
+    case "$n" in ''|*[!0-9]*) n=${#pat[@]} ;; esac
+    [ "$n" -gt 0 ] || { EYE_NOTE="window0"; return 0; }
+
+    # The window: n frames, the pattern cycled, each capture held back to the
+    # spacing. cam0 looks at the room the phone lies in, cam1 at the ceiling
+    # above it, and the default pattern takes the rear camera three times out of
+    # four because that is the one with the scene in it. The memory floor is
+    # re-read before every frame and not once before the window: the eye holds
+    # about a gigabyte while it runs, and the colony can wake into the gap
+    # between two frames.
+    t0="$(date -u +%s)"; b0="$(batt_pct)"; c0="$(batt_ma)"
+    for ((i = 0; i < n; i++)); do
+        mem="$(mem_avail_mb)"
+        if [ "$mem" -lt "$SENSES_EYE_MIN_MB" ]; then
+            say "eye: MemAvailable ${mem} MB < ${SENSES_EYE_MIN_MB} MB — the window stops at frame $i"
+            EYE_NOTE="${EYE_NOTE:+$EYE_NOTE,}skip-mem:${mem}"
+            break
+        fi
+        cam="${pat[$((i % ${#pat[@]}))]}"
+        t_start="$(date -u +%s)"
         eye_one "$cam"
+        if [ $((i + 1)) -lt "$n" ] && [ "$SENSES_EYE_SPACING" -gt 0 ]; then
+            waited=$(( $(date -u +%s) - t_start ))
+            [ "$waited" -lt "$SENSES_EYE_SPACING" ] && sleep $((SENSES_EYE_SPACING - waited))
+        fi
     done
+    t1="$(date -u +%s)"; b1="$(batt_pct)"; c1="$(batt_ma)"
+    eye_novelty
+
+    # One line per window, beside the pass line: what the trajectory cost and
+    # how much of it was not a repetition of itself.
+    printf '%s eyewin pattern=%s n=%s spacing=%ss frames=%s said=%s repeat=%s novel=%s wall=%ss rss=%smb batt=%s%%->%s%%,%s->%smA cpu=%s\n' \
+        "$(now_iso)" "$(printf '%s' "$SENSES_EYE_PATTERN" | tr ' ' ',')" "$n" \
+        "$SENSES_EYE_SPACING" "$EYE_FRAMES" "${#EYE_SAID[@]}" "$EYE_REPEAT" \
+        "${EYE_NOVEL:-none}" "$((t1 - t0))" "$EYE_RSS" \
+        "${b0:-?}" "${b1:-?}" "${c0:-?}" "${c1:-?}" "$CPUS" >> "$LOGF"
+
     prune_dir "$FRAMES" "$SENSES_KEEP"
     prune_dir "$RUN/dna/output/world" "$SENSES_FRAG_KEEP"
     return 0
 }
 
 # --- the ears --------------------------------------------------------------
-EARS_RC=0; EARS_WALL=0; EARS_FRAGS=0; EARS_SPEECH=no; EARS_NOTE=""
+EARS_RC=0; EARS_WALL=0; EARS_FRAGS=0; EARS_SPEECH=no; EARS_NOTE=""; EARS_ENV=""
+
+# ears_env <wav> <raw transcript> — the half of hearing that is not language.
+# Two things survive here that the transcript dropped on the floor: the sound
+# describer's one line about the recording itself, which is written whether
+# anybody spoke or not, and the recognizer's own bracketed non-speech tags,
+# which used to be stripped and thrown away. The fragment is marked `env` and
+# not `mic`: it is a different kind of evidence about the same twelve seconds
+# and it is not supposed to agree with the transcript (molequla_new_logic.md
+# §15).
+ears_env() {
+    local wav="$1" raw="$2" tags label text
+    tags="$(printf '%s' "$raw" | grep -oE '\[[^]]+\]|\([^)]+\)|\*[^*]+\*' 2>/dev/null \
+            | awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR) printf "\n"}')"
+    if [ -n "$SENSES_SOUNDSCAPE" ] && [ -x "$SENSES_SOUNDSCAPE" ]; then
+        label="$(timeout 60 taskset -c "$CPUS" "$SENSES_SOUNDSCAPE" "$wav" 2>/dev/null | head -1)"
+    else
+        label=""
+        [ -n "$SENSES_SOUNDSCAPE" ] && EARS_NOTE="${EARS_NOTE:+$EARS_NOTE,}no-describer"
+    fi
+    label="$(printf '%s' "$label" | sed 's/^ *//; s/ *$//')"
+    EARS_ENV="$label"
+    [ -n "$label" ] || [ -n "$tags" ] || return 0
+
+    text=""
+    if [ -n "$label" ]; then
+        text="$(printf '%s' "${label:0:1}" | tr '[:lower:]' '[:upper:]')${label:1}"
+        case "$text" in *[.!?]) ;; *) text="$text." ;; esac
+    fi
+    [ -n "$tags" ] && text="${text:+$text }The recognizer also marked $tags."
+    frag_write sound "[ears env $(now_iso)] $text" && EARS_FRAGS=$((EARS_FRAGS + 1))
+    # The same twelve seconds as a fact, beside the fragment, the way every
+    # other organ writes one. The predicate is `soundscape` and not `hearing`:
+    # what the recording sounded like is a different claim from whether anybody
+    # spoke in it, and the ledger should be able to hold both about one window
+    # without either correcting the other (§15). The object is the describer's
+    # line, or the recognizer's tags when there is no describer — whichever of
+    # the two put the fragment on disk.
+    fact_emit ears microphone soundscape "${label:-$tags}" \
+        "$(jq -cn --arg describer "$(basename "${SENSES_SOUNDSCAPE:-none}")" \
+            --arg label "$label" --arg tags "$tags" \
+            --argjson window_s "$SENSES_REC_SECONDS" \
+            --argjson conditions "$(conditions_json)" \
+            '{describer:$describer,label:$label,tags:$tags,window_s:$window_s,
+              conditions:$conditions} | with_entries(select(.value != ""))')"
+}
 
 do_ears() {
     local ts remote wav txt rc t0 t1 clean
@@ -465,6 +633,8 @@ do_ears() {
     clean="$(printf '%s' "$txt" \
         | sed -E 's/\[[^]]*\]//g; s/\([^)]*\)//g; s/\*[^*]*\*//g' \
         | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+    ears_env "$wav" "$txt"
+
     if [ "${#clean}" -lt "$SENSES_SPEECH_MIN_CHARS" ] || ! printf '%s' "$clean" | grep -q '[[:alpha:]]'; then
         say "ears: no speech in ${SENSES_REC_SECONDS}s"
         EARS_SPEECH=no
@@ -473,6 +643,7 @@ do_ears() {
         # has always been quiet is not news (world_ledger.go).
         fact_emit ears microphone hearing silence "$(ears_prov "" "$rc")"
         prune_dir "$AUDIO" "$SENSES_KEEP"
+        prune_dir "$RUN/dna/output/sound" "$SENSES_FRAG_KEEP"
         return 0
     fi
     EARS_SPEECH=yes
@@ -658,6 +829,14 @@ fi
 
 # --- one pass --------------------------------------------------------------
 MODE="${1:-all}"
+# The metric, before the lock and before any directory is made: `overlap` takes
+# no camera, writes nothing, and exists so that the gate drives the same awk the
+# window does rather than a copy of it.
+if [ "$MODE" = overlap ]; then
+    [ $# -eq 3 ] || { echo 'usage: senses.sh overlap "<a>" "<b>"' >&2; exit 2; }
+    text_overlap "$2" "$3"
+    exit 0
+fi
 case "$MODE" in eye|ears|place|all) ;; *) echo "usage: senses.sh [eye|ears|place|all]" >&2; exit 2 ;; esac
 
 mkdir -p "$SENSES_DIR" "$FRAMES" "$AUDIO" "$RUN/dna/output" || exit 1
@@ -681,8 +860,8 @@ do_ingest
 T1="$(date -u +%s)"
 FRAGS=$((EYE_FRAGS + EARS_FRAGS + PLACE_FRAGS))
 LINE="$(now_iso) pass=$MODE cpu=$CPUS mem_mb=${MEM0}->$(mem_avail_mb)"
-LINE="$LINE eye=rc${EYE_RC},${EYE_WALL}s,rss${EYE_RSS}mb,frames${EYE_FRAMES},frags${EYE_FRAGS}${EYE_NOTE:+,$EYE_NOTE}"
-LINE="$LINE ears=rc${EARS_RC},${EARS_WALL}s,speech${EARS_SPEECH},frags${EARS_FRAGS}${EARS_NOTE:+,$EARS_NOTE}"
+LINE="$LINE eye=rc${EYE_RC},${EYE_WALL}s,rss${EYE_RSS}mb,frames${EYE_FRAMES},frags${EYE_FRAGS}${EYE_NOVEL:+,novel$EYE_NOVEL}${EYE_NOTE:+,$EYE_NOTE}"
+LINE="$LINE ears=rc${EARS_RC},${EARS_WALL}s,speech${EARS_SPEECH},frags${EARS_FRAGS}${EARS_ENV:+,env:$(printf '%s' "$EARS_ENV" | tr ' ' '-')}${EARS_NOTE:+,$EARS_NOTE}"
 LINE="$LINE place=rc${PLACE_RC},${PLACE_WALL}s,moved${PLACE_MOVED},frags${PLACE_FRAGS}${PLACE_NOTE:+,$PLACE_NOTE}"
 LINE="$LINE world=rc${INGEST_RC},changes${INGEST_LINES}"
 LINE="$LINE frags=$FRAGS total=$((T1 - T0))s"

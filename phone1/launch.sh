@@ -14,6 +14,12 @@ ELEMENTS="earth air water fire"
 # directory per organ under dna/output, beside the four elements. Read-only
 # food for every organism — they are told about it with --dna-extra-sources.
 SENSES_SOURCES="world sound place"
+# The same list in the form the flag takes. One variable, two readers: the four
+# organisms eat these directories and the witness counts them. dnaSources("")
+# in the witness process is built from CFG.DNAExtraSources like everybody
+# else's, so a witness started without the argument reports a DNA field of four
+# elements and never names what the eye, the ears and the place left behind.
+SENSES_ARG="${SENSES_SOURCES// /,}"
 
 if [ ! -x "$BIN" ]; then
     echo "[launch] no binary at $BIN — run phone1/build.sh first"
@@ -85,7 +91,7 @@ for e in $ELEMENTS; do
     # declared ceiling on the colony's head count.
     start "$e" "$RUN/$e" $TMO taskset -c 4-7 "$BIN" \
         --organism-id "$e" --element "$e" --max-organisms 4 \
-        --dna-extra-sources "${SENSES_SOURCES// /,}" \
+        --dna-extra-sources "$SENSES_ARG" \
         --evolution --cross-graze --corpus-overlay \
         || refused=$((refused + 1))
     sleep 1
@@ -93,7 +99,8 @@ done
 
 sleep 5
 start witness "$RUN/witness" $TMO taskset -c 0-3 "$BIN" \
-    --witness --witness-interval 5 || refused=$((refused + 1))
+    --witness --witness-interval 5 \
+    --dna-extra-sources "$SENSES_ARG" || refused=$((refused + 1))
 
 echo "[launch] run root $RUN${DUR:+ (timeout ${DUR}s)}; pids in $RUN/pids"
 if [ "$refused" -gt 0 ]; then

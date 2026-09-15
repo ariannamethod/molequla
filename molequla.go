@@ -21,8 +21,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +30,7 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 )
@@ -49,12 +50,12 @@ func init() { gradEnabled.Store(true) }
 
 type Config struct {
 	// data
-	CorpusPath     string  `json:"corpus_path"`
-	DBPath         string  `json:"db_path"`
-	CkptPath       string  `json:"ckpt_path"`
-	MaxCorpusLines int     `json:"max_corpus_lines"`
-	MaxLineChars   int     `json:"max_line_chars"`
-	MinNewChars    int     `json:"min_new_chars_to_train"`
+	CorpusPath     string `json:"corpus_path"`
+	DBPath         string `json:"db_path"`
+	CkptPath       string `json:"ckpt_path"`
+	MaxCorpusLines int    `json:"max_corpus_lines"`
+	MaxLineChars   int    `json:"max_line_chars"`
+	MinNewChars    int    `json:"min_new_chars_to_train"`
 	// DNAMinFragmentBytes — minimum DNA fragment size in bytes. A unified
 	// emit/consume gate: dnaWrite skips below this, dnaRead deletes below
 	// this. Replaces a desynced literal pair (write 5 / read 10) that
@@ -69,8 +70,13 @@ type Config struct {
 	DNAExtraSources []string `json:"dna_extra_sources"`
 	// DNAMaxReadsPerTick — dnaRead eats at most this many new fragments per
 	// tick, so an organism that fell behind catches up over ticks instead of
-	// swallowing a backlog in one.
+	// swallowing a backlog in one. Siblings only — see DNAExtraReadsPerTick.
 	DNAMaxReadsPerTick int `json:"dna_max_reads_per_tick"`
+	// DNAExtraReadsPerTick — the same bound for DNAExtraSources, counted
+	// separately. One shared bound put the senses last in a queue the siblings
+	// kept full (the routing audit of 2026-09-15 §3); two bounds mean neither
+	// half of the field can starve the other. 0 = unbounded.
+	DNAExtraReadsPerTick int `json:"dna_extra_reads_per_tick"`
 	// DNARetainSeconds — the writer prunes its own fragments older than this;
 	// readers never delete (see dna_field.go).
 	DNARetainSeconds float64 `json:"dna_retain_seconds"`
@@ -112,9 +118,9 @@ type Config struct {
 	BlockSize     int  `json:"block_size"`
 
 	// ontogenesis — growth stages (corpus_chars, n_embd, n_layer, n_head)
-	GrowthStages          [][4]int `json:"growth_stages"`
-	FreezeAfterGrowthSteps int     `json:"freeze_after_growth_steps"`
-	PostGrowthLRScale      float64 `json:"post_growth_lr_scale"` // LR multiplier during freeze period (prevents delta overfit to noise)
+	GrowthStages           [][4]int `json:"growth_stages"`
+	FreezeAfterGrowthSteps int      `json:"freeze_after_growth_steps"`
+	PostGrowthLRScale      float64  `json:"post_growth_lr_scale"` // LR multiplier during freeze period (prevents delta overfit to noise)
 
 	// training
 	WarmupSteps         int     `json:"warmup_steps"`
@@ -130,8 +136,8 @@ type Config struct {
 	// weak-sentence indices to stderr; does NOT reseed weak sentences yet
 	// (reseed is a Phase C activation step, requires GenerateResonant
 	// restructuring). See spa_coherence.go + PROJECT_LOG.md B1 step 3.
-	SPACoherenceGate  bool    `json:"spa_coherence_gate"`
-	SPAEmbedAlpha     float32 `json:"spa_embed_alpha"`
+	SPACoherenceGate bool    `json:"spa_coherence_gate"`
+	SPAEmbedAlpha    float32 `json:"spa_embed_alpha"`
 
 	// B2 — Q-style additive metaweights logit overlay.
 	// When CorpusLogitOverlay=true, GenerateResonant adds
@@ -142,7 +148,7 @@ type Config struct {
 	// additional, not replacement. Default off — RunPod toggles on for the
 	// before/after measurement run. Floor on log-prob for unseen tokens
 	// prevents -inf bias from masking valid model preferences.
-	CorpusLogitOverlay     bool    `json:"corpus_logit_overlay"`
+	CorpusLogitOverlay bool `json:"corpus_logit_overlay"`
 
 	// Trainer selects the training backend: "notorch" (compiled C tape,
 	// BLAS, automatic GPU — the default) or "aml" (the legacy AML-interpreter
@@ -155,7 +161,7 @@ type Config struct {
 	// gradEnabled gates training back to the CPU/BLAS path. Default off — same
 	// binary runs unchanged on macOS / non-CUDA hosts; on a CUDA pod the
 	// --gpu flag plus a successful gpu_init() enables the fast path.
-	UseGPU                 bool    `json:"use_gpu"`
+	UseGPU bool `json:"use_gpu"`
 
 	// CrossGraze enables Dario-style cross-organism logit injection during
 	// generation (cross_graze.go). Each organism's MaybeRefresh() reads recent
@@ -164,41 +170,41 @@ type Config struct {
 	// the overlay'd logits before sampling. Default off; activate with
 	// --cross-graze. Requires --element to be set (single-organism runs have
 	// no peers).
-	CrossGraze             bool    `json:"cross_graze"`
+	CrossGraze bool `json:"cross_graze"`
 	// CrossGrazeCoef — weightless-mode coefficient on the rank-1 token. Falls
 	// off as coef/(1+rank). Default 2.0 matches Q's c_doc-equivalent
 	// magnitude (postgpt_q.c:1361 weightless-regime range).
-	CrossGrazeCoef         float64 `json:"cross_graze_coef"`
+	CrossGrazeCoef float64 `json:"cross_graze_coef"`
 	// CrossGrazeTopN — how many most-recent tokens per sibling participate.
 	// Default 8 mirrors Q's interf_signal_chunk MAX_HEAVY/2 effective use.
-	CrossGrazeTopN         int     `json:"cross_graze_top_n"`
-	MetaProphecyDecay      float64 `json:"meta_prophecy_decay"`
+	CrossGrazeTopN    int     `json:"cross_graze_top_n"`
+	MetaProphecyDecay float64 `json:"meta_prophecy_decay"`
 
 	// cosine LR schedule
-	LRMin              float64 `json:"lr_min"`
-	MaxTotalSteps      int     `json:"max_total_steps"`
-	CosineWarmupSteps  int     `json:"cosine_warmup_steps"`
+	LRMin             float64 `json:"lr_min"`
+	MaxTotalSteps     int     `json:"max_total_steps"`
+	CosineWarmupSteps int     `json:"cosine_warmup_steps"`
 
 	// gradient accumulation
 	AccumSteps int `json:"accum_steps"`
 
 	// deltas
-	DeltaRank      int     `json:"delta_rank"`
-	RRPRAMRank     int     `json:"rrpram_rank"` // low-rank RRPRAM factor rank (Inc2)
-	MaxDeltaModules int    `json:"max_delta_modules"`
-	DeltaGrowProb  float64 `json:"delta_grow_prob"`
+	DeltaRank       int     `json:"delta_rank"`
+	RRPRAMRank      int     `json:"rrpram_rank"` // low-rank RRPRAM factor rank (Inc2)
+	MaxDeltaModules int     `json:"max_delta_modules"`
+	DeltaGrowProb   float64 `json:"delta_grow_prob"`
 
 	// generation
-	Temperature    float64 `json:"temperature"`
-	TopK           int     `json:"top_k"`
-	TopP           float64 `json:"top_p"`
-	MinP           float64 `json:"min_p"`     // GPT-3/4 style: filter tokens below min_p * max_prob
-	TypicalP       float64 `json:"typical_p"` // Typical sampling: prefer tokens with typical information content
-	MaxGenTokens   int     `json:"max_gen_tokens"`
-	MinGenTokens   int     `json:"min_gen_tokens"`
+	Temperature     float64 `json:"temperature"`
+	TopK            int     `json:"top_k"`
+	TopP            float64 `json:"top_p"`
+	MinP            float64 `json:"min_p"`     // GPT-3/4 style: filter tokens below min_p * max_prob
+	TypicalP        float64 `json:"typical_p"` // Typical sampling: prefer tokens with typical information content
+	MaxGenTokens    int     `json:"max_gen_tokens"`
+	MinGenTokens    int     `json:"min_gen_tokens"`
 	RepetitionGuard int     `json:"repetition_guard"`
-	FreqPenalty     float64 `json:"freq_penalty"`      // penalize logits by count * freq_penalty
-	PresencePenalty float64 `json:"presence_penalty"`   // flat penalty for any token that appeared
+	FreqPenalty     float64 `json:"freq_penalty"`     // penalize logits by count * freq_penalty
+	PresencePenalty float64 `json:"presence_penalty"` // flat penalty for any token that appeared
 
 	// tokenizer evolution
 	EnableBPEAfterChars  int `json:"enable_bpe_after_chars"`
@@ -209,8 +215,8 @@ type Config struct {
 	TrainTickSeconds float64 `json:"train_tick_seconds"`
 
 	// hybrid attention heads: "content", "rrpram", or "hybrid"
-	HeadTypes        []string `json:"head_types"`
-	HybridAlphaInit  float64  `json:"hybrid_alpha_init"`
+	HeadTypes       []string `json:"head_types"`
+	HybridAlphaInit float64  `json:"hybrid_alpha_init"`
 
 	// gamma (personality fingerprint)
 	GammaSparsityThreshold float64 `json:"gamma_sparsity_threshold"`
@@ -226,12 +232,12 @@ type Config struct {
 	EntropyTempFocus float64 `json:"entropy_temp_focus"`
 
 	// corpus field
-	CorpusGenMaxTokens   int     `json:"corpus_gen_max_tokens"`
-	CorpusFadeK          float64 `json:"corpus_fade_k"`          // sigmoid steepness for corpus→model transition
-	CorpusFadeThreshold  float64 `json:"corpus_fade_threshold"`  // entropy at which blend is 50/50
-	CooccurWindowSize    int     `json:"cooccur_window_size"`    // co-occurrence proximity window (Stanley-style)
-	UserBoostStrength    float64 `json:"user_boost_strength"`    // how strongly user's recent words are boosted
-	UserBoostDecay       float64 `json:"user_boost_decay"`       // per-generation decay of user word boost
+	CorpusGenMaxTokens  int     `json:"corpus_gen_max_tokens"`
+	CorpusFadeK         float64 `json:"corpus_fade_k"`         // sigmoid steepness for corpus→model transition
+	CorpusFadeThreshold float64 `json:"corpus_fade_threshold"` // entropy at which blend is 50/50
+	CooccurWindowSize   int     `json:"cooccur_window_size"`   // co-occurrence proximity window (Stanley-style)
+	UserBoostStrength   float64 `json:"user_boost_strength"`   // how strongly user's recent words are boosted
+	UserBoostDecay      float64 `json:"user_boost_decay"`      // per-generation decay of user word boost
 
 	// quantum buffer
 	QBMinBytes        int     `json:"qb_min_bytes"`
@@ -259,16 +265,15 @@ type Config struct {
 	CheckpointMinInterval  float64 `json:"checkpoint_min_interval"`   // write-storm throttle: min seconds between DEFAULT-path (periodic) full-model JSON checkpoints (0 = no throttle). Explicit-path saves (mitosis parent ckpt) are never throttled.
 
 	// consciousness: per-token dissonance feedback
-	DissonanceEMAAlpha      float64 `json:"dissonance_ema_alpha"`       // EMA smoothing for entropy within generation
-	DissonanceSpikeK        float64 `json:"dissonance_spike_k"`         // temp multiplier when entropy spikes
-	DissonanceDropK         float64 `json:"dissonance_drop_k"`          // temp multiplier when entropy drops
+	DissonanceEMAAlpha       float64 `json:"dissonance_ema_alpha"`       // EMA smoothing for entropy within generation
+	DissonanceSpikeK         float64 `json:"dissonance_spike_k"`         // temp multiplier when entropy spikes
+	DissonanceDropK          float64 `json:"dissonance_drop_k"`          // temp multiplier when entropy drops
 	DissonanceSpikeThreshold float64 `json:"dissonance_spike_threshold"` // entropy/EMA ratio triggering spike
 	DissonanceDropThreshold  float64 `json:"dissonance_drop_threshold"`  // entropy/EMA ratio triggering drop
 
 	// consciousness: pattern breaking (anti-field generation)
 	AntiFieldProb    float64 `json:"anti_field_prob"`     // probability of pure-model token (bypass corpus)
 	AntiFieldMinStep int     `json:"anti_field_min_step"` // don't anti-field before this many tokens
-
 
 	// consciousness: conscience (self-editing)
 	ConscienceWindow   int     `json:"conscience_window"`   // rolling window for generation entropy trend
@@ -277,22 +282,53 @@ type Config struct {
 	ConscienceFloor    float64 `json:"conscience_floor"`    // minimum deltaAlphaScale
 
 	// notorch: gradient-free delta training (ported from AML C)
-	NotorchLR          float64 `json:"notorch_lr"`          // learning rate for notorch step
-	NotorchDecay       float64 `json:"notorch_decay"`       // adaptive weight decay
-	CoordinateWarmup   bool    `json:"coordinate_warmup"`   // true = warmup through training queue (for Mac 8GB)
+	NotorchLR        float64 `json:"notorch_lr"`        // learning rate for notorch step
+	NotorchDecay     float64 `json:"notorch_decay"`     // adaptive weight decay
+	CoordinateWarmup bool    `json:"coordinate_warmup"` // true = warmup through training queue (for Mac 8GB)
+
+	// the cafeteria (new logic §12/§14) — see experience_routing.go
+	ExperienceRouting             bool    `json:"experience_routing"`               // false = the old byte-identical broadcast
+	ExperienceCoverageSampleBytes int     `json:"experience_coverage_sample_bytes"` // bytes of a fragment the coverage is taken over, strided
+	ExperienceResonanceHigh       float64 `json:"experience_resonance_high"`        // bigram coverage at or above which a fragment is already this organism's language
+	ExperienceNoveltyLow          float64 `json:"experience_novelty_low"`           // coverage at or below which it is news
+	ExperienceMinPairs            int     `json:"experience_min_pairs"`             // fewer measured token pairs than this = unmeasurable = food
+	ExperienceMaxMeasuredPerTick  int     `json:"experience_max_measured_per_tick"` // coverage measurements one dnaRead may spend; a decline costs no read budget, only this
+	ExperienceMealMemory          int     `json:"experience_meal_memory"`           // fragments kept as "what was just eaten"
+	ExperienceProbeFromMeals      bool    `json:"experience_probe_from_meals"`      // false = the fixed six-question round robin
+	ExperienceProbeMaxChars       int     `json:"experience_probe_max_chars"`       // bound on a probe taken from a meal
+	ExperienceProbeMinChars       int     `json:"experience_probe_min_chars"`       // below this a meal probe is degenerate; the round robin answers instead
+	ExperienceProbeMinWords       int     `json:"experience_probe_min_words"`       // and it must be this many words
+	ExperienceRecentPadLines      int     `json:"experience_recent_pad_lines"`      // padding lines drawn from recent meals before random corpus draws
+
+	// the §13 gate — eligibility for sentence-boundary injection, read from the voice
+	InjectionFadeMin float64 `json:"injection_fade_min"` // 1 - lastOverlayWeight must reach this
+	InjectionMagMin  float64 `json:"injection_mag_min"`  // mean |logit| of the raw output must reach this
 }
 
 var CFG = Config{
-	CorpusPath:           "nonames.txt",
-	DBPath:               "memory.sqlite3",
-	CkptPath:             "molequla_ckpt.json",
-	MaxCorpusLines:       8000,
-	MaxLineChars:         240,
-	MinNewChars:          480,
-	DNAMinFragmentBytes:  5, // unified DNA emit+consume gate (Fix A)
+	CorpusPath:             "nonames.txt",
+	DBPath:                 "memory.sqlite3",
+	CkptPath:               "molequla_ckpt.json",
+	MaxCorpusLines:         8000,
+	MaxLineChars:           240,
+	MinNewChars:            480,
+	DNAMinFragmentBytes:    5,    // unified DNA emit+consume gate (Fix A)
 	DNAFragmentTargetBytes: 5000, // dnaWrite pads fragments toward this (Fix B; 200→600→5000 2026-06-03: per-tick cost grows with model size so ingestion/tick must too — real corpus text, not seeding; corpus FILE capped at MaxCorpusLines so field-rebuild stays bounded while the monotonic ingest clock climbs fast)
-	DNAExtraSources:      nil,  // "world" joins here when the eye writes
-	DNAMaxReadsPerTick:   8,    // repair 3: catch up over ticks, not in one
+	DNAExtraSources:        nil,  // "world" joins here when the eye writes
+	DNAMaxReadsPerTick:     8,    // repair 3: catch up over ticks, not in one — siblings only
+	// Routing repair 2: the extra sources read under their own budget, so the
+	// siblings cannot starve the senses and the senses cannot starve the
+	// siblings. 4 is one sensing episode: the largest bundle one senses pass
+	// left in the live field is four fragments (eye cam0, eye cam1, ears,
+	// place — gen_..._4 through gen_..._7, 2026-09-13T22:18:27Z..22:21:08Z),
+	// and the scheduled passes in molequla-run/schedule.log recorded frags=3
+	// and frags=2. Arrival is far below that: the 13 fragments standing in
+	// dna/output/{world,sound,place} span 22:10:52Z..2026-09-14T01:00:48Z,
+	// 10195 s, i.e. 4.59 fragments/hour or 3.2e-4 per 0.25 s tick. So this
+	// number never binds on live arrival — it binds on the backlog a sleeping
+	// colony leaves, and it is chosen so that one episode enters in one tick
+	// instead of being split across four. 0 disables the bound.
+	DNAExtraReadsPerTick: 4,
 	DNARetainSeconds:     1800, // repair 3: the writer prunes its own fragments after 30 min
 	DNARetainFiles:       256,  // repair 5: and keeps at most 256 of them (~1.3 MB at 5 KB each). Tunable; 0 disables.
 	TickJitterSeconds:    0.05, // repair 3: de-phase sibling scans
@@ -317,41 +353,41 @@ var CFG = Config{
 	},
 	FreezeAfterGrowthSteps: 500,
 	PostGrowthLRScale:      0.3,
-	WarmupSteps:          400,
-	CrossGrazeCoef:       2.0, // Q-style weightless-regime c_doc magnitude
-	CrossGrazeTopN:       8,   // last 8 sibling tokens per buffer at rank-decay
-	MicroSteps:           32,
-	LearningRate:         0.01,
-	GradClip:             1.0,
-	FreezeBaseAfterWarm:  true,
-	BatchSize:            4,
-	SPACoherenceGate:     false,
-	SPAEmbedAlpha:        0.85, // Q's default (q/README.md:179)
-	CorpusLogitOverlay:   false,
-	Trainer:              "notorch",
-	MetaProphecyDecay:    0.95, // age multiplier per generation step
-	LRMin:                0.001,
-	MaxTotalSteps:        50000,
-	CosineWarmupSteps:    200,
-	AccumSteps:           1,
-	DeltaRank:            8,
-	RRPRAMRank:           32,
-	MaxDeltaModules:      12,
-	DeltaGrowProb:        0.08,
-	Temperature:          0.85,
-	TopK:                 40,
-	TopP:                 0.92,
-	MinP:                 0.06,
-	TypicalP:             0.95,
-	MaxGenTokens:         180,
-	MinGenTokens:         16,
-	RepetitionGuard:      4,
-	FreqPenalty:          0.1,
-	PresencePenalty:      0.1,
-	EnableBPEAfterChars:  20000,
-	BPENumMerges:         384,
-	BPERetrainEveryChars: 4000,
-	TrainTickSeconds:     0.25,
+	WarmupSteps:            400,
+	CrossGrazeCoef:         2.0, // Q-style weightless-regime c_doc magnitude
+	CrossGrazeTopN:         8,   // last 8 sibling tokens per buffer at rank-decay
+	MicroSteps:             32,
+	LearningRate:           0.01,
+	GradClip:               1.0,
+	FreezeBaseAfterWarm:    true,
+	BatchSize:              4,
+	SPACoherenceGate:       false,
+	SPAEmbedAlpha:          0.85, // Q's default (q/README.md:179)
+	CorpusLogitOverlay:     false,
+	Trainer:                "notorch",
+	MetaProphecyDecay:      0.95, // age multiplier per generation step
+	LRMin:                  0.001,
+	MaxTotalSteps:          50000,
+	CosineWarmupSteps:      200,
+	AccumSteps:             1,
+	DeltaRank:              8,
+	RRPRAMRank:             32,
+	MaxDeltaModules:        12,
+	DeltaGrowProb:          0.08,
+	Temperature:            0.85,
+	TopK:                   40,
+	TopP:                   0.92,
+	MinP:                   0.06,
+	TypicalP:               0.95,
+	MaxGenTokens:           180,
+	MinGenTokens:           16,
+	RepetitionGuard:        4,
+	FreqPenalty:            0.1,
+	PresencePenalty:        0.1,
+	EnableBPEAfterChars:    20000,
+	BPENumMerges:           384,
+	BPERetrainEveryChars:   4000,
+	TrainTickSeconds:       0.25,
 
 	HeadTypes:              []string{"content"},
 	HybridAlphaInit:        0.5,
@@ -406,6 +442,35 @@ var CFG = Config{
 
 	NotorchLR:    0.01,
 	NotorchDecay: 0.999,
+
+	// The cafeteria. Every default below is a quantile of a distribution
+	// measured on the live run 2026-09-15 (four corpora x 133 fragments;
+	// MOLEQULALOG2.md 2026-09-15) and every one is a knob that can be moved.
+	ExperienceRouting:             true,
+	ExperienceCoverageSampleBytes: 480,   // 4 windows of 120 B: sibling quartiles preserved to 0.006 against the whole fragment, 22 ms/call instead of 144
+	ExperienceResonanceHigh:       0.965, // the median of the sibling-DNA coverage distribution (n=120, min 0.909, p25 0.952, med 0.965, p75 0.975, max 0.996)
+	ExperienceNoveltyLow:          0.620, // the median of the senses coverage distribution (n=52, min 0.427, p25 0.578, med 0.620, p75 0.651, max 0.736)
+	ExperienceMinPairs:            16,    // below this the coverage of a fragment is noise; a shorter fragment is eaten, not judged
+	ExperienceMaxMeasuredPerTick:  8,     // 8 x 21.7 ms of coverage against a 250 ms tick; the two read budgets are 8 + 4, so this is already fewer measurements than they were making. Tunable; 0 disables.
+	ExperienceMealMemory:          16,    // two ticks of the sibling read budget (DNAMaxReadsPerTick 8)
+	// Off, and the number says why: over 300 s scratch colonies the emission
+	// line's gen/bytes went 0.00285 (origin/main, n=623) -> 0.00238 (n=373) when
+	// the probe came from the meal. The §18 order's gate for this step is that
+	// the share must not fall; it fell, so the mechanism lands switched off with
+	// the measurement beside it rather than as a regression. Both runs were
+	// embryo-capped colonies where the overlay is the whole voice — the regime
+	// this is meant for is a stage-3 organism at mag 8.66, which a scratch probe
+	// cannot reach. See MOLEQULALOG2.md, 2026-09-15.
+	ExperienceProbeFromMeals:      false,
+	ExperienceProbeMaxChars:       120, // one sentence; the six fixed probes are 6-24 chars, a place fragment's first sentence is 118
+	ExperienceProbeMinChars:       12,  // "Speak." is 6 and "What matters?" is 13; an embryo's fragment opens with 2-3 bytes and a full stop
+	ExperienceProbeMinWords:       3,
+	ExperienceRecentPadLines:      4,
+
+	// The §13 gate. 130 `[dna] wrote` lines, live colony, session ending
+	// 2026-09-13T20:29:30Z: fade 1.00 on all 130; mag 2.82..16.35, median 8.66.
+	InjectionFadeMin: 1.0, // the overlay must be gone before the organism's own voice can be said to carry
+	InjectionMagMin:  6.0, // below 6.00, 10 of 10 observed generations emitted gen=0; at or above, 92 of 120 emitted text
 }
 
 // headTypesForNHead returns the head type list for a given number of heads.
@@ -1574,7 +1639,7 @@ func (t *EvolvingTokenizer) trainBPELocked(docs []string, numMerges int) {
 	}
 
 	// Build vocab: token sequence → frequency
-	vocab := make(map[string]int)    // key = null-separated token names
+	vocab := make(map[string]int) // key = null-separated token names
 	symSeqs := make(map[string][]string)
 
 	for _, seg := range segments {
@@ -1825,9 +1890,9 @@ type GammaStatsResult struct {
 // layerKeySet holds pre-computed string keys for a single layer, avoiding fmt.Sprintf per call.
 type layerKeySet struct {
 	wq, wk, wv, wo, fcG, fcV, fc2 string
-	wrA, wrB    string   // per-layer low-rank RRPRAM factors (Inc2, Resonance form)
-	headPattern []string // per head (legacy position-bias, retired by Inc2)
-	headAlpha   []string // per head
+	wrA, wrB                      string   // per-layer low-rank RRPRAM factors (Inc2, Resonance form)
+	headPattern                   []string // per head (legacy position-bias, retired by Inc2)
+	headAlpha                     []string // per head
 }
 
 // GPT is the full model.
@@ -1845,15 +1910,15 @@ type GPT struct {
 
 	InitEmbedSnapshot [][]float64 // snapshot of initial embeddings for gamma
 
-	residualAlpha    float64 // 1/sqrt(nLayer) scaling for residual connections
-	globalStep       int     // global training step counter (for cosine LR + checkpoint)
-	syntropyTempOff  float64 // temperature offset from syntropy state (-0.05 to +0.05)
+	residualAlpha   float64 // 1/sqrt(nLayer) scaling for residual connections
+	globalStep      int     // global training step counter (for cosine LR + checkpoint)
+	syntropyTempOff float64 // temperature offset from syntropy state (-0.05 to +0.05)
 
 	growthFreezeRemaining int  // ontogenesis: freeze base after growth, train only deltas
 	growthCapLogged       bool // the MaxGrowthStage ceiling is announced once, not every check (repair 9)
-	growthStepOffset      int // reset to globalStep on each growth — for LR warmup phase
-	lastWarmupStage       int // last stage that completed warmup (-1 = none)
-	corpusIngestedTotal   int // ontogenesis growth clock: monotonic Σ of all text ever ingested (seed + dnaRead). Replaces reservoir file size as the stage gate.
+	growthStepOffset      int  // reset to globalStep on each growth — for LR warmup phase
+	lastWarmupStage       int  // last stage that completed warmup (-1 = none)
+	corpusIngestedTotal   int  // ontogenesis growth clock: monotonic Σ of all text ever ingested (seed + dnaRead). Replaces reservoir file size as the stage gate.
 
 	corpusField *CooccurField // set by backgroundTrainer for adaptive blend
 
@@ -2382,9 +2447,9 @@ func (gpt *GPT) MaybeGrowArchitecture() bool {
 				}
 			}
 			type fcSpec struct {
-				key        string
-				noutMul    int
-				ninMul     int
+				key     string
+				noutMul int
+				ninMul  int
 			}
 			fcSpecs := []fcSpec{
 				{pfx + "fc_g", 4, 1},
@@ -2981,8 +3046,8 @@ func (gpt *GPT) ForwardStep(tokenID, posID int, keys, values [][]*Vec) *Vec {
 		gpt.mlpInputs[li] = x
 
 		g := gpt.applyWithDeltas(lk.fcG, x).SiLU() // gate (SwiGLU)
-		u := gpt.applyWithDeltas(lk.fcV, x)         // value
-		mlpX := g.MulVec(u)                          // gating
+		u := gpt.applyWithDeltas(lk.fcV, x)        // value
+		mlpX := g.MulVec(u)                        // gating
 
 		// notorch: save g*u intermediate for fc2 adapter input (4*NEmbd dimension)
 		gpt.mlpIntermediates[li] = mlpX
@@ -3131,7 +3196,6 @@ func (gpt *GPT) ComputeSelfPredictionError(ids []int) float64 {
 	}
 	return totalCE / float64(count)
 }
-
 
 // ============================================================
 // 6) SQLITE MEMORY — and a small ghost shall remember
@@ -3294,6 +3358,70 @@ func loadCorpusLines(path string) []string {
 		}
 	}
 	return lines
+}
+
+// splitCorpusLine cuts one eaten text into corpus lines, none longer than
+// maxChars. Routing repair 3: loadCorpusLines truncates every line at
+// CFG.MaxLineChars and a DNA fragment is padded toward
+// CFG.DNAFragmentTargetBytes and was appended as one line, so a fragment
+// reached `docs` only as its first 240 bytes — measured on the live run,
+// 4.7-4.8 % of a 5 KB sibling fragment and 76.7 % of a place fragment, where
+// the quarter that fell off was exactly the clause saying whether the phone had
+// moved. Cutting on sentence ends instead leaves the byte bound
+// MaxCorpusLines × MaxLineChars untouched (the line count becomes the binding
+// cap) while the whole fragment reaches the field.
+//
+// A sentence ends at '.', '!' or '?' followed by a space or by the end of the
+// text, so "22.5 °C" and "2026-09-14T18:48" stay whole. A run with no sentence
+// end inside maxChars is cut at the last space before the bound, or at the
+// bound on a rune boundary — which is what loadCorpusLines would have done to
+// it anyway, only without the rune care.
+func splitCorpusLine(text string, maxChars int) []string {
+	text = strings.TrimSpace(strings.ReplaceAll(text, "\n", " "))
+	if text == "" {
+		return nil
+	}
+	if maxChars <= 0 {
+		return []string{text}
+	}
+	var out []string
+	emit := func(s string) {
+		s = strings.TrimSpace(s)
+		for len(s) > maxChars {
+			cut := maxChars
+			for cut > 0 && !utf8.RuneStart(s[cut]) {
+				cut--
+			}
+			if sp := strings.LastIndexByte(s[:cut], ' '); sp > maxChars/2 {
+				cut = sp
+			}
+			if cut == 0 {
+				break
+			}
+			if head := strings.TrimSpace(s[:cut]); head != "" {
+				out = append(out, head)
+			}
+			s = strings.TrimSpace(s[cut:])
+		}
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	start := 0
+	for i := 0; i < len(text); i++ {
+		if c := text[i]; c != '.' && c != '!' && c != '?' {
+			continue
+		}
+		if i+1 < len(text) && text[i+1] != ' ' && text[i+1] != '\t' {
+			continue
+		}
+		emit(text[start : i+1])
+		start = i + 1
+	}
+	if start < len(text) {
+		emit(text[start:])
+	}
+	return out
 }
 
 func saveCorpusLines(path string, lines []string) {
@@ -3469,27 +3597,27 @@ func computeNewCorpusMass(db *sql.DB, lastEventID int) (int, int) {
 // ============================================================
 
 type CheckpointJSON struct {
-	Cfg       json.RawMessage            `json:"cfg"`
-	Tokenizer TokenizerJSON              `json:"tokenizer"`
-	Base      map[string][][][]float64   `json:"base"`  // name -> rows -> cols (but we store as [][]float64)
-	Alpha     []float64                  `json:"alpha"`
-	Deltas    []map[string]DeltaJSON     `json:"deltas"`
+	Cfg       json.RawMessage          `json:"cfg"`
+	Tokenizer TokenizerJSON            `json:"tokenizer"`
+	Base      map[string][][][]float64 `json:"base"` // name -> rows -> cols (but we store as [][]float64)
+	Alpha     []float64                `json:"alpha"`
+	Deltas    []map[string]DeltaJSON   `json:"deltas"`
 }
 
 func intPtr(v int) *int { return &v }
 
 // We need a different approach - Base stores name -> [][]float64 (matrix rows)
 type CheckpointData struct {
-	Cfg               json.RawMessage        `json:"cfg"`
-	Tokenizer         TokenizerJSON          `json:"tokenizer"`
-	Base              map[string][][]float64 `json:"base"`
-	Alpha             []float64              `json:"alpha"`
-	Deltas            []map[string]DeltaJSON `json:"deltas"`
-	InitEmbedSnapshot [][]float64            `json:"init_embed_snapshot,omitempty"`
-	GlobalStep        int                    `json:"global_step"`
-	GrowthStepOffset  int                    `json:"growth_step_offset"`
-	LastWarmupStage   *int                   `json:"last_warmup_stage,omitempty"`
-	CorpusIngestedTotal int                  `json:"corpus_ingested_total"`
+	Cfg                 json.RawMessage        `json:"cfg"`
+	Tokenizer           TokenizerJSON          `json:"tokenizer"`
+	Base                map[string][][]float64 `json:"base"`
+	Alpha               []float64              `json:"alpha"`
+	Deltas              []map[string]DeltaJSON `json:"deltas"`
+	InitEmbedSnapshot   [][]float64            `json:"init_embed_snapshot,omitempty"`
+	GlobalStep          int                    `json:"global_step"`
+	GrowthStepOffset    int                    `json:"growth_step_offset"`
+	LastWarmupStage     *int                   `json:"last_warmup_stage,omitempty"`
+	CorpusIngestedTotal int                    `json:"corpus_ingested_total"`
 }
 
 type TokenizerJSON struct {
@@ -4233,10 +4361,10 @@ func (qb *QuantumBuffer) Reset() {
 type CooccurField struct {
 	Unigram          map[int]float64
 	BigramByFirst    map[int]map[int]float64    // prev → {next: count}
-	TrigramByContext map[[2]int]map[int]float64  // [prev2,prev1] → {next: count}
-	FourgramByCtx    map[[3]int]map[int]float64  // [prev3,prev2,prev1] → {next: count}
-	CooccurWindow    map[int]map[int]float64     // token → {nearby_token: count} (Stanley-style proximity)
-	UserBoost        map[int]float64             // temporary user word boosts (Leo-style)
+	TrigramByContext map[[2]int]map[int]float64 // [prev2,prev1] → {next: count}
+	FourgramByCtx    map[[3]int]map[int]float64 // [prev3,prev2,prev1] → {next: count}
+	CooccurWindow    map[int]map[int]float64    // token → {nearby_token: count} (Stanley-style proximity)
+	UserBoost        map[int]float64            // temporary user word boosts (Leo-style)
 	Built            bool
 	mu               sync.RWMutex // RWMutex: reads (SampleNext) don't block each other
 }
@@ -5175,15 +5303,15 @@ type SwarmPeerInfo struct {
 }
 
 type SyntropyTracker struct {
-	EntropyHistory   []float64 // rolling window of model entropy
-	SyntropyTrend    float64   // positive = organizing, negative = dissolving
-	FieldDeviation   float64   // how far from corpus physics
-	PurposeMagnitude float64   // strength of current learning direction
-	PurposeAlignment float64   // cosine(purpose, gamma)
-	LastAction       string    // what was decided last time
-	BurstHistory     []BurstRecord // last 16 burst outcomes — training efficiency memory
-	ModelStage       int       // current growth stage (set during measure)
-	LastMitosisTime  float64   // cooldown for divide
+	EntropyHistory   []float64      // rolling window of model entropy
+	SyntropyTrend    float64        // positive = organizing, negative = dissolving
+	FieldDeviation   float64        // how far from corpus physics
+	PurposeMagnitude float64        // strength of current learning direction
+	PurposeAlignment float64        // cosine(purpose, gamma)
+	LastAction       string         // what was decided last time
+	BurstHistory     []BurstRecord  // last 16 burst outcomes — training efficiency memory
+	ModelStage       int            // current growth stage (set during measure)
+	LastMitosisTime  float64        // cooldown for divide
 	SwarmInfo        *SwarmPeerInfo // peer state from mesh.db (set externally)
 }
 
@@ -5566,8 +5694,14 @@ type SwarmRegistry struct {
 	PidFile    string
 	MeshDB     *sql.DB
 	keeper     *beatKeeper // repeats the last heartbeat on its own clock (repair 4)
-	growthMu   sync.Mutex
-	growthStop chan struct{} // closed by ReleaseGrowthLock; stops the lock refresher (repair 9)
+	// Mesh write failures already said, by error string. A schema narrower
+	// than the write makes every heartbeat a silent no-op, so it is reported —
+	// once each, because the tick loop beats every ten ticks for the life of
+	// the run and a repeated line is a line nobody reads.
+	meshErrMu   sync.Mutex
+	meshErrSaid map[string]bool
+	growthMu    sync.Mutex
+	growthStop  chan struct{} // closed by ReleaseGrowthLock; stops the lock refresher (repair 9)
 }
 
 // StartKeeper launches the heartbeat keeper: from now until stop closes, the
@@ -5625,10 +5759,22 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		n_params INTEGER, syntropy REAL, entropy REAL,
 		last_heartbeat REAL, parent_id TEXT,
 		status TEXT DEFAULT 'alive',
-		element TEXT, global_step INTEGER)`)
+		element TEXT, global_step INTEGER,
+		gen_mag REAL, overlay_fade REAL)`)
 	// Migrations for existing databases
 	db.Exec("ALTER TABLE organisms ADD COLUMN element TEXT")
 	db.Exec("ALTER TABLE organisms ADD COLUMN global_step INTEGER") // repair 7: age in training steps, for the witness and for gates
+	// Routing repair 6: the voice, beside the age. gen_mag is the mean |logit|
+	// of the raw transformer at the first step of the last generation and
+	// overlay_fade is 1 - the overlay weight that magnitude bought, the two
+	// numbers dnaWrite already prints as mag= and fade= and that nothing
+	// outside the process could see. §13 of molequla_new_logic.md wants the
+	// sentence-boundary gate keyed on the voice rather than on the stage
+	// label; these are the columns it reads. Same idempotent ALTER as
+	// global_step above: an error on an existing column is the expected
+	// outcome and is discarded like the two before it.
+	db.Exec("ALTER TABLE organisms ADD COLUMN gen_mag REAL")
+	db.Exec("ALTER TABLE organisms ADD COLUMN overlay_fade REAL")
 	if err != nil {
 		db.Close()
 		return err
@@ -5724,16 +5870,49 @@ func (sr *SwarmRegistry) ReserveChildSlot(childID string, pid int, element strin
 		childID, pid, float64(time.Now().UnixMilli())/1000.0, sr.OrganismID, element)
 }
 
+// sayMeshError reports one failed mesh write per distinct error. The write
+// this guards is the organism's only statement that it is alive, so when it
+// fails the colony's own governor and the witness both stop seeing an organism
+// that is running perfectly well — a failure with no symptom except silence.
+// It happened twice, both times because a column had been added to the write
+// and not to the schema in front of it; the second time it cost a red test and
+// twelve runs to name. Once per distinct error, because the tick loop beats
+// every ten ticks for the life of the run.
+func (sr *SwarmRegistry) sayMeshError(err error) {
+	if sr == nil || err == nil {
+		return
+	}
+	key := err.Error()
+	sr.meshErrMu.Lock()
+	if sr.meshErrSaid == nil {
+		sr.meshErrSaid = map[string]bool{}
+	}
+	said := sr.meshErrSaid[key]
+	sr.meshErrSaid[key] = true
+	sr.meshErrMu.Unlock()
+	if said {
+		return
+	}
+	fmt.Printf("[ecology] mesh refused the heartbeat of %s: %s — this organism is alive and invisible to the colony\n",
+		sr.OrganismID, key)
+}
+
 // Heartbeat performs periodic state update in mesh.db. globalStep is the
-// organism's age in training steps (repair 7), visible to the witness.
-func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int) {
+// organism's age in training steps (repair 7); genMag and overlayFade are its
+// voice (routing repair 6) — the raw transformer magnitude at the first step of
+// the last generation, and how far the corpus overlay has faded out of it.
+// Both were process-local until now, readable only in the organism's own
+// stdout, so no gate outside the process could follow the voice.
+func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int, genMag, overlayFade float64) {
 	if sr.MeshDB == nil {
 		return
 	}
-	sr.MeshDB.Exec(
-		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=? WHERE id=?",
-		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, sr.OrganismID)
-	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep) // nil-safe; the keeper repeats this state
+	if _, err := sr.MeshDB.Exec(
+		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=?,gen_mag=?,overlay_fade=? WHERE id=?",
+		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, genMag, overlayFade, sr.OrganismID); err != nil {
+		sr.sayMeshError(err)
+	}
+	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep, genMag, overlayFade) // nil-safe; the keeper repeats this state
 }
 
 // DiscoverPeers finds other living organisms.
@@ -6032,7 +6211,12 @@ func performMitosis(model *GPT, tok *EvolvingTokenizer, db *sql.DB, swarm *Swarm
 	}
 	// Reap the child on its eventual exit (no zombie of this long-lived parent)
 	// and close its log handle.
-	go func() { _ = cmd.Wait(); if childLog != nil { childLog.Close() } }()
+	go func() {
+		_ = cmd.Wait()
+		if childLog != nil {
+			childLog.Close()
+		}
+	}()
 
 	// M-GOV-001: reserve the child's slot in the mesh NOW so the population cap
 	// counts it immediately. Otherwise a sibling's AcquireMitosisSlot, run in the
@@ -6067,12 +6251,24 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	if element == "" || len(docs) == 0 {
 		return
 	}
+	// Publish the field and tokenizer the organism is speaking with, so the
+	// cafeteria in experience_routing.go judges the fragments dnaRead is about
+	// to offer (one line below, same tick) against this same state.
+	experienceRouting.observe(field, tok)
+
 	probes := []string{
 		"What do you feel?", "Tell me about yourself.",
 		"What is truth?", "What matters?",
 		"Speak.", "What do you remember?",
 	}
-	probe := probes[step%len(probes)]
+	// §14: the world must be metabolized by somebody before it becomes culture.
+	// The probe is where that happens — the organism is asked about what it
+	// just ate and answers in its own voice. The six fixed questions remain the
+	// fallback for an organism that has not eaten yet.
+	probe := experienceRouting.probe(step)
+	if probe == "" {
+		probe = probes[step%len(probes)]
+	}
 
 	// GenerateResonant takes model.mu.Lock internally — do NOT double-lock
 	answer := GenerateResonant(model, tok, field, probe, docs, true)
@@ -6085,9 +6281,25 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 	// share of the fragment rises on its own.
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(answer))
+	// The padding leads with what this organism has eaten most recently from
+	// its siblings, so the fragment carries the organism's current diet and not
+	// an arbitrary slice of its whole corpus. Sense lines are not in that list
+	// and are skipped when a random draw lands on one: §14 forbids raw outside
+	// experience from entering collective DNA without passing through an
+	// organism, and a padded line is a byte copy, not a passage. The world
+	// reaches the ecology through `answer` above, which was generated from it.
+	for _, line := range experienceRouting.recentPadding(CFG.ExperienceRecentPadLines) {
+		if b.Len() >= CFG.DNAFragmentTargetBytes {
+			break
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(line)
+	}
 	for i := 0; b.Len() < CFG.DNAFragmentTargetBytes && i < 600; i++ {
 		line := strings.TrimSpace(docs[rand.Intn(len(docs))])
-		if line == "" {
+		if line == "" || experienceRouting.isRawExperience(line) {
 			continue
 		}
 		if b.Len() > 0 {
@@ -6116,15 +6328,32 @@ func dnaWrite(element string, model *GPT, tok *EvolvingTokenizer, field *Cooccur
 		fade = 1 - model.lastOverlayWeight
 		model.mu.Unlock()
 	}
-	fmt.Printf("[dna] %s wrote %d bytes to ecology | gen=%d mag=%.2f fade=%.2f\n", element, len(frag), gen, mag, fade)
+	// eligible is the §13 gate (experience_routing.go): whether this organism's
+	// voice is its own enough to receive sentence-boundary knowledge injection.
+	// The injection itself is not implemented — the decision is printed so it
+	// can be read back out of the logs before anything is built on it.
+	eligible := 0
+	if ok, _ := injectionEligible(fade, mag); ok {
+		eligible = 1
+	}
+	fmt.Printf("[dna] %s wrote %d bytes to ecology | gen=%d mag=%.2f fade=%.2f eligible=%d\n", element, len(frag), gen, mag, fade, eligible)
 	// The writer is the only one that deletes: readers keep cursors (repair 3).
 	dnaPruneOwn(element, time.Duration(CFG.DNARetainSeconds*float64(time.Second)), CFG.DNARetainFiles)
 }
 
 // dnaRead eats fragments from every source this organism reads (the other
 // elements plus CFG.DNAExtraSources), newer than its cursor, at most
-// CFG.DNAMaxReadsPerTick per call. Fragments are never removed here; the
-// cursor is advanced and persisted instead. Returns bytes added to the corpus.
+// CFG.DNAMaxReadsPerTick sibling fragments and CFG.DNAExtraReadsPerTick extra
+// ones per call. Fragments are never removed here; the cursor is advanced and
+// persisted instead. Returns bytes added to the corpus.
+//
+// The two budgets are routing repair 2. Under one shared bound the extra
+// sources were read last, after three siblings that emit a fragment per tick
+// each, so a senses fragment waited behind sibling chatter for as long as the
+// backlog lasted: in the 2026-09-13T20:26Z session the shared cap was spent
+// before the source list ran out on 12 of earth's 15 reads, 9 of air's 13, 10
+// of water's 13 and 4 of fire's 14. A separate counter per half makes the
+// order in dnaSources an order of service and not an order of entitlement.
 func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *EvolvingTokenizer, cur *dnaCursor) int {
 	if element == "" {
 		return 0
@@ -6133,21 +6362,48 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 		cur = &dnaCursor{Last: map[string]string{}}
 	}
 	added := 0
-	reads := 0
-	limit := CFG.DNAMaxReadsPerTick
-	if limit <= 0 {
-		limit = 1 << 30
+	budget := func(n int) int {
+		if n <= 0 {
+			return 1 << 30
+		}
+		return n
+	}
+	siblingLeft := budget(CFG.DNAMaxReadsPerTick)
+	extraLeft := budget(CFG.DNAExtraReadsPerTick)
+	// Membership, not order: dnaSources decides who is served in what order,
+	// this decides which counter the read is charged to. Built from CFG so it
+	// stays true however dnaSources is later allocated.
+	isExtra := make(map[string]bool, len(CFG.DNAExtraSources))
+	for _, s := range CFG.DNAExtraSources {
+		if s != "" && s != element {
+			isExtra[s] = true
+		}
 	}
 	var consumed []string
 	moved := false
+	// Coverage costs a BPE encode of the sampled fragment — 21.7 ms on cores
+	// 4-7 (MOLEQULALOG2.md, 2026-09-15). A declined fragment costs one of these
+	// and no read budget, so this is what bounds the work a tick can spend
+	// deciding rather than eating; when it is spent the loop stops with the
+	// cursors where they are and the rest is examined next tick.
+	measured := 0
+	measuredCap := CFG.ExperienceMaxMeasuredPerTick
+	if measuredCap <= 0 {
+		measuredCap = 1 << 30
+	}
 
+reading:
 	for _, src := range dnaSources(element) {
-		if reads >= limit {
-			break
+		left := &siblingLeft
+		if isExtra[src] {
+			left = &extraLeft
+		}
+		if *left <= 0 {
+			continue // that half is spent; the other half is still owed its reads
 		}
 		dir := filepath.Join("../dna/output", src)
 		for _, name := range dnaListNew(dir, cur.Last[src]) {
-			if reads >= limit {
+			if *left <= 0 {
 				break
 			}
 			fpath := filepath.Join(dir, name)
@@ -6155,21 +6411,79 @@ func dnaRead(element string, corpusPath string, qbuf *QuantumBuffer, tok *Evolvi
 			if err != nil {
 				continue
 			}
-			reads++
 			text := strings.TrimSpace(string(data))
 			if len(text) < CFG.DNAMinFragmentBytes {
+				*left-- // a read happened; it was not food
 				cur.Last[src] = name // too short to be food; step past it, do not delete
 				moved = true
 				continue
 			}
-			// Append to own corpus — the organism eats another's words
-			f, err := os.OpenFile(corpusPath, os.O_APPEND|os.O_WRONLY, 0644)
+			// The cafeteria (experience_routing.go): this organism's own plate,
+			// decided from the fragment's name and its coverage under this
+			// organism's own field. A declined plate advances the cursor — the
+			// fragment is not eaten and is not looked at again — and it does
+			// NOT spend a read from either budget: those two bound how much an
+			// organism EATS per tick, and a colony that declines a third of
+			// what it is offered would otherwise starve on a backlog. What a
+			// decline does cost is a coverage measurement, and that is what
+			// ExperienceMaxMeasuredPerTick bounds instead.
+			ok, why, _ := experienceRouting.admits(element, src, name, text)
+			if why != "owner" && why != "broadcast" {
+				measured++
+			}
+			if !ok {
+				cur.Last[src] = name
+				moved = true
+				if measured >= measuredCap {
+					break reading
+				}
+				continue
+			}
+			*left--
+			// Append to own corpus — the organism eats another's words, cut
+			// into corpus lines so that the whole fragment survives
+			// loadCorpusLines instead of its first CFG.MaxLineChars bytes
+			// (routing repair 3).
+			lines := splitCorpusLine(text, CFG.MaxLineChars)
+			if len(lines) == 0 {
+				cur.Last[src] = name
+				moved = true
+				continue
+			}
+			f, err := os.OpenFile(corpusPath, os.O_APPEND|os.O_RDWR, 0644)
 			if err != nil {
 				continue
 			}
-			f.WriteString(text + "\n")
+			// A corpus whose last line has no newline of its own would take
+			// this fragment's first sentence onto the end of it — one
+			// malformed line per fragment, and the one carrying the sense's
+			// header at that. saveCorpusLines always terminates its lines, so
+			// this is the hand-edited or truncated file, not the normal one:
+			// read the last byte (O_RDWR because an O_APPEND handle cannot)
+			// and close the line before opening a new one.
+			if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
+				var last [1]byte
+				if _, err := f.ReadAt(last[:], fi.Size()-1); err == nil && last[0] != '\n' {
+					f.WriteString("\n")
+				}
+			}
+			wrote := 0
+			for _, ln := range lines {
+				f.WriteString(ln + "\n")
+				wrote += len(ln)
+			}
 			f.Close()
-			added += len(text)
+			// The growth clock counts what reached the field, not what was
+			// offered to it. Before repair 3 the two were the same number by
+			// accident of the append and different by 20× in fact; now they
+			// differ only by the whitespace between sentences.
+			added += wrote
+			// What was just eaten shapes what is said next (§14) — see
+			// dnaWrite. The meal is the lines that were appended, not the
+			// fragment they were cut from: those lines are what loadCorpusLines
+			// will hand back, so they are what the padding must be able to
+			// recognise.
+			experienceRouting.remember(src, lines, experienceIsExtraSource(src))
 			consumed = append(consumed, fmt.Sprintf("%s/%s", src, name))
 			if qbuf != nil && tok != nil {
 				qbuf.Feed(text, tok)
@@ -6609,7 +6923,6 @@ func parseCLIArgs() (organismID string, configPath string, element string, evolu
 	return
 }
 
-
 // cosineLR returns learning rate for the given global step using cosine schedule with linear warmup.
 // stepsSinceGrowth enables LR ramp-up after each growth event (new weights need high LR initially).
 func cosineLR(globalStep, stepsSinceGrowth int) float64 {
@@ -6630,7 +6943,7 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 	syntracker := NewSyntropyTracker()
 	field := NewCooccurField()
 	tickCount := 0
-	var docs []string     // persists across ticks; reloaded throttled (see loop)
+	var docs []string      // persists across ticks; reloaded throttled (see loop)
 	lastFieldRebuild := -1 // tick of last corpus reload + field rebuild
 	// Growth and the warmup behind it are one memory event spanning ticks, so the
 	// colony lock taken before growth is released only after the warmup (repair 9).
@@ -6711,17 +7024,17 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				warmupScale = 1
 			}
 			effectiveWarmup := CFG.WarmupSteps * warmupScale
-			backpropSteps := effectiveWarmup  // 100% backprop, notorch warmup disabled (was 0.6)
-			notorchDeltaSteps := 0  // disabled: notorch warmup diverges at stage 5
+			backpropSteps := effectiveWarmup // 100% backprop, notorch warmup disabled (was 0.6)
+			notorchDeltaSteps := 0           // disabled: notorch warmup diverges at stage 5
 			fmt.Printf("[trainer] warmup for stage %d (embd=%d) — %d steps total (%d backprop + %d notorch, sqrt-scaled %dx)\n",
 				currentStage, model.NEmbd, effectiveWarmup, backpropSteps, notorchDeltaSteps, warmupScale)
 			// Phase A: backprop with progressive sequence length (short→full)
 			earlySteps := int(float64(backpropSteps) * 0.4)
 			midSteps := int(float64(backpropSteps) * 0.3)
 			lateSteps := backpropSteps - earlySteps - midSteps
-			ntWarmupTrain(model, tok, docs, earlySteps, 8)   // very short seqs, batch=1
-			ntWarmupTrain(model, tok, docs, midSteps, 16)    // short seqs, batch=1
-			ntWarmupTrain(model, tok, docs, lateSteps, 32)   // medium seqs, batch=1
+			ntWarmupTrain(model, tok, docs, earlySteps, 8) // very short seqs, batch=1
+			ntWarmupTrain(model, tok, docs, midSteps, 16)  // short seqs, batch=1
+			ntWarmupTrain(model, tok, docs, lateSteps, 32) // medium seqs, batch=1
 			// Phase B: notorch for delta adapters (40%, no autograd = much faster)
 			// notorchTrainSteps DISABLED in warmup — diverges at stage 5 (loss 3.5→116)
 			// notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)
@@ -6948,12 +7261,16 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				nP += m.Nout * m.Nin
 			}
 			gs := model.globalStep
+			// The voice, read under the same lock dnaWrite reads it under
+			// (routing repair 6). fade = 1 means the overlay is gone and the
+			// speech is the transformer's own.
+			genMag, genFade := model.lastGenMag, 1-model.lastOverlayWeight
 			model.mu.Unlock()
 			lastEntropy := 0.0
 			if len(syntracker.EntropyHistory) > 0 {
 				lastEntropy = syntracker.EntropyHistory[len(syntracker.EntropyHistory)-1]
 			}
-			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs)
+			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs, genMag, genFade)
 			// Update swarm info for hibernate decisions
 			peers := swarm.DiscoverPeers(60)
 			syntracker.SwarmInfo = &SwarmPeerInfo{Peers: peers}
@@ -7294,17 +7611,17 @@ func main() {
 			}
 			effectiveWarmup := CFG.WarmupSteps * warmupScale
 			if effectiveWarmup > 0 {
-				backpropSteps := effectiveWarmup  // 100% backprop, notorch warmup disabled (was 0.6)
-				notorchDeltaSteps := 0  // disabled: notorch warmup diverges at stage 5
+				backpropSteps := effectiveWarmup // 100% backprop, notorch warmup disabled (was 0.6)
+				notorchDeltaSteps := 0           // disabled: notorch warmup diverges at stage 5
 				fmt.Printf("[init] Stage %d (%s): embd=%d, layer=%d, head=%d — warmup %d steps (%d backprop + %d notorch, sqrt-scaled %dx)\n",
 					stage, stageName, model.NEmbd, model.NLayer, model.NHead, effectiveWarmup, backpropSteps, notorchDeltaSteps, warmupScale)
 				// Phase A: backprop with progressive sequence length (short→full)
 				earlySteps := int(float64(backpropSteps) * 0.4)
 				midSteps := int(float64(backpropSteps) * 0.3)
 				lateSteps := backpropSteps - earlySteps - midSteps
-				ntWarmupTrain(model, tok, docs, earlySteps, 8)   // very short seqs, batch=1
-				ntWarmupTrain(model, tok, docs, midSteps, 16)    // short seqs, batch=1
-				ntWarmupTrain(model, tok, docs, lateSteps, 32)   // medium seqs, batch=1
+				ntWarmupTrain(model, tok, docs, earlySteps, 8) // very short seqs, batch=1
+				ntWarmupTrain(model, tok, docs, midSteps, 16)  // short seqs, batch=1
+				ntWarmupTrain(model, tok, docs, lateSteps, 32) // medium seqs, batch=1
 				// (repair 10) A bootstrap warmup cut short by a signal is not a
 				// warmup done — same rule as the tick loop's warmup: leaving
 				// lastWarmupStage behind would make the next launch walk into
@@ -7353,7 +7670,7 @@ func main() {
 			if !model.MaybeGrowArchitecture() {
 				break // corpus too small for next stage, or already at max
 			}
-			ntOnGrowth() // reset the notorch tape — Net2Net changed dims (06_PLAN S1)
+			ntOnGrowth()                    // reset the notorch tape — Net2Net changed dims (06_PLAN S1)
 			model.growthFreezeRemaining = 0 // skip freeze during init — we're about to warmup anyway
 
 			// Rebuild corpus field after growth (vocab may have expanded)
@@ -7450,8 +7767,9 @@ func main() {
 	for _, m := range model.Base {
 		seedParams += m.Nout * m.Nin
 	}
+	seedMag, seedFade := model.lastGenMag, 1-model.lastOverlayWeight
 	model.mu.Unlock()
-	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep)
+	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep, seedMag, seedFade)
 
 	if evolution {
 		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -108,6 +110,93 @@ func TestDNAExtraSourcesFragmentIsListedForTheOrganism(t *testing.T) {
 		}
 		if seen["sound"] != 0 {
 			t.Fatalf("dnaListNew invented %d fragments in an empty sound", seen["sound"])
+		}
+	})
+}
+
+// Routing repair 2. The siblings emit a fragment per tick each and the senses
+// write a few an hour, so a backlog of sibling chatter is the normal state of
+// the field. Under one shared budget the extra sources, which dnaSources lists
+// last, were read only when the siblings happened to leave room; this case is
+// the shape of that starvation — 64 sibling fragments standing in front of one
+// world fragment — and the world fragment has to be in the corpus after a
+// single dnaRead. Red under one budget: the eight reads are spent inside air.
+func TestDNAExtraSourcesReadUnderTheirOwnBudget(t *testing.T) {
+	root, restore := dnaTestTree(t, "world", "sound", "place")
+	defer restore()
+
+	const worldText = "[eye cam0 2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl and a spoon."
+	for i := 0; i < 64; i++ {
+		dnaWriteFragment(t, root, "air",
+			fmt.Sprintf("gen_1789337000_%d.txt", i),
+			fmt.Sprintf("air fragment %d, long enough to be food for a sibling.", i))
+	}
+	dnaWriteFragment(t, root, "world", "gen_1789337521_2.txt", worldText)
+
+	withArgs(t, []string{"--element", "earth", "--dna-extra-sources", "world,sound,place"}, func() {
+		CFG.DNAExtraSources = nil
+		parseCLIArgs()
+		if err := os.Chdir(filepath.Join(root, "earth")); err != nil {
+			t.Fatal(err)
+		}
+		corpus := filepath.Join(root, "earth", "nonames_earth.txt")
+		if err := os.WriteFile(corpus, []byte("seed line.\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		cur := &dnaCursor{Last: map[string]string{}}
+		if added := dnaRead("earth", corpus, nil, nil, cur); added == 0 {
+			t.Fatal("dnaRead ate nothing at all")
+		}
+		body, err := os.ReadFile(corpus)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), worldText) {
+			t.Fatalf("one dnaRead behind 64 sibling fragments left the world fragment uneaten; "+
+				"corpus holds %d lines, cursor: %v",
+				strings.Count(string(body), "\n"), cur.Last)
+		}
+		// The siblings keep their own budget: the world fragment must not have
+		// been bought with sibling reads.
+		if n := strings.Count(string(body), "air fragment "); n != CFG.DNAMaxReadsPerTick {
+			t.Fatalf("air was read %d times, want CFG.DNAMaxReadsPerTick = %d", n, CFG.DNAMaxReadsPerTick)
+		}
+	})
+}
+
+// And the mirror case: a flood of senses fragments must not eat the siblings'
+// budget either. Both halves are bounded, neither is entitled to the other's.
+func TestDNAExtraSourcesCannotStarveTheSiblings(t *testing.T) {
+	root, restore := dnaTestTree(t, "world", "sound", "place")
+	defer restore()
+
+	for i := 0; i < 64; i++ {
+		dnaWriteFragment(t, root, "world",
+			fmt.Sprintf("gen_1789337000_%d.txt", i),
+			fmt.Sprintf("[eye cam0] world fragment %d, a whole sentence of it.", i))
+	}
+	dnaWriteFragment(t, root, "air", "gen_1789337521_2.txt", "air said something worth eating.")
+
+	withArgs(t, []string{"--element", "earth", "--dna-extra-sources", "world,sound,place"}, func() {
+		CFG.DNAExtraSources = nil
+		parseCLIArgs()
+		if err := os.Chdir(filepath.Join(root, "earth")); err != nil {
+			t.Fatal(err)
+		}
+		corpus := filepath.Join(root, "earth", "nonames_earth.txt")
+		if err := os.WriteFile(corpus, []byte("seed line.\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		dnaRead("earth", corpus, nil, nil, &dnaCursor{Last: map[string]string{}})
+		body, err := os.ReadFile(corpus)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), "air said something worth eating.") {
+			t.Fatal("64 world fragments swallowed the sibling's turn")
+		}
+		if n := strings.Count(string(body), "world fragment "); n != CFG.DNAExtraReadsPerTick {
+			t.Fatalf("world was read %d times, want CFG.DNAExtraReadsPerTick = %d", n, CFG.DNAExtraReadsPerTick)
 		}
 	})
 }

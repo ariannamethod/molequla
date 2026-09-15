@@ -6,6 +6,8 @@ harness/oracle_dump
 tests/cmp_f32
 tests/dump_mel
 tests/dump_enc
+soundscape
+tests/test_soundscape
 tests/out/
 
 # weights and audio — see README.md for where they come from

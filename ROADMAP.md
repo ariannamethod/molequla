@@ -35,7 +35,8 @@ is long — an organism lives for months of sessions, not for one uptime.
   is one pass of eye, ears and place, and the scheduler gained a second kind of
   slot: nine senses slots a day in the gaps between the colony windows, capped
   at 600 s, skipped and logged if they meet a live colony. The organisms are
-  told to eat the result with `--dna-extra-sources world,sound,place`. Waiting
+  told to eat the result with `--dna-extra-sources world,sound,place`, and since
+  the routing repairs of 2026-09-15 so is the witness. Waiting
   on the merge: the daemon still runs the old conf and the binary in
   `$MOLEQULA_RUN` predates the flag.
 - **A ledger of change, not a stream of facts** (`claude/phone1-world-ledger`,
@@ -77,35 +78,51 @@ is long — an organism lives for months of sessions, not for one uptime.
    with f16) has to enter the growth byte gate, which today knows nothing about
    it — hence the crude fence, a MemAvailable floor plus the colony-window
    skip. Still open too: the sentence entering the corpus at every age but
-   cross-graze only at `fade = 1` / stage ≥ teen. Age is `global_step`, already
-   a column in mesh.db.
+   cross-graze only at `fade = 1` / stage ≥ teen. Age is `global_step` and the
+   voice is `gen_mag` / `overlay_fade`, all three columns in mesh.db since the
+   routing repairs of 2026-09-15, so the gate has its inputs — and as of the
+   same day it has the gate: `injectionEligible(fade, mag)` decides §13
+   eligibility from the voice, refuses the stage label, and prints
+   `eligible=0|1` on the emission line. What is open is the injection itself,
+   below.
 4. **Other VLMs for the same organ.** Alternative eyes measured on the phone
    with the same table (tok/s, wall, peak RSS, one global frame) and stored in
    sibling folders of the weights repo.
-5. **loragrad as immune filter.** The gradient verdict (PASS / WEAKEN / FREEZE /
+5. **Sentence-boundary injection itself** (2026-09-15). The gate that says who
+   may receive it exists and is printed; the injection does not. Dario's
+   mechanism is a token boundary, not a character (`chain_dialogue.py:364-368`),
+   and the seed path at `molequla.go:5090-5103` is a known panic-and-leave-the-
+   gate-off site. The gate that matters is not the eligibility one: the n-gram
+   overlap between an injected sentence and the organism's continuation has to
+   stay under a bound measured first, because copying rather than reformulating
+   is the failure this whole item exists to avoid.
+6. **loragrad as immune filter.** The gradient verdict (PASS / WEAKEN / FREEZE /
    SCAR / DARK / SILENCE) applied to an eaten DNA fragment inside the organism,
    between `dnaRead` and the burst; not in the witness. Own repair after the
    measurements above.
-6. **Replacement instead of growth under a full machine.** When the byte budget
+7. **Replacement instead of growth under a full machine.** When the byte budget
    refuses growth for long, an organism yields to a sibling rather than waiting
    forever; needs a channel between organisms that does not exist yet.
-7. **Sound that is not speech** (Oleg, 2026-09-13: "if there is sight there must
-   be hearing"). The speech half is closed below — `senses/ears` is the organ and
-   `senses.sh` runs it. What is still open is everything a transcript throws
-   away: a plain sound-event detector in C ahead of the model, so that a bang, a
-   door, a passing voice becomes one line even when no words are said; and later
-   a model that names sounds rather than words. Today a quiet twelve seconds
-   produces nothing, which is correct for speech and empty for hearing. Also
-   open: the encoder gap, `senses/ears/EARSLOG.md` measures whisper.cpp 3.4-4.3×
-   faster on the same wav and names the reason (its threaded REPACK kernel
-   against a single `nt_qmatmul` per projection), which is a notorch debt below
-   as much as an ears one.
-8. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
+8. **A model that names sounds rather than classifying their shape.** The
+   detector half of this item is closed below: `senses/ears/soundscape` says what
+   kind of sound twelve seconds were, without weights. What it cannot say is what
+   made the sound — "a car passed nearby", "a door closed" — and that needs an
+   AudioSet-vocabulary tagger on notorch. The survey with the measured weight
+   sizes and the ops notorch is missing is `senses/ears/PORT_NOTES_SOUND.md`:
+   YAMNet first (4 126 810 B of TFLite, depthwise conv2d and pooling are what
+   notorch lacks, and the mel bank has to arrive as a binary rather than be
+   generated), PANNs CNN10 second if weights can be found, AST and BEATs not
+   while the eye holds a gigabyte in the same slot. Also still open: the encoder
+   gap, `senses/ears/EARSLOG.md` measures whisper.cpp 3.4-4.3× faster on the same
+   wav and names the reason (its threaded REPACK kernel against a single
+   `nt_qmatmul` per projection), which is a notorch debt below as much as an ears
+   one.
+9. **A voice out.** Senses run both ways, like the VLM: not only circulation in,
    but the mycelium speaking. First step costs nothing — the witness's line
    through Android TTS (`termux-tts-speak`; the package is disabled on phone-1
    and re-enabled with `pm enable com.google.android.tts`); the real step is a
    TTS on notorch, its own port.
-9. **Place — the world that does not depend on you** (Oleg, 2026-09-13). Landed
+10. **Place — the world that does not depend on you** (Oleg, 2026-09-13). Landed
    on `claude/phone1-senses` as the third organ of `senses.sh` rather than a
    `place.sh` of its own: `termux-location` (13 m by network here), open-meteo
    for temperature, humidity, wind, the WMO code as a word and today's sun,
@@ -139,6 +156,48 @@ is long — an organism lives for months of sessions, not for one uptime.
 - `assert T == BlockSize` in the sequence path.
 
 ## Closed
+
+- **The cafeteria, the probe, and the §13 gate** (`claude/phone1-cafeteria`,
+  2026-09-15). Items 4, 5 and 7 of the §18 order in
+  `reports/2026-09-15_new_logic_audit/README.md`. Reading is per organism now:
+  a fragment goes to the element its file name hashes to, plus anybody whose own
+  co-occurrence field says it resonates or that it is news, with both thresholds
+  set to the median of the distribution they cut (sibling DNA 0.965, senses
+  0.620, measured on 133 live fragments × four live corpora). The emitted
+  fragment's padding comes from what this organism just ate, and a sense line it
+  ate is never padded in verbatim; the probe half of that is built, guarded and
+  switched off, because the emission line's `gen/bytes` fell from 0.00285 to
+  0.00238 over 300 s scratch colonies and the gate for that step was that it
+  must not fall. `injectionEligible(fade, mag)`
+  decides §13 eligibility from the voice and prints `eligible=0|1`; the
+  injection itself moved up to *Next*. Numbers in `MOLEQULALOG2.md`.
+
+- **Routing repairs 1, 2, 3 and 6** (`claude/phone1-routing-food`, 2026-09-15). The
+  first four items of the audit of `molequla_new_logic.md`
+  (`reports/2026-09-15_new_logic_audit/README.md` §4) that are routing rather than
+  infrastructure: the witness is told about the senses, the extra sources read
+  under their own per-tick budget, an eaten fragment enters the corpus cut into
+  sentences instead of truncated at 240 bytes, and the organism's voice — the raw
+  transformer magnitude and the overlay fade — rides the heartbeat into `mesh.db`
+  beside `global_step`. Items 4, 5, 7, 8, 9 and 10 of that list stay open; the
+  measurements are in `MOLEQULALOG2.md`.
+
+- **The sensing window, and hearing that is not only speech**
+  (`claude/phone1-sensing-window`, 2026-09-15; molequla_new_logic.md §2, §3 and
+  §18 steps 1-5). An eye pass is a window of `SENSES_EYE_WINDOW` frames taken
+  `SENSES_EYE_SPACING` apart with the cameras cycled from `SENSES_EYE_PATTERN`,
+  and one summary line per window carries its novelty — the share of descriptions
+  that did not repeat an earlier frame, by token overlap. The cadence is not
+  frozen by decree: n ∈ {1, 2, 4} was measured twice each on cores 4-7 (15-18 s,
+  46-49 s, 104-107 s, peak RSS 1020 MB throughout, novelty 1.000 / 1.000 / 0.750)
+  and the default n=4, spacing 30 s comes out of that table. Hearing gained
+  `senses/ears/soundscape`: no weights, `nt_stft`, seven labels from measured
+  features, an `[ears env …]` fragment on every pass whether or not anybody spoke,
+  and the recognizer's own non-speech tags kept instead of stripped. Gates:
+  `phone1/senses_test.sh` 20 cases (red first: 0 pass, 20 fail),
+  `make test-soundscape` 7 fixtures (red twice by moving a threshold). Numbers in
+  `MOLEQULALOG2.md` and `senses/ears/EARSLOG.md`; the tagger port stays open above
+  as item 8.
 
 - **The senses gathered into one folder** (`claude/phone1-senses-tree`,
   2026-09-13). Oleg's decision: the organs live inside molequla, in `senses/`,

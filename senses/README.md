@@ -17,7 +17,8 @@ weights next to four growing organisms on an 8 GB phone.
 | | what it is | build | gate |
 |---|---|---|---|
 | `ocelli/` | the eye — SmolVLM2-500M end to end in C, vision tower, projector and text decoder, with its own notorch vendored | `cd senses/ocelli && make` → `./ocelli`, driven by `./eye <image> [prompt]` | the 14-frame watermark probe in `OCELLILOG.md`: same portraits, same prompt, the count of frames whose `StyleGAN2 (Karras et al.)` mark is read must not fall. Hand-run, not `make test`. |
-| `ears/` | the ear — OpenAI Whisper in C on notorch: ggml `.bin` reader, a log-mel front end written from scratch because notorch has no FFT, encoder, decoder, tokenizer | `cd senses/ears && make` → `./ears <model.bin> <wav>` | `make test` — four gates against whisper.cpp as oracle: mel, encoder, transcript (token for token under pure greedy, 6 rows) and speed. Runs in `EARSLOG.md`. |
+| `ears/` | the ear — OpenAI Whisper in C on notorch: ggml `.bin` reader, a log-mel front end written from scratch because notorch has no FFT, encoder, decoder, tokenizer | `cd senses/ears && make` → `./ears <model.bin> <wav>` | `make test` — five gates: the describer's fixture table, then mel, encoder, transcript (token for token under pure greedy, 6 rows) and speed against whisper.cpp as oracle. Runs in `EARSLOG.md`. |
+| `ears/soundscape` | the same ear's other half — what a transcript throws away. No weights: `nt_stft` over the same wav, level percentiles, band ratios, spectral flatness, peak prominence, onsets, envelope autocorrelation and 2-8 Hz modulation, and one English line naming the kind of sound (`quiet room`, `a single loud transient`, `music is audible`, `speech-like modulation, words unclear`, `repeated mechanical noise`, `steady broadband noise`, or none of those) | `cd senses/ears && make soundscape` → `./soundscape [-v] <wav>` | `make test-soundscape` — seven fixtures synthesised in C, one per label, each of which must produce its own label and therefore none of the others. Red by moving a threshold: `SND_QUIET_DB=-80`, `SND_SPEECH_BAND=1.1`. |
 
 `place` has no folder here. It is thirty lines of `bash` inside
 `../phone1/senses.sh` — `termux-location`, then open-meteo and nominatim over
@@ -27,7 +28,11 @@ to look like the other two.
 ## What drives them
 
 `../phone1/senses.sh` is the only caller: one pass of eye, ears and place, then
-exit. It runs in its own short slots between the colony's windows, writes what it
+exit. The eye's part of a pass is a window of frames rather than one frame —
+`SENSES_EYE_WINDOW` of them, `SENSES_EYE_SPACING` apart, cameras cycled from
+`SENSES_EYE_PATTERN` — and the ears' part runs both binaries over the same wav,
+`ears` for the words and `soundscape` for the sound, which is why a pass can now
+leave two fragments in `sound/` and used to leave none when the room was quiet. It runs in its own short slots between the colony's windows, writes what it
 found into `$MOLEQULA_RUN/dna/output/{world,sound,place}/` as timestamped
 fragments, and the organisms eat those with `--dna-extra-sources
 world,sound,place`. Every engine path and every model path in it is one

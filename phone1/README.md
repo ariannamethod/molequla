@@ -87,9 +87,9 @@ comes back after a reboot.
 
 `bash phone1/senses.sh [eye|ears|place|all]` is the other thing the schedule
 runs, and the reason the phone has organs at all. The colony is down sixteen
-hours a day; the senses are not. One pass takes a frame from each camera, twelve
-seconds from the microphone and one fix of where the phone is, and leaves what
-it found as fragments in `$MOLEQULA_RUN/dna/output/world/`, `sound/` and
+hours a day; the senses are not. One pass takes a short window of camera frames,
+twelve seconds from the microphone and one fix of where the phone is, and leaves
+what it found as fragments in `$MOLEQULA_RUN/dna/output/world/`, `sound/` and
 `place/` — the same `gen_<unix>_<seq>.txt` names the organisms order their
 reading by, each fragment one sentence behind a bracketed header
 (`[eye cam0 2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl…`)
@@ -106,6 +106,24 @@ cloth, named with the nearest word a 500M model has. Nothing is filtered:
 the fragment is what the eye believed, and the organisms eat beliefs. The
 correction, when it comes, comes from the other senses and from time
 (ROADMAP item 10), not from a filter in this script.
+
+A pass of the eye is a window, not a sample: `SENSES_EYE_WINDOW` frames (4) taken
+`SENSES_EYE_SPACING` seconds apart (30), the cameras cycled from
+`SENSES_EYE_PATTERN` (`0 1 0 0` — rear, front, rear, rear), one fragment per
+sentence as before and one summary line per window. That line carries the
+pattern, the spacing, how many descriptions came back, how many of them repeated
+an earlier frame of the same window and the novelty that leaves, the wall time,
+the peak RSS and the battery before and after. A repeat is a token overlap of
+`SENSES_EYE_SAME` (0.8) or more against an earlier frame — lowercased,
+non-alphanumerics as separators, intersection over union of the distinct tokens;
+`senses.sh overlap "<a>" "<b>"` prints the number and the gate drives that same
+code. Measured 2026-09-15 on cores 4-7, two runs each: n=1 15-18 s, n=2 46-49 s,
+n=4 104-107 s, peak RSS 1020 MB whatever n is, novelty 1.000 at n=1 and n=2 and
+0.750 at n=4 both times. n=4 is the default because at n=2 the two frames come
+from different cameras and can only be new; n=4 puts two rear frames a minute
+apart, and in both runs one of them repeated — the window seeing that the scene
+held still. The memory floor is re-read before every frame, so a window stops
+where MemAvailable falls short instead of failing the slot.
 
 The eye is `senses/ocelli/eye`, the pure-C SmolVLM2-500M engine, on the q6_k Yent
 decoder with one global frame (`SMOLVLM_NOSPLIT=1`): 14-16 s and a peak of
@@ -132,10 +150,28 @@ else). Room noise does not become a sentence: `ears` drops a whole window on its
 own no-speech probability and prints nothing, and on top of that bracketed tags
 are stripped — `base` under whisper.cpp once spent 185 s on eight seconds of
 ambience and emitted `[Motor]` (`~/arianna/ears-reference/REFERENCE.md`) — and
-what is left must still be eight characters with a letter in it before a fragment
-is written. A quiet twelve seconds produces nothing. A twelve-second pass that
-does hear something costs about 22 s end to end on cores 4-7 (measured
-2026-09-13: `ears=rc0,22s,speechyes,frags1`).
+what is left must still be eight characters with a letter in it before a `mic`
+fragment is written. A twelve-second pass that does hear something costs about
+22 s end to end on cores 4-7 (measured 2026-09-13:
+`ears=rc0,22s,speechyes,frags1`).
+
+A quiet twelve seconds no longer produces nothing. `senses/ears/soundscape` —
+the same folder, no weights, 0.057 s on a 12 s wav — reads that wav after the
+recognizer and writes one English line about what kind of sound it was as an
+`[ears env …]` fragment, every pass, speech or not: quiet room, a single loud
+transient, music is audible, speech-like modulation words unclear, repeated
+mechanical noise, steady broadband noise, or an unsteady sound without clear
+structure. The recognizer's bracketed tags go into that fragment instead of the
+bin (`[ears env …] Quiet room. The recognizer also marked [BLANK_AUDIO].`).
+`SENSES_SOUNDSCAPE` names the binary and emptying it puts the speech-only pass
+back; every threshold inside it is an `SND_*` environment variable with a
+measured default (`senses/ears/EARSLOG.md`, 2026-09-15). The two fragments are
+separate evidence about the same twelve seconds and are not expected to agree.
+Beside the fragment the pass also writes one fact into `senses/facts.jsonl`,
+`ears microphone soundscape "<line>"`, so the world ledger can tell a room that
+went quiet from a room that was always quiet. The predicate is `soundscape` and
+not `hearing`: what the recording sounded like is a different claim from whether
+anybody spoke in it, and the ledger holds both about one window.
 
 Place is `termux-location` (network first, satellites if that fails), then two
 keyless APIs over `curl` and `jq`: open-meteo for temperature, humidity, wind,
@@ -146,7 +182,9 @@ reverse, zoom 14, with a User-Agent and English names. The last fix is kept in
 
 Every pass appends one line to `$MOLEQULA_RUN/senses/senses.log` with the cores
 it used, MemAvailable before and after, and per organ the exit code, the wall
-time, the fragments written, plus the eye's peak RSS. Frames and wavs are kept
+time, the fragments written, plus the eye's peak RSS and novelty and the
+describer's label; a pass that opened the eye appends a second, `eyewin` line for
+the window itself. Frames and wavs are kept
 under `senses/frames/` and `senses/audio/`, the newest 48 of each; the fragment
 directories keep the newest 64. Nothing is pruned by age — an organism's cursor
 only advances while it runs, and it may have slept through eight hours of
@@ -170,6 +208,21 @@ The other fifteen are the two kinds together: eight drive `next --epoch` and
 empty senses list, and seven drive `schedule.sh in-window`, the predicate that
 keeps the senses out of a colony session — its opening moment, its closing
 moment, and a session long enough to reach past midnight into the next day.
+
+`bash phone1/senses_test.sh` is the gate for the pass itself: 20 cases through
+the real `senses.sh` with the hardware faked and nothing else — an `ssh` that
+copies fixture files where `termux-camera-photo` and `termux-microphone-record`
+would have written them, a scripted `eye`, a scripted recognizer and a scripted
+describer; `ffmpeg` is real, because the frame path runs through it. Ten cases
+are the window: a window of four leaving four fragments, the cameras in the
+pattern's order both at capture and in the headers, a pattern shorter than the
+window cycling, the summary line's size, pattern, repeat count and novelty, and
+the spacing holding a capture back. Five are the overlap metric — identical,
+disjoint, punctuation and case, empty against text, and one noun changed in a
+long sentence, which must stay above the 0.8 that counts as a repeat. Five are
+hearing: silence still leaving an `[ears env …]` fragment, speech leaving both
+`env` and `mic`, a bare `[Motor]` not counting as a transcript, and the tag
+surviving into the environmental line.
 
 `bash phone1/status.sh` prints one screen: per organism the pid and whether it is
 alive, VmRSS and VmHWM in MB, the stage and ingested count from the last

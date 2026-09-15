@@ -1795,6 +1795,890 @@ air's 13, 10 of water's 13 and 4 of fire's 14. And the witness cannot see the se
 
 — Defender (Arianna Method, phone-1)
 
+
+## 2026-09-15 — a ledger of change instead of a stream of state
+
+ROADMAP item 10, and §4–6 and §15–16 of the new-logic brief. The senses have
+been writing prose since 2026-09-13 and the prose is a stream of state: four
+place passes on a still phone leave four fragments that say the same sentence,
+and the two rear-camera frames of 22:18 and 01:00 say it byte for byte. An
+organism eating that learns that the world repeats. What is wanted is the
+other thing — *the phone moved from A to B*, *the sky changed from fog to
+overcast*, *a person entered the frame* — and a change can only be named
+against a memory of what was true before.
+
+**The table.** `world_facts(id, source, subject, predicate, object,
+valid_from, valid_to, recorded_at, provenance)` in the same `mesh.db` the
+organisms and the witness already share, migrated idempotently like the
+`global_step` ALTER (`molequla.go:5629`). `valid_from`/`valid_to` is when a
+fact held in the world; `recorded_at` is when molequla learned it. A
+contradicting observation closes the open row at the new fact's `valid_from`
+and opens a new one; a fact older than the open row is filed as closed history
+and says nothing, because the revision that replaced it stands. Nothing is
+deleted and nothing is overwritten, so the belief a correction corrected is
+still there to be read.
+
+It is `id INTEGER PRIMARY KEY` and not AUTOINCREMENT, and that is not a taste
+decision — the first run of the one-way gate went red on it. AUTOINCREMENT
+keeps its high-water mark in `sqlite_sequence`, which this mesh already has
+because `messages` uses it (`molequla.go:5634`), so the ledger's first insert
+wrote a row of a table an organism owns:
+
+    a pre-existing table changed under the ledger:
+    before  organisms[earth 25578 2 262144 0.1 1.25 1.789437447087e+09 <nil> alive earth 4200]
+    after   organisms[earth …]
+            sqlite_sequence[world_facts 4]
+
+**The writer is not the witness.** It was, for one commit, and the audit that
+landed the same night (`claude/phone1-new-logic-audit`, `9464b81`) is right
+that this is the §11 arrow: the witness opens the mesh `query_only`
+(`witness.go:167`) and that property is the one-way rule, not a habit. So the
+writer is its own process, `molequla --world-ingest [--once]`, run from a
+sibling of the organism directories exactly as the witness is, so
+`../dna/output` and `../senses/facts.jsonl` are the same tree. The witness
+reads `world_facts` on its tick and prints `world <n> facts/<m> open`. It may
+do nothing else with it, and after the writer has been through the same file
+its own connection still refuses every write — that is a gate now, in both
+directions.
+
+**The sidecar.** `phone1/senses.sh` keeps writing its fragments untouched and
+appends one JSON line per observation to `$MOLEQULA_RUN/senses/facts.jsonl`:
+
+    eye    <lens> interpreted_as <the whole answer>
+    ears   microphone hearing speech|silence · microphone interpreted_as <text>
+    place  phone at_place <name> · phone at_position <lat,lon> · sky reported_as <sky>
+
+`interpreted_as` and never `is` — §6. The provenance of an eye fact carries the
+camera, the lens, the frame, the decoder and the projector by file name, the
+prompt, the resize edge, the wall time, the peak RSS and the conditions of the
+pass (cores, colony awake or asleep, MemAvailable). The balcony the eye read as
+a bathroom on the first night is a true record of a reading and a false record
+of a room, and the table now says which of the two it holds. `provider` is new
+in place — which locator answered, network or gps.
+
+jq builds every line, and that is the whole reason jq is in that function. The
+eye's own sentence of 2026-09-14T01:00:28Z is
+
+    A black screen with a small white text that reads "the world is not what it seems".
+
+and a `printf`-built line breaks on it. Replacing the jq call with `printf` in
+`fact_emit` took eight cases of the bash gate down, the first of them printing
+the broken object in full.
+
+**One knob that is a gate, not a shape.** A network fix on this phone reports
+13–14 m of accuracy and wanders a metre or four between passes
+(`senses.log`, `movedno` at 2 m, 1 m, 4 m). `CFG.WorldMoveMeters`, default 50 m
+— the same figure `senses.sh` already compares against `senses/place.last` — is
+what separates a fix that wandered from a phone that moved, and `at_position`
+is the only predicate compared in metres rather than as text. The gate fails
+both ways in test: 22 m under 50 m emits nothing, 22 m under 5 m is a move,
+1112 m is a move under either.
+
+**Red before green.** Every gate was shown failing by breaking the thing it
+names:
+
+| broken on purpose | what went red |
+|---|---|
+| `worldSameObject` always false | `repeat 1 emitted [The phone moved from … to …] — repeated identical state must produce no fragment` |
+| the close skipped | `the old row's valid_to = {Float64:0 Valid:false}, want 260` |
+| `recorded_at` set to `valid_from` | `valid_from=1000 recorded_at=1000, want 1000 and 5000` |
+| the cursor never advanced | `the cursor stopped at 0 of 541 bytes` |
+| the move gate at 0 m | `22 m under a 50 m gate emitted [The phone moved 22 m.]` |
+| the derivation suppressed | `a hand appearing said [scene change], want a scene change and a person entering` |
+| the negation vocabulary emptied | `"…with no people or text visible." matched [people] — a negated word is not a sighting` |
+| `query_only` removed from the witness handle | `the witness handle wrote to organisms after the ingest ran` |
+| `fact_emit` on `printf` instead of jq | 8 bash cases, starting with `not JSON: {"…object":"A black screen … reads "the world is not what it seems".",…}` |
+| `cam_lens 0` returning `camera 0` | `eye: the subject is the lens: got [camera 0], want [rear camera]` |
+
+The cursor gate did not go red the first time it was written: the dedupe behind
+it — an observation identical to the open row writes nothing — covered for a
+cursor that never moved, so the test passed over a broken mechanism. It was
+rewritten around a fixture with two observations of one triple, where
+re-reading the file from the start is visible in the table as one extra history
+row, plus a direct assertion on the offset. Then it went red.
+
+**Counts.** `CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false ./...`
+— 196 pass, 2 skipped, 0 fail, 4.2 s, against 184/2/0 on `origin/main` at
+`5d46fc0`; twelve of the new tests are the ledger's, one extends the witness's.
+One run in the middle of the session reported `FAIL … 3.448s` without a named
+case and five full runs since have been green; the name was not captured, so it
+is recorded here as unexplained rather than attributed. `go vet` clean,
+`gofmt` clean on the new files, `go build -a` 35.7 s. Bash: 37 cases in
+`phone1/senses_facts_test.sh` (new), `phone1/schedule_test.sh` unchanged at 36.
+
+**The live smoke.** `mesh.db` copied out of the live swarm into a scratch
+`HOME`, and `facts.jsonl` built from the fragments the senses actually wrote
+on 2026-09-13/14 — the same sentences, through `senses.sh`'s own `fact_emit`,
+`cam_lens`, `eye_prov` and `ears_prov` with `now_iso` overridden so each fact
+carries its fragment's stamp. 24 facts, one ingest pass, 14 changes, 14
+fragments, on cores 4–7 at 02:17 UTC with 3.3 GB MemAvailable (neighbourhood
+scrubbed here, not in the run):
+
+    [world] The phone is at <neighbourhood>, Be'er-Sheva, Israel. Where it was before that, the ledger does not know.
+    [world] The sky is fog.
+    [world] The rear camera opened on: "A blurry kitchen table shows a green bowl, a spoon, and a plate, …"
+    [world] The front camera opened on: "An empty room has a ceiling fan, a white floor, and a metal frame for a door."
+    [world] The rear camera's scene changed from "A blurry kitchen table …" to "A close-up view shows a keyboard with white keys …"
+    [world] The front camera's scene changed from "An empty room has a ceiling fan …" to "A bathroom with a shower curtain hanging, a person's hand reaching out, …"
+    [world] A person entered the front camera's frame.
+    [world] Speech was heard through the microphone for 12 s.
+    [world] The microphone heard: "And so my fellow Americans ask not what your country can do for you."
+    [world] The rear camera's scene changed from "A close-up view shows a keyboard …" to "A black screen with a small white text that reads "the world is not what it seems"."
+    [world] The front camera's scene changed from "A bathroom with a shower curtain hanging, a person's hand reaching out, …" to "A bathroom with a shower curtain, a light above the shower, and a small trash can."
+    [world] A person left the front camera's frame.
+    [world] The microphone stopped hearing speech: 12 s of room noise instead.
+    [world] The front camera's scene changed from "A bathroom with a shower curtain, …" to "A dark room with a chair, a table, and a blanket, with no people or text visible."
+    [world] 24 facts read, 14 changes emitted
+
+What is not in that list is the point of it. The four place passes produced one
+line, not four: the second, third and fourth say the same neighbourhood, the
+same fog and a coordinate 1–4 m away, and none of that is a change. The two
+rear-camera readings of the black screen are byte-identical and the second
+wrote nothing at all. A second ingest over the same file read 0 facts and left
+the 14 fragments where they were; deleting the cursor and running a third time
+emitted nothing either, because everything in the file already matches an open
+row. The witness then read the table through its own handle and said
+`world 18 facts/9 open` — nine open triples, nine rows closed behind them.
+
+**The first live run found a false positive and it is fixed in the same pass.**
+`sees_person` is lexical, and the eye's phrasing for an empty room is *"A dark
+room with a chair, a table, and a blanket, with no people or text visible."* —
+so the first ingest of the real fragments ended with `A person entered the
+front camera's frame.` `CFG.WorldNegationWords` (`no`, `not`, `without`,
+`none`, `nobody`, `empty`) now cancels a vocabulary word that stands
+immediately after one of them, which took the run from 15 changes to 14 and put
+the exact sentence in the test. It is a lexical rule guarding a lexical rule
+and it will miss negation at any distance; every derived fact says
+`derived: lexical` in its provenance so that a later reading may disagree with
+it, which is the §6 position applied to molequla's own inference rather than
+the eye's.
+
+**Left, named.** The eye and the ears still write one observation per pass, so
+§2's short trajectory is not built. The ingest is called at the end of a senses
+pass and by hand; the scheduler has no slot of its own for it yet. Routing —
+which organism eats which change, §12's cafeteria — is untouched: the change
+fragments land in `dna/output/world/` beside the eye's own, and every organism
+told `--dna-extra-sources world` eats all of them. `facts.jsonl` rotates at
+`SENSES_FACTS_MAX_KB` (4096) and the rotated file is not ingested after the
+move, which is correct only because everything in it is already in the table.
+The live run directory was not touched by any of this: the smoke ran against a
+copy of `mesh.db` under a scratch `HOME`, and the daemon on the phone still
+runs the binary and the conf that predate this branch.
+
+— Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the sensing window, and the half of hearing that is not language
+
+Two changes from `molequla_new_logic.md`, §2 and §3, and steps 1-5 of §18. A
+sensing episode stops being one sample of each organ: the eye takes a short
+measured trajectory, and the microphone's twelve seconds leave something behind
+even when nobody says a word. Both on `claude/phone1-sensing-window`, not pushed.
+
+**The window.** `phone1/senses.sh` grew three variables and a summary line.
+`SENSES_EYE_PATTERN` is the camera order, cycled; `SENSES_EYE_WINDOW` is how many
+frames the pass takes; `SENSES_EYE_SPACING` is the seconds between the starts of
+two consecutive captures, so a slow frame does not push the next one back. The
+memory floor moved inside the loop — the eye holds about a gigabyte per frame and
+the colony can wake between two frames, so `MemAvailable` is re-read before every
+capture and the window stops where it falls short, `skip-mem` in the pass line,
+rather than failing the slot. Each window appends one `eyewin` line beside the
+pass line, e.g.
+
+    2026-09-15T02:01:04Z eyewin pattern=0,1,0,0 n=4 spacing=30s frames=4 said=4
+    repeat=1 novel=0.750 wall=107s rss=1020mb batt=96%->96%,1395->1009mA cpu=4-7
+
+**The cadence was measured, not decided.** Six windows on cores 4-7, a scratch
+`MOLEQULA_RUN` so the live field was untouched, pattern `0 1 0 0`, spacing 30 s,
+each configuration twice, 14 frames in total:
+
+| n | wall, run 1 | wall, run 2 | peak RSS | descriptions | repeats | novelty |
+|---|---|---|---|---|---|---|
+| 1 | 18 s | 15 s | 1020 MB | 1 | 0 | 1.000 |
+| 2 | 46 s | 49 s | 1020 MB | 2 | 0 | 1.000 |
+| 4 | 107 s | 104 s | 1020 MB | 4 | 1 | 0.750 |
+
+Peak RSS is the eye process's own `VmHWM` through `/usr/bin/time -v` and it does
+not move with n: the window is one process per frame and nothing accumulates
+across them. Novelty is the share of descriptions that did not repeat an earlier
+frame of the same window, where a repeat is a token overlap ≥ 0.8 — lowercased,
+non-alphanumerics as separators, intersection over union of the distinct tokens.
+Measured overlaps from those same windows: a rear frame repeating an earlier rear
+frame 1.000 (the eye returns the sentence word for word), two different scenes
+from one camera 0.350 and 0.368, the two cameras of one window 0.154. Nothing
+lands between 0.4 and 1.0, so the threshold sits in the middle of empty space.
+
+**The default is n=4 at 30 s, and the reason is in the table.** Not because n=4
+scored highest — it scored lowest. At n=2 the two frames come from different
+cameras and cannot help being new, so 1.000 there is arithmetic rather than a
+discovery; n=4 puts two rear frames a minute apart, and in both runs one of them
+repeated, which is the window noticing that the scene held still. That is the
+observation §5 wants and a single frame cannot produce. It costs 104-107 s, 18 %
+of the 600 s senses slot cap, and a full pass with it measures about 200 s worst
+case. Spacing comes out of the eye's own period: a frame occupies 15-18 s
+(14 s engine, 3-4 s capture and scale), so below ~20 s there is no spacing at
+all; 30 s leaves 12-15 s of world between frames and spreads n=4 over 90 s.
+
+**Battery, honestly.** The window line records `capacity` and `current_now` from
+`/sys/class/power_supply/battery` before and after, but the phone was on the
+charger for all six windows — capacity went 95 % → 97 % while the charge current
+fell from 1605 mA to 979 mA as the battery filled. No discharge cost can be read
+off these runs. The measurement is recorded per window from now on, so the first
+unplugged pass will have it.
+
+**Hearing.** A quiet twelve seconds used to produce nothing, and the recognizer's
+own `[Motor]`, `(wind)`, `[BLANK_AUDIO]` were stripped before the fragment was
+written — correct for speech, empty for hearing. `senses/ears/soundscape` is the
+other question, asked without a model: 512-point frames through notorch's
+`nt_stft`, level percentiles, the 300-3400 Hz band share, spectral flatness, peak
+prominence over its own neighbourhood, onset count, envelope autocorrelation and
+the 2-8 Hz modulation share, and one English line naming the kind of sound —
+quiet room, a single loud transient, music is audible, speech-like modulation
+words unclear, repeated mechanical noise, steady broadband noise, or an unsteady
+sound without clear structure. 0.057 s on a 12 s wav against the 22 s the
+recognizer takes on the same file. It runs on every pass and writes an
+`[ears env …]` fragment beside the `[ears mic …]` transcript, whether or not
+anybody spoke, with the recognizer's tags appended to it instead of dropped —
+two separate pieces of evidence about the same twelve seconds, which §15 says do
+not have to agree. Live, on a scratch field, 2026-09-15T02:13:18Z:
+
+    ears=rc0,22s,speechno,frags1,env:quiet-room
+    [ears env 2026-09-15T02:13:18Z] Quiet room. The recognizer also marked [BLANK_AUDIO].
+
+The environmental line also leaves a fact, `ears microphone soundscape "<line>"`,
+in `senses/facts.jsonl` beside the fragment — the sidecar the world ledger reads
+(`world_ledger.go`), which landed in `main` while this branch was open and which
+every other organ already wrote to. Without it the ledger could see that speech
+stopped and not that the room itself changed. `soundscape` and not `hearing`
+deliberately: the two predicates make different claims about one window and
+neither corrects the other.
+
+**Two artefacts the fixtures could not have shown**, both found by running the
+describer over the six real recordings the live field left in
+`molequla-run/senses/audio/` on 2026-09-13/14. The recorder hands over a third of
+a second of digital silence at the start of every wav; frames of literal nothing
+sit at -120 dB and put the envelope's standard deviation at 13.3-13.5 dB in all
+six files while their 10th-to-90th percentile span was under 6 dB. And with the
+spectrum as it arrives, every recording is "tonal" — a phone on a table has more
+power under 100 Hz than in the room above it, so six of six night recordings came
+out as music. Leading and trailing zeros are now cut before anything is measured,
+a one-pole high pass at 100 Hz sits in front of everything, and tonality is
+prominence over the median of the 48 bins around the peak rather than over the
+whole spectrum. Tonal frame share on those recordings fell from 0.44-0.94 to
+0.06-0.13 while the tone fixtures stayed at 1.000, and the six files then read
+five `quiet room` — one of them with a single click, `a single loud transient`,
+`db_max` -21.2 against a median of -45.6 — and, for the one with `jfk.wav` played
+into the room from the phone's own speaker, `speech-like modulation, words
+unclear`. Room tone on this microphone measures `db_p90` -47.6 .. -41.5, which is
+where the -40 dB quiet threshold comes from. Every threshold is an `SND_*`
+environment variable with the measurement written beside its default in
+`soundscape.c`.
+
+**Gates, each shown red first.** `phone1/senses_test.sh`, 20 cases through the
+real `senses.sh` with the camera, the microphone and the three engines stubbed
+and `ffmpeg` real: red on the unchanged script, **0 pass, 20 fail**, green after,
+**20 pass, 0 fail**. Ten are the window (four fragments from a four-frame window,
+the cameras in the pattern's order at capture and in the headers, a short pattern
+cycling, the summary line's n / pattern / repeat=1 / novel=0.750, spacing holding
+a capture back), five the overlap metric, five hearing (silence still leaving an
+`env` fragment, speech leaving both, a bare `[Motor]` not counting as a
+transcript, the tag surviving). `make test-soundscape`, seven fixtures
+synthesised in C — there is no sox on this phone and no wav in the repository —
+**7 pass, 0 fail**, red twice by moving a threshold rather than patching the
+organ: `SND_QUIET_DB=-80` takes the quiet row down, `SND_SPEECH_BAND=1.1` the
+speech row. `bash phone1/schedule_test.sh`: 36 pass, 0 fail, unchanged.
+
+**Left, named.** The four whisper parity gates were not re-run: this branch adds
+a binary beside the recognizer and changes none of its sources. No Go file and no
+Go test changed either. The eye's own 14-frame watermark probe was not re-run —
+nothing in the engine changed, only how often it is called. The live scheduler
+still runs the pre-merge `senses.sh`, so nothing measured here has reached the
+real field; the `dna/output/` used throughout was a scratch directory. And the
+tagger that would name a sound rather than classify its shape is a survey, not a
+port: `senses/ears/PORT_NOTES_SOUND.md`.
+
+— Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — routing: the witness is told about the senses, the senses get their own queue, and a fragment reaches the field whole
+
+Four of the ten items the audit of `molequla_new_logic.md` proposed for §18
+(`reports/2026-09-15_new_logic_audit/README.md` §4, branch
+`claude/phone1-new-logic-audit` at `9464b81`): its 1, 2, 3 and 6. All four are
+routing over paths that already run, and each one landed behind a gate that was
+watched going red on the code it repairs before it was made green.
+
+**1. The witness was never told the senses exist.** `phone1/launch.sh` handed
+`--dna-extra-sources world,sound,place` to each of the four organisms and
+nothing to the witness, so `dnaSources("")` in the witness process
+(`witness.go:458`) was built from an empty `CFG.DNAExtraSources` and
+`witnessScanDNA` counted four element directories and never looked into
+`dna/output/{world,sound,place}`. The list is now one variable, `SENSES_ARG`,
+declared once beside `SENSES_SOURCES` and passed to both readers, so the witness
+counts exactly what the organisms eat.
+
+The gate is `phone1/launch_test.sh`, in the shape of `phone1/schedule_test.sh`:
+it drives the real `launch.sh` against a stub binary that records its own argv,
+asserts that the recorded witness argv carries the same list as the recorded
+earth argv, then takes that recorded argv — not a copy of it — and runs the real
+`molequla_cgo` with it over a scratch tree holding one `world` fragment, with a
+mesh written by two seconds of a real organism rather than by a fixture. A third
+stage builds a copy of `launch.sh` with the argument removed and requires the
+first stage to fail on it, so the check is known to fail on the thing it exists
+for. On `origin/main`'s `launch.sh` the gate reads 1 passed, 4 failed, the
+witness argv being `--witness --witness-interval 5` and its snapshot carrying no
+`dna` key at all; on the repaired script, 5 passed, 0 failed
+(`MOLEQULA_BIN=$PWD/molequla_cgo bash phone1/launch_test.sh`, cores 4-7).
+
+**2. The senses stood last in a queue the siblings kept full.** `dnaRead` walked
+`dnaSources(element)` — three siblings, then the extra sources — under one bound
+of `CFG.DNAMaxReadsPerTick = 8` and broke out of both loops when it was spent.
+Each sibling emits one fragment per tick and a tick is 0.25 s, so a sibling
+backlog is the normal state of the field: in the 2026-09-13T20:26Z session the
+shared cap was spent before the source list ran out on 12 of earth's 15 reads, 9
+of air's 13, 10 of water's 13 and 4 of fire's 14 (audit §3). The extra sources
+now read under `CFG.DNAExtraReadsPerTick`, a second counter, and a spent half
+skips to the next source instead of ending the walk. Which counter a read is
+charged to is decided by membership in `CFG.DNAExtraSources`, not by position,
+so the order `dnaSources` returns stays an order of service and stops being an
+order of entitlement — and the cafeteria can reorder that list without touching
+the budget.
+
+The default is 4, and the number comes from the live field rather than from
+taste. One senses pass leaves at most four fragments — eye cam0, eye cam1, ears,
+place — and the largest bundle actually on disk is exactly that, `gen_..._4`
+through `gen_..._7` between 2026-09-13T22:18:27Z and 22:21:08Z; the two
+scheduled passes in `molequla-run/schedule.log` recorded `frags=3` and `frags=2`.
+Arrival is nowhere near the bound: the thirteen fragments standing in
+`dna/output/{world,sound,place}` span 2026-09-13T22:10:52Z to
+2026-09-14T01:00:48Z, 10195 s, which is 4.59 fragments an hour, or 3.2e-4 per
+tick. So 4 never binds on live arrival — it binds on the backlog a sixteen-hour
+sleep leaves, and it is one sensing episode, so an episode enters whole in one
+tick instead of arriving in pieces over four.
+
+Two gates in `dna_extra_sources_test.go`, one per direction. Sixty-four sibling
+fragments standing in front of one `world` fragment, one `dnaRead`: the world
+fragment must be in the corpus, and air must have been read exactly
+`DNAMaxReadsPerTick` times. Sixty-four `world` fragments in front of one sibling
+fragment: the sibling must be in the corpus, and world must have been read
+exactly `DNAExtraReadsPerTick` times. Reverted to the single shared counter both
+go red, and they name the mechanism as they fall — `corpus holds 9 lines, cursor:
+map[air:gen_1789337000_7.txt]`, the whole budget spent inside air, and in the
+mirror `world was read 7 times, want 4`.
+
+**3. The 240-character ceiling, measured before it was touched.** Every source
+was measured on copies of the live run taken 2026-09-15, counting for each line
+how many of its bytes survive `loadCorpusLines`, which truncates at
+`CFG.MaxLineChars = 240` on every read. First the four corpora as the trainer
+sees them:
+
+| corpus | lines | over 240 B | bytes | reach `docs` | share | longest line |
+|---|---|---|---|---|---|---|
+| earth | 1101 | 592 | 687953 | 158793 | 23.1 % | 5406 |
+| air | 1083 | 156 | 540830 | 138428 | 25.6 % | 5221 |
+| water | 1672 | 90 | 579634 | 144924 | 25.0 % | 5223 |
+| fire | 1590 | 60 | 425086 | 134006 | 31.5 % | 5233 |
+
+Then the fragments standing in the DNA field, each counted the way `dnaRead`
+appended it, as one line:
+
+| source | fragments | over 240 B | bytes | reach `docs` | share | longest |
+|---|---|---|---|---|---|---|
+| earth | 20 | 20 | 102697 | 4800 | 4.7 % | 5233 |
+| air | 20 | 20 | 101916 | 4800 | 4.7 % | 5223 |
+| water | 20 | 20 | 100867 | 4800 | 4.8 % | 5108 |
+| fire | 70 | 70 | 353255 | 16800 | 4.8 % | 5126 |
+| world | 8 | 0 | 977 | 977 | 100 % | 156 |
+| sound | 1 | 0 | 100 | 100 | 100 % | 100 |
+| place | 4 | 4 | 1251 | 960 | 76.7 % | 317 |
+
+The eye and the ears write inside the ceiling and lose nothing. Place does not,
+and what it loses is not its last quarter in general but the same clause every
+time: the cut lands mid-timestamp in `, sunset 2026-09-14T` and drops
+`18:48. And it has not moved more than 50 m since the last pass (2 m from it).`
+That sentence is the only part of a place fragment that reports a change rather
+than a state, which is the thing ROADMAP item 10 exists for, and it was the part
+being discarded.
+
+Then the cost, since the 30-tick rebuild throttle is there to contain it.
+`BuildFromCorpus` over the earth corpus on cores 4-7, two builds per shape:
+
+| shape of `docs` | lines | bytes | build 1 | build 2 |
+|---|---|---|---|---|
+| truncated at 240 (today) | 1101 | 158793 | 239.9 ms | 246.0 ms |
+| split into sentences | 13813 | 675007 | 1076.6 ms | 1100.7 ms |
+| whole lines, no ceiling | 1101 | 687953 | 1088.3 ms | 1283.8 ms |
+| split, at the 8000-line cap | 8000 | 410290 | 604.0 ms | 649.1 ms |
+
+The cost is in bytes, not in lines: splitting and raising the ceiling cost the
+same 1.08 s at the same 680 KB. So the rebuild clock does not choose between the
+two fixes — the byte bound does. `updateReservoirCorpus` holds the corpus file
+under `MaxCorpusLines × MaxLineChars` = 8000 × 240 = 1.92 MB. Raising
+`MaxLineChars` to the fragment size would raise that bound to 40 MB, and at the
+measured 1.58 µs/byte that is about 63 s per rebuild against a rebuild interval
+of 30 ticks ≈ 7.5 s — the throttle would stop being a throttle. Splitting leaves
+`MaxLineChars` where it is and lets the line count become the binding cap
+instead: at 8000 sentences the reservoir is 410 KB and rebuilds in 604-649 ms,
+against 159 KB and 240-246 ms today. That is 2.5× the rebuild for 2.6× the
+field, 8 % of wall instead of 3 %, and it is the change that was made —
+`splitCorpusLine` in `molequla.go`, called from `dnaRead` on append, cutting at
+`.`, `!` or `?` followed by a space so that `22.5 °C` and `2026-09-14T18:48`
+survive, and falling back to a cut at the last space before the bound for a run
+with no sentence end in it.
+
+`corpusIngestedTotal`, the monotonic growth clock the ontogenesis gate reads,
+now counts the bytes actually written as corpus lines instead of the length of
+the offered fragment. Before this repair those two numbers differed by about
+20×: the clock was reading 5 KB of growth for 240 bytes of field. After it they
+differ only by the whitespace the cuts fall on, so the clock is measuring the
+thing it is named after, and the ontogenesis thresholds keep the meaning they
+were tuned with rather than gaining one.
+
+Gates in `corpus_line_split_test.go`: the unit cases on `splitCorpusLine` (a
+decimal and a timestamp are not sentence ends, a 3600 B run with no sentence end
+is cut under the bound without losing content, a multi-byte run is never cut
+inside a rune), and the one the audit asked for — a 5073 B fragment eaten
+through `dnaRead`, then `loadCorpusLines` → `NewEvolvingTokenizer` →
+`BuildFromCorpus`, with every bigram of the fragment's last sentence required to
+be in `cf.BigramByFirst`. Appending the fragment whole again, it goes red at the
+first step of that sentence with `docs hold 2 lines, 261 bytes, the fragment was
+5073 B`.
+
+**6. Fade and magnitude ride the heartbeat.** `model.lastGenMag`, the mean
+absolute raw logit at the first step of the last generation, and
+`model.lastOverlayWeight`, the overlay weight that magnitude bought, existed
+only in process memory and in the `mag=` and `fade=` of the organism's own
+`[dna]` line. §13 of the brief wants eligibility for sentence-boundary injection
+read from the voice rather than from the stage label, and nothing outside the
+organism could read the voice. `Heartbeat` now takes them as two more arguments
+and writes two more columns, `gen_mag` and `overlay_fade`, added the way repair
+7 added `global_step` — in the `CREATE TABLE` for a fresh mesh and by an
+idempotent `ALTER TABLE ... ADD COLUMN` for one that already exists. The keeper
+carries them between tick reports like the rest of the state, the witness reads
+them with `COALESCE(...,0)` so an organism that has never generated reads as
+zero rather than as a schema error, and the per-organism part of the witness
+line gained a field: `earth:s4/4100k/0.90/12000/f1.00`.
+
+Gates in `witness_test.go`. A fresh mesh must carry all three columns, the
+values must survive the round trip, and the line must contain the fade; a
+pre-repair-7 fixture — `organisms` with `element` and without `global_step`,
+`gen_mag` or `overlay_fade`, holding one row — must gain all three, keep its row,
+read back as `0` for a voice never reported, and take a later heartbeat
+correctly. Removing the two `ALTER`s: `migration did not add "gen_mag"` with the
+column list printed. Removing the columns from the `CREATE TABLE` as well: `a
+fresh mesh has no "gen_mag" column`.
+
+Live on the phone, one organism and the witness over a scratch tree with a
+scratch `HOME`, cores 4-7: the organism printed `[dna] earth wrote 5003 bytes to
+ecology | gen=67 mag=5.69 fade=1.00`, and the witness snapshot read `"gen_mag":
+5.7641914466417274`, `"overlay_fade": 1`, `"global_step": 432` and
+`"world": {"files": 1, "bytes": 130}` in the same pass — the whole chain of
+repairs 1, 2, 3 and 6 in one run. The `[dna] earth consumed 127 bytes from 1
+files: [world/gen_1789337521_2.txt]` line is repair 3 counting: a 130 B fragment
+minus its newline is 129, and 127 is what reached the corpus as three sentences,
+the two bytes being the spaces the cuts fell on.
+
+**Two things found and not fixed.** `dnaRead` appends with `O_APPEND` and does
+not check whether the corpus file ends in a newline, so the first sentence of a
+fragment is glued to the last line of a corpus that does not — visible in the
+probe above as `...microorganism[eye cam0 2026-09-13T22:12:01Z] A blurry...`.
+That is older than these repairs and unchanged by them, one malformed line per
+fragment either way. And `Heartbeat` discards the error from its `Exec`, so a
+mesh whose schema is narrower than the write stops beating silently; that is how
+`TestBeatKeeperRefreshesMeshWithoutTicks` went red here, 12 runs out of 12, on a
+fixture that was a hand copy of the schema — the same way it went red when
+repair 7 added `global_step`, as the comment in `meshForKeeperTest` records. The
+fixture was widened, which is the repair-7 answer, and the deeper one — a
+fixture that cannot drift, or a heartbeat that says when it failed — is left
+named rather than done.
+
+**Tests.** Before: 184 pass, 2 skip, 0 fail. After: 191 pass, 2 skip. Twenty runs
+of `CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false ./...` on cores
+4-7, 3.6-3.9 s each: 17 clean, 3 red, and every red one is
+`TestBeatKeeperRefreshesMeshWithoutTicks` failing with `SQL logic error: no such
+table: organisms` at `governor_phone_test.go:117` or `:127`. That is the known
+flake of this tree, and its mechanism is now named rather than assumed:
+`meshForKeeperTest` opens `sqlite` with the DSN `:memory:` through `database/sql`,
+whose pool is free to open a second connection, and a second connection to
+`:memory:` is a second, empty database. It is a different failure from the
+deterministic one above, which said `heartbeat is 600.2 s old after the keeper
+ran` and is gone. `phone1/launch_test.sh`: 5 pass, 0 fail. The two skips are
+`TestCheckpointMemoryProfile` and `TestStage4SavePeak`, which want
+`MOLEQULA_CKPT_MEASURE` and `MOLEQULA_HEAVY=1`.
+
+Items 4, 5, 7, 8, 9 and 10 of the audit's order are untouched: the cafeteria, the
+probe drawn from what was eaten, the §13 gate itself, `world_facts`, the change
+emitter and the last infrastructure block. Nothing here decides who receives
+what — it only makes sure that what is sent arrives, whole, and that the signals
+the allocator will need are visible from outside the organism.
+
+**The two things named above, repaired.** Both sit on the path these repairs
+already changed, and both were gated before they were fixed.
+
+`dnaRead` opens the corpus `O_APPEND` and never asked whether the file ended in
+a newline, so a corpus whose last line has none took the next fragment's first
+sentence onto the end of it — and with repair 3 that sentence is the one
+carrying the organ's header. It now reads the last byte (`O_RDWR`, because an
+`O_APPEND` handle cannot read) and closes the open line first. `saveCorpusLines`
+always terminates its lines, so this is the hand-edited or truncated file rather
+than the ordinary one, which is why it survived this long. The gate feeds a
+corpus with no trailing newline one fragment and requires the fragment's first
+sentence to be a line of its own; before the fix it names the glue it found:
+`"A handful of healthy soil contains more microorganisms[eye cam0
+2026-09-13T22:12:01Z] A blurry kitchen table shows a green bowl."`
+
+`Heartbeat` discarded the error from its `Exec`. That write is the organism's
+only statement that it is alive, so when a column is added to the write and not
+to the schema in front of it, every beat becomes a no-op and the colony's own
+governor and the witness both stop seeing an organism that is running perfectly
+well — a failure whose only symptom is silence. It happened when repair 7 added
+`global_step` and again here. `sayMeshError` now prints one line per distinct
+error, `[ecology] mesh refused the heartbeat of earth: SQL logic error: no such
+column: global_step (1) — this organism is alive and invisible to the colony`,
+and not once per beat: the tick loop beats every ten ticks for the life of the
+run and a line repeated that often is a line nobody reads. The gate drives the
+unwidened pre-repair-7 fixture, requires the line, requires ten further beats of
+the same failure to add nothing, then adds the missing columns one at a time and
+requires each newly uncovered one — `gen_mag`, then `overlay_fade` — to be said
+in turn, and the beat to fall silent once the schema is whole. sqlite reports
+the first column it cannot find, not the one most recently added, which is why
+the first line names `global_step` and not `gen_mag`.
+
+**The keeper fixture's `:memory:` database.** `meshForKeeperTest` opened
+`sqlite` with the bare DSN `:memory:`. `database/sql` hands out a connection
+pool, and every connection to `:memory:` is a separate, empty database, so the
+keeper goroutine and the test's own queries could land on different ones —
+`SQL logic error: no such table: organisms`, intermittently, for as long as this
+test has existed. The DSN is now `file:keeper_<pid>_<nanos>?mode=memory&cache=shared`:
+one in-memory database that the whole pool attaches to, with a name unique per
+test so two of them never share it. `SetMaxOpenConns(1)` would also hide the
+symptom, and is the wrong fix here, because it gives the fixture a pool shape
+`initMeshDB` does not have — `initMeshDB` opens a real file and leaves the pool
+alone, so in the colony the tick loop and the keeper really do write through
+different connections to one database, which is the thing this test exists to
+exercise. `cache=shared` is that arrangement, in memory.
+
+Isolated, `CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false -run
+TestBeatKeeperRefreshesMeshWithoutTicks .` is 20 green out of 20 with the fix and
+5 red out of 20 with the DSN reverted, failing at `governor_phone_test.go:141`
+with `no such table: organisms` — so the gate is real and the fix is what makes
+it pass. Over the whole suite the rate fell from 3 red in 20 runs to 1 in 53;
+that one red's message was not captured, so the honest statement is that the
+diagnosed mechanism is closed and the test is not yet proven deterministic.
+
+**Tests, final.** 193 pass, 2 skip. `phone1/launch_test.sh`: 5 pass, 0 fail.
+
+— Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the cafeteria: reading becomes per organism, the probe comes from the meal, and eligibility is read from the voice
+
+Three routing repairs from the §18 order in `reports/2026-09-15_new_logic_audit/README.md`
+(`9464b81`), items 4, 5 and 7: the cafeteria of the brief's §12, the probe of §14, and the
+§13 gate keyed on demonstrated coherence rather than on the stage label. Everything below
+is on `claude/phone1-cafeteria`, rebased onto `claude/phone1-routing-food` at `48d9581` so
+that the two branches' changes to the same `dnaRead` loop hold together. New file
+`experience_routing.go` and its test; the rest is a `CFG` block, three calls inside
+`dnaWrite`, two inside `dnaRead`, and this entry.
+
+### What the cafeteria decides, and on what
+
+`dnaSources(element)` still returns the same list of directories to all four organisms, and
+that is deliberate: routing by directory name would be the `flowers -> Earth` rule §12
+forbids, and `cross_graze.go:60` reads the same list for the logit path, which is not part
+of this allocation. The decision is per fragment instead, taken inside `dnaRead` after the
+bytes are read and before they are appended:
+
+- **owner** — `fnv64a(src + "/" + name) mod` the elements allowed to read that source picks
+  exactly one guaranteed eater. Content-blind: a lottery over file names. It is what makes
+  "every fragment reaches at least one organism" true without any process asking another.
+  A mitosis child carries its parent's `--element` (`molequla.go:5985-5988`), so both eat
+  what the slot owns.
+- **resonance** — the share of the fragment's adjacent token pairs that this organism's own
+  `CooccurField` has already seen is at or above `experience_resonance_high`.
+- **novelty** — that same share is at or below `experience_novelty_low`.
+- the band between is declined; the cursor steps past it and the fragment is not revisited.
+
+Coverage is state: it moves as the organism eats, so the same file routes differently later
+in a life than earlier. Nothing is shared between the processes but the file name and the
+bytes.
+
+### The coverage distribution the defaults come from
+
+Measured on the live run: the four corpora of `molequla-run/{earth,air,water,fire}/` and all
+133 fragments then sitting in `molequla-run/dna/output/` (8 `world`, 4 `place`, 1 `sound`,
+20 each for earth, air and water, 70 for fire of which the first 20 were taken), copied to
+scratch. Each organism was rebuilt the way boot rebuilds it — `loadCorpusLines`,
+`NewEvolvingTokenizer`, `MaybeEnableBPE`, `BuildFromCorpus` — giving vocab 643 with BPE on
+in all four, and 439-456 distinct bigram first-tokens. Whole-fragment token-bigram coverage,
+each fragment against each organism that is allowed to read it:
+
+| fragment source | earth | air | water | fire |
+|---|---|---|---|---|
+| world (8) | .675 - .739 | .578 - .643 | .610 - .663 | .598 - .652 |
+| place (4) | .589 - .607 | .433 - .440 | .450 - .456 | .427 - .434 |
+| sound (1) | .676 | .595 | .630 | .611 |
+| earth DNA (20) | — | .890 - .935 | .899 - .944 | .903 - .937 |
+| air DNA (20) | .964 - .979 | — | .957 - .973 | .955 - .977 |
+| water DNA (20) | .975 - .985 | .966 - .979 | — | .967 - .978 |
+| fire DNA (20) | .966 - .978 | .959 - .980 | .960 - .975 | — |
+
+Two populations that do not overlap. Pooled, at the sample size the code actually uses:
+sibling DNA read by a foreign organism, n=120 — min 0.909, p25 0.952, **med 0.965**, p75
+0.975, max 0.996. Senses read by anybody, n=52 — min 0.427, p25 0.578, **med 0.620**, p75
+0.651, max 0.736.
+
+`experience_resonance_high = 0.965` and `experience_novelty_low = 0.620` are those two
+medians. Each threshold splits its own population in half, which is the most a threshold can
+say and the least a threshold can be taste; both are `CFG` fields and both are gated.
+
+**Why novelty admits at all.** With a resonance branch only, the senses — coverage 0.427 to
+0.736 against a bar of 0.965 — would be eaten by nobody but their hash owner, and the only
+food that is new by construction would reach one organism in four. An organism would be
+sealed inside what it already knows. The measurement is what settles it: the two populations
+are disjoint, so the two branches do not compete, and today the resonance branch admits only
+sibling speech while the novelty branch admits only the world.
+
+**Sibling DNA is routed too, not left as broadcast.** Its distribution has real spread
+(0.909 to 0.996) and the four organisms disagree about the same fragment — `air/gen_…_1.txt`
+scores .973 under earth, .968 under fire, .964 under water, which the 0.965 bar splits. The
+cost is named: each organism now owns about a third of each foreign source and admits about
+half the rest, so sibling intake falls to roughly two thirds of the broadcast, and
+`corpusIngestedTotal`, the growth clock, slows in proportion. `experience_resonance_high` is
+the knob that buys it back.
+
+**Sampling.** `tok.Encode` is O(bytes × merges) and a whole 5 KB fragment cost 143.5 ms on
+cores 4-7 — more than half a tick, eight times per tick at the read cap. Coverage is
+therefore taken over `experience_coverage_sample_bytes = 480`, four 120-byte windows spread
+across the fragment: 21.7 ms, with the sibling quartiles preserved to within 0.006 (p25
+0.952 against 0.956, med 0.965 against 0.968, p75 0.975 against 0.974). The windows are
+strided and not a head on purpose — a head of 240 bytes is the writer's own generated answer,
+whose bigrams everyone has, and it drove sibling coverage to 1.000 for 15 of 20 fragments
+and destroyed the signal. A strided 240 was also too short (sibling median 0.978).
+
+### The probe comes from what was eaten
+
+`dnaWrite` picked `probes[step%6]` from six fixed questions and padded the fragment with
+random `docs` lines. Both are now fed by a bounded ring of what this organism has just
+accepted (`experience_meal_memory = 16`, two ticks of the read cap, each line cut to
+`MaxLineChars` because that is all `loadCorpusLines` will hand back anyway):
+
+- the probe is the first sentence of the most recent meal, sense food before sibling food
+  because sense food is the only food nobody has metabolized yet (§14). The six questions
+  remain the fallback for an organism that has eaten nothing. This half ships switched off
+  — see the emission gate below.
+- a degenerate fragment must not yield a degenerate probe — the risk the §18 order names
+  against this step. An embryo's fragment opens with two or three bytes of its own speech
+  and a full stop, so its leading sentence can be `A.`; the ring is walked back until a
+  probe of at least `experience_probe_min_chars = 12` and
+  `experience_probe_min_words = 3` appears, and the round robin answers if none does.
+- the padding leads with `experience_recent_pad_lines = 4` recently eaten **sibling** lines,
+  and any random `docs` draw that is a sense line this organism ate is skipped. That is §14
+  as a rule the code can enforce: a padded line is a byte copy, not a passage through an
+  organism. The world reaches collective DNA through the generated answer, which was
+  produced from it.
+
+`experience_probe_max_chars = 120` is one sentence, against 6-24 characters for the fixed
+probes and 118 for the first sentence of a place fragment. A paired sweep of the bound (12,
+20, 30, 40, 60, 120 characters; 75 prompts each, 4 rounds, one organism, same weights) put
+every setting within ±4 % of the fixed round robin with no ordering, so the bound is set by
+what a sentence is and not by the number.
+
+### The §13 gate, and why it cannot read the stage
+
+`injectionEligible(fade, mag float64) (bool, string)` — `fade = 1 - lastOverlayWeight` must
+reach `injection_fade_min = 1.0`, and `lastGenMag`, the mean |logit| of the raw output at the
+first generated step, must reach `injection_mag_min = 6.0`. Nothing else; the stage is not
+read. The decision is printed on the emission line as `eligible=0|1`; the injection itself is
+not implemented, so the next session can read the gate's behaviour out of the logs before
+anything is built on it.
+
+The defaults come from the 130 `[dna] wrote` lines under `molequla-run/*/*.stdout`, session
+ending `2026-09-13T20:29:30Z`. `fade` is 1.00 on all 130 — the overlay is gone everywhere in
+this colony, so fade is a necessary condition that refuses nobody today and binds only while
+the overlay is running below its fade width. `mag` runs 2.82 to 16.35, median 8.66, and it is
+what separates:
+
+| mean \|logit\| | emissions | of them gen=0 | mean gen |
+|---|---|---|---|
+| < 6.00 | 10 | 10 | 0.0 |
+| 6.00 - 8.00 | 23 | 7 | 31.1 |
+| 8.00 - 10.00 | 50 | 16 | 23.0 |
+| ≥ 10.00 | 47 | 5 | 36.7 |
+
+Below 6.00 every observed generation emitted nothing at all. That is the floor, and it is a
+knob.
+
+All four organisms sat at `stage=3` across that whole range. A gate on the label returns one
+answer for organisms that spoke 197 bytes and for organisms that spoke none, and it refuses a
+mitosis child that loaded its parent's checkpoint and woke with a mature voice at a stage that
+says nothing about it. That is the red in `TestStageGateGoesRedWhereTheVoiceGateDoesNot`.
+
+### Gates
+
+Nine new tests, and each was watched failing on the behaviour it replaces before it was
+believed. With `experience_routing` off, `experience_probe_from_meals` off,
+`experience_recent_pad_lines` 0 and `isRawExperience` neutered — the pre-cafeteria code —
+`TestCafeteriaPlatesDifferPairwise`, `TestCafeteriaAllocationFollowsState`,
+`TestProbeComesFromWhatWasEaten` and `TestSenseFragmentIsNotEmittedVerbatim` all fail.
+`TestCafeteriaEveryFragmentIsEaten` passes there, and must: a broadcast starves nobody. Its
+red is the opposite failure — with `experienceOwner` returning nothing and both thresholds
+pushed outside their range it reports `earth/gen_1789330000_0.txt reached nobody`.
+
+Suite: `claude/phone1-routing-food` at `48d9581` gives 193 pass, 2 skip, 0 fail; this branch
+on top of it gives 202 pass, 2 skip, 0 fail (`CGO_ENABLED=1 taskset -c 4-7 go test -count=1
+./...`, 3.9 s). The two skips are the same two as always, `TestCheckpointMemoryProfile` and
+`TestStage4SavePeak`. Nine tests, not eight: the ninth is the one the rebase needed, below.
+
+### What the rebase onto the extra-source budget changed
+
+`dnaRead` now carries both branches' repairs, and the order they sit in is the decision. The
+two read budgets (`DNAMaxReadsPerTick` 8, `DNAExtraReadsPerTick` 4) bound how much an
+organism EATS in a tick, so a declined plate spends neither: a colony that refuses a third of
+what it is offered would otherwise consume its budget on refusals and leave the fragments it
+wanted behind them. What a decline does cost is one coverage measurement at 21.7 ms, and that
+is bounded on its own by `experience_max_measured_per_tick = 8` — eight measurements against
+a 250 ms tick, and fewer than the 12 the two read budgets would have allowed. When the cap is
+spent the pass stops with the cursors where they are and the rest is examined next tick.
+`TestCafeteriaDeclineDoesNotSpendTheReadBudget` writes three fragments earth does not own and
+then one it does, sets the read budget to two, and requires the cursor to reach the owned
+one; charging a decline to `*left` — the pre-rebase arrangement — makes it red, with `one
+dnaRead over [three declines] + gen_1789331000_6.txt added nothing`.
+
+The meal ring also changed shape. `splitCorpusLine` (routing repair 3) means a fragment is
+appended as several corpus lines rather than truncated to one, and those lines are what
+`loadCorpusLines` hands back as `docs`. So `remember` takes the appended lines, `probe` reads
+the first of them, `recentPadding` returns them, and `isRawExperience` matches against each —
+otherwise the padding would be refusing a fragment that no longer appears in `docs` in that
+form, and a sense sentence would pass through.
+
+### The emission gate, live
+
+The §18 order asks that the `gen=` share of the emission line not fall. Baseline and
+candidate were run as four organisms for 300 s each on cores 4-7, capped at
+`--max-growth-stage 0` so the run reaches the tick loop instead of spending its whole life in
+stage warmups, out of a scratch `MOLEQULA_RUN` seeded with the repo corpora and the 13 live
+senses fragments; `origin/main` built into one binary, this branch into another.
+
+| run | emissions | mean gen | median gen | gen=0 | gen/bytes | total generated bytes |
+|---|---|---|---|---|---|---|
+| origin/main, pair 1 | 310 | 15.45 | 14 | 12 | 0.00305 | 4791 |
+| origin/main, pair 2 | 313 | 13.51 | 14 | 0 | 0.00266 | 4230 |
+| this branch, pair 1 | 449 | 11.78 | 13 | 27 | 0.00232 | 5291 |
+| this branch, pair 2 | 347 | 13.50 | 14 | 29 | 0.00266 | 4684 |
+
+The `gen=0` count was the first thing to move, and it moved the wrong way: 27 and 29
+emissions with nothing said, against 12 and 0 on `origin/main`. That is exactly the
+degenerate-probe risk the §18 order names against this step — an embryo's fragment opens with
+two or three bytes and a full stop, so its leading sentence is `A.` — and it is what
+`experience_probe_min_chars` and `experience_probe_min_words` were then added for. A third
+300 s run with the guard in place: 373 emissions, **4 of them empty (1.1 %)**, below the
+pooled baseline's 1.9 %. The guard works.
+
+It did not restore the share. Pooled:
+
+| | emissions | mean gen | median | gen=0 | gen/bytes |
+|---|---|---|---|---|---|
+| `origin/main`, both runs | 623 | 14.48 | 14 | 12 (1.9 %) | **0.00285** |
+| this branch, probe on, no guard | 796 | 12.53 | 13 | 56 (7.0 %) | 0.00247 |
+| this branch, probe on, guarded | 373 | 12.08 | 12 | 4 (1.1 %) | **0.00238** |
+
+**So the gate for step 5 is red, and the probe lands switched off.**
+`experience_probe_from_meals` defaults to `false`; the mechanism, its guard and its
+measurement are in the tree, and one `CFG` field turns it on when a run says it pays. A gate
+that cannot refuse is decoration, and this one refused.
+
+What the number does not settle: both arms were embryo-capped colonies
+(`--max-growth-stage 0`), where the overlay is the entire voice and the answer is a
+continuation of the prompt, so a long declarative probe legitimately continues shorter than
+`Speak.` does. The regime this step is for is a stage-3 organism at mean |logit| 8.66 with the
+transformer carrying the voice, and a scratch probe cannot reach it in 300 s from a cold
+corpus. That measurement belongs to a scheduled session, not to this branch.
+
+The padding half of step 5 is on, and is not what moved the number: `gen` is the length of the
+answer, and padding is everything after it. Its own gate — no sense fragment appearing byte
+for byte in an emitted fragment — is green and red on the code it replaces.
+
+Total generated bytes per session is higher on this branch in every pair (4791 → 5291,
+4230 → 4684), because a colony that declines a third of what it is offered spends less of each
+tick appending and ticks more often: 623 emissions in 600 s of baseline against 796 with the
+cafeteria.
+
+`eligible=` prints: all 75 earth emissions of the third run read `eligible=0`, which is
+correct — an embryo sits at mean |logit| around 0.3 against a floor of 6.00. No live organism
+reached `eligible=1` in a scratch run; the admitting side of that gate is covered by
+`TestInjectionGateFollowsTheVoice` and is unverified in a session.
+
+### The rebased branch, run once
+
+One organism and the witness, 180 s, scratch `HOME` and `MOLEQULA_RUN`, cores 4-7 and 0-3,
+`--max-growth-stage 0`, the 13 live senses fragments seeded and no `--corpus-overlay` (so the
+transformer speaks alone and the fade is 1.00 by definition):
+
+    [dna] earth wrote 5009 bytes to ecology | gen=10 mag=2.94 fade=1.00 eligible=0
+    [dna] earth consumed 942 bytes from 3 files: [place/gen_1789337964_6.txt place/gen_1789340468_10.txt place/gen_1789342466_11.txt]
+    [witness] step=20 organisms=1 action=sustain(0.10) H=1.401 S=-0.428 trend=+0.000 target=earth harm=k7:-0.000 conf=0.48 pulse=0.00/0.00/0.00 | earth:s0/26k/1.40/432/f1.00
+
+245 emissions, every one carrying `eligible=`, and every one refused: `mag` ran 2.94 to 5.31
+against a floor of 6.00, which is the embryo regime the floor was measured to exclude. The
+cursor ends with all three senses eaten (`{"place":"gen_1789342466_11.txt",
+"sound":"gen_1789338068_7.txt","world":"gen_1789347647_13.txt"}`) — the cafeteria fed the
+extra sources through their own budget without starving them, and the witness reads the voice
+off the heartbeat as `f1.00`. The witness must be started after the organism, not before: it
+exits on a missing `mesh.db`, which is what a six-second head start gives it.
+## 2026-09-15 — the first scheduled session, and what the gate did with it
+
+The colony's first session under `phone1/schedule.sh` ran 04:00:00Z to
+06:01:55Z on the pre-merge binary `3267e67` (`molequla-run/BUILD`), after the
+phone had died on a flat battery on 2026-09-14 before the slot it was scheduled
+for. The scheduler's own line (`schedule.log`): `dur=7200 elapsed=7315
+reason=overran alive=- mem_mb=3499->4346 hwm_mb=earth:755,air:1032,water:820,
+fire:1091,witness:15 samples=237`. All four came up from their stage-4
+checkpoints of 2026-09-13T20:26Z, all four went down on the scheduler's
+signal with a checkpoint written (`[evolution] checkpoint saved on signal` in
+`earth.stdout` and `fire.stdout`; `air` and `water` had saved at 05:49Z and
+05:58Z and shut down gracefully), and nothing was left running.
+
+**The growth gate of repair 9 refused adulthood, live, for the first time.**
+Every organism asked to grow from stage 4 to stage 5 and was deferred —
+earth 6 times, air 5, water 13, fire 8 (`grep -c 'growth\] deferred'` over the
+session's stdout). The refusals read `free=1467 MB need=2188 MB` (earth),
+`free=1461 MB need=2317 MB` (fire), `free=1483 MB need=2359 MB` (water): the
+need is three times the organism's own peak plus 256 MB, and MemAvailable sat
+at 1.4-1.5 GB for the whole second hour. This is the scenario that killed
+Termux on 2026-09-13, ending as a log line. `launch.sh` passes no
+`--max-growth-stage`, so `[caps]` printed `growth ≤ stage 5 of 5`; the gate
+held by memory alone.
+
+**Peaks moved without growth.** `air`'s VmHWM went from 689 MB at 04:43Z to
+1032 MB by 05:24Z while the witness kept reporting it at `s4/4834k`. Its own
+log brackets the jump: the growth line's `need` rose from 2323 MB at tick 30
+to 3352 MB at tick 40 (need = 3 × peak + 256, so the peak rose by ~343 MB in
+those ten ticks) while `[debug-onto]` shows the corpus going from 1 143 296 B
+to 1 549 540 B over the same ticks. A larger corpus means a larger
+`BuildFromCorpus` and larger training batches; that is a correlation in one
+organism's log, not a measurement, and the measurement belongs to the adult
+question: no stage-5 organism is to be allowed on this phone until its peak is
+known.
+
+**DNA and the senses.** Fragments written this session (`[dna] … wrote`):
+earth 80 (35 with `gen=0`), air 71 (6), water 156 (3), fire 153 (16); mean
+`mag` 9.3 / 11.7 / 9.3 / 11.4, `fade=1.00` throughout. earth's empty share,
+44 %, at mag ≈ 9 is the band the cafeteria branch measured as 16/50 empty on
+the 2026-09-13 logs. For the first time organisms ate the senses: every
+`dna_cursor.json` now carries `world`, `sound` and `place` — the same three
+files in all four cursors (`gen_1789441275_15`, `gen_1789338068_7`,
+`gen_1789342466_11`), which is the byte-identical broadcast the cafeteria
+branch replaces. Corpora reached 1.60-1.88 MB, under the 1.92 MB cap.
+
+**After the session.** `bash phone1/daily.sh` wrote `daily/2026-09-15.md`.
+Oleg merged `phone1-new-logic-ack`, `phone1-new-logic-audit` and
+`phone1-world-ledger` during the session; `bash phone1/build.sh` at 06:17Z put
+`c33a494` into `molequla-run`, and `molequla_cgo --world-ingest --once` answers
+with its `[world] mesh=… facts=… dna=…` line, so the 07:00Z senses slot is the
+first one whose facts reach the ledger. The 12:00Z colony session is the first
+on a binary with the ledger; the routing and cafeteria branches are still
+pending.
+
+— Defender (Arianna Method, phone-1)
+
 ## 2026-09-15 — where a 4.8 M-parameter organism keeps 900 MB, and the pages nobody asked the allocator to give back
 
 The 04:00 colony session left `hwm_mb=earth:755,air:1032,water:820,fire:1091`
@@ -1970,7 +2854,10 @@ red as `the release returned nothing: VmRSS 28964 → 28964 kB, free chunks
 13412560 → 13412560 bytes`. `TestHeapTrimObeysItsKnob` requires the release to
 do nothing with the knob off. Suite: `CGO_ENABLED=1 taskset -c 4-7 go test
 -count=1 -buildvcs=false ./...` — **198 PASS, 2 SKIP, 0 FAIL**, twice in a row;
-baseline 196.
+baseline 196. Both arms of the before-and-after above were measured on
+`c33a494` plus these two commits and nothing else; after integrating
+`origin/main` at `0aea2e6` — the ledger, routing, cafeteria and sensing-window
+work of the same day — the suite is **216 PASS, 2 SKIP, 0 FAIL**.
 
 **Ranked, what is left.**
 

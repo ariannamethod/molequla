@@ -32,6 +32,13 @@ const dnaCursorFile = "dna_cursor.json"
 
 // dnaSources lists the ../dna/output subdirectories this organism eats from:
 // every element but itself, then the configured extra sources.
+//
+// This list is still the same for all four organisms, and deliberately so: the
+// cafeteria of new logic §12 allocates per fragment, not per directory (see
+// experience_routing.go, called from dnaRead). Routing by source name would be
+// the "flowers -> Earth" rule the brief forbids, and it would also cut
+// cross_graze.go:60, which reads the same list for the logit path and is not
+// part of the corpus allocation.
 func dnaSources(element string) []string {
 	out := make([]string, 0, len(dnaElements)+len(CFG.DNAExtraSources))
 	for _, e := range dnaElements {

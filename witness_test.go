@@ -2,9 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -36,8 +38,8 @@ func TestWitnessReadsWhatGoWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.MeshDB.Close()
-	a.Heartbeat(2, 262144, 0.10, 1.25, 4200)
-	b.Heartbeat(3, 1100000, -0.05, 0.80, 9800)
+	a.Heartbeat(2, 262144, 0.10, 1.25, 4200, 3.25, 0.40)
+	b.Heartbeat(3, 1100000, -0.05, 0.80, 9800, 7.90, 1.00)
 
 	db, err := witnessOpenMesh(filepath.Join(dir, "mesh.db"))
 	if err != nil {
@@ -204,7 +206,7 @@ func TestWitnessNeverWritesBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.MeshDB.Close()
-	a.Heartbeat(2, 1000, 0, 1.0, 10)
+	a.Heartbeat(2, 1000, 0, 1.0, 10, 0, 0)
 
 	base := filepath.Join(t.TempDir(), "dna", "output")
 	if err := os.MkdirAll(filepath.Join(base, "earth"), 0755); err != nil {
@@ -277,5 +279,250 @@ func TestWitnessNeverWritesBack(t *testing.T) {
 	}
 	if n, _ := os.ReadDir(filepath.Join(base, "earth")); len(n) != 2 {
 		t.Fatalf("DNA directory holds %d files, want 2 (nothing deleted)", len(n))
+	}
+}
+
+// Routing repair 6: fade and magnitude on the heartbeat. lastGenMag and
+// lastOverlayWeight were process-local (molequla.go), printed by dnaWrite as
+// mag= and fade= and visible nowhere else, so a gate outside the organism could
+// only read the stage label — which is exactly what §13 of
+// molequla_new_logic.md says not to key on. They are now two arguments of
+// Heartbeat and two columns beside global_step.
+
+func meshColumns(t *testing.T, path string) map[string]bool {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query("PRAGMA table_info(organisms)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	cols := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatal(err)
+		}
+		cols[name] = true
+	}
+	return cols
+}
+
+func TestMeshCarriesTheVoiceOnAFreshDatabase(t *testing.T) {
+	dir := witnessTestMesh(t)
+	a := NewSwarmRegistry("earth", "earth")
+	if err := a.Register(); err != nil {
+		t.Fatal(err)
+	}
+	defer a.MeshDB.Close()
+
+	cols := meshColumns(t, filepath.Join(dir, "mesh.db"))
+	for _, want := range []string{"global_step", "gen_mag", "overlay_fade"} {
+		if !cols[want] {
+			t.Fatalf("a fresh mesh has no %q column: %v", want, cols)
+		}
+	}
+
+	a.Heartbeat(4, 4100000, 0.2, 0.9, 12000, 7.90, 1.00)
+	db, err := witnessOpenMesh(filepath.Join(dir, "mesh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	orgs, err := witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatalf("witness: %v", err) // a schema it cannot read is the alert at witness.go:147-151
+	}
+	if len(orgs) != 1 {
+		t.Fatalf("witness sees %d organisms, want 1", len(orgs))
+	}
+	if math.Abs(orgs[0].GenMag-7.90) > 1e-9 || math.Abs(orgs[0].OverlayFade-1.00) > 1e-9 {
+		t.Fatalf("voice read back as mag=%.4f fade=%.4f, want 7.90 / 1.00", orgs[0].GenMag, orgs[0].OverlayFade)
+	}
+	if !strings.Contains(witnessSnapshot{Organisms: orgs}.line(), "/f1.00") {
+		t.Fatalf("the witness line does not carry the fade: %s", witnessSnapshot{Organisms: orgs}.line())
+	}
+}
+
+// The database four processes hold open is older than the columns. A mesh
+// written before repair 7 has neither global_step nor the two voice columns;
+// initMeshDB must add all three without losing the row that is already there,
+// and the witness must read it rather than raising the schema alert.
+func TestMeshMigratesAPreRepair7Database(t *testing.T) {
+	dir := witnessTestMesh(t)
+	path := filepath.Join(dir, "mesh.db")
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`CREATE TABLE organisms(
+		id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER,
+		n_params INTEGER, syntropy REAL, entropy REAL,
+		last_heartbeat REAL, parent_id TEXT,
+		status TEXT DEFAULT 'alive', element TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(
+		"INSERT INTO organisms(id,pid,stage,n_params,syntropy,entropy,last_heartbeat,status,element) "+
+			"VALUES('water',4242,2,262144,0.05,1.10,?,'alive','water')", nowSec()); err != nil {
+		t.Fatal(err)
+	}
+	old.Close()
+
+	before := meshColumns(t, path)
+	for _, unwanted := range []string{"global_step", "gen_mag", "overlay_fade"} {
+		if before[unwanted] {
+			t.Fatalf("the fixture is not a pre-repair-7 database: it already has %q", unwanted)
+		}
+	}
+
+	sr := NewSwarmRegistry("earth", "earth")
+	if err := sr.Register(); err != nil {
+		t.Fatal(err)
+	}
+	defer sr.MeshDB.Close()
+
+	after := meshColumns(t, path)
+	for _, want := range []string{"global_step", "gen_mag", "overlay_fade"} {
+		if !after[want] {
+			t.Fatalf("migration did not add %q: %v", want, after)
+		}
+	}
+
+	db, err := witnessOpenMesh(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	orgs, err := witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatalf("witness: mesh schema alert after migration: %v", err)
+	}
+	var water *witnessOrganism
+	for i := range orgs {
+		if orgs[i].ID == "water" {
+			water = &orgs[i]
+		}
+	}
+	if water == nil {
+		t.Fatalf("the row written before the migration is gone: %+v", orgs)
+	}
+	if water.GenMag != 0 || water.OverlayFade != 0 {
+		t.Fatalf("an organism that never reported a voice reads back as mag=%.4f fade=%.4f, want 0/0",
+			water.GenMag, water.OverlayFade)
+	}
+	// And a heartbeat on the migrated database fills them in.
+	sr.Heartbeat(3, 1100000, -0.05, 0.80, 9800, 3.25, 0.40)
+	orgs, err = witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range orgs {
+		if o.ID != "earth" {
+			continue
+		}
+		if math.Abs(o.GenMag-3.25) > 1e-9 || math.Abs(o.OverlayFade-0.40) > 1e-9 {
+			t.Fatalf("after migration the voice reads back as mag=%.4f fade=%.4f, want 3.25 / 0.40",
+				o.GenMag, o.OverlayFade)
+		}
+	}
+}
+
+// captureStdout runs f with os.Stdout replaced by a pipe and returns what was
+// written to it. The mesh lines go to stdout like the rest of [ecology].
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Stdout
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
+	f()
+	os.Stdout = saved
+	w.Close()
+	out := <-done
+	r.Close()
+	return out
+}
+
+// Heartbeat discarded the error from its Exec, so a mesh whose schema is
+// narrower than the write stopped beating in silence: the organism is alive,
+// every heartbeat is a no-op, and the governor's live count and the witness
+// both see it disappear. That is how TestBeatKeeperRefreshesMeshWithoutTicks
+// went red when repair 7 added global_step and again when routing repair 6
+// added the two voice columns. The failure is now said — once per distinct
+// error, not once per beat, since the tick loop beats every ten ticks for the
+// life of the run.
+func TestHeartbeatSaysWhenTheMeshRefusesTheWrite(t *testing.T) {
+	dir := witnessTestMesh(t)
+	path := filepath.Join(dir, "mesh.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// The pre-repair-7 schema, unwidened: no global_step, no gen_mag, no
+	// overlay_fade.
+	if _, err := db.Exec(`CREATE TABLE organisms(
+		id TEXT PRIMARY KEY, pid INTEGER, stage INTEGER,
+		n_params INTEGER, syntropy REAL, entropy REAL,
+		last_heartbeat REAL, parent_id TEXT,
+		status TEXT DEFAULT 'alive', element TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	sr := &SwarmRegistry{OrganismID: "earth", Element: "earth", MeshDB: db}
+
+	out := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) })
+	if !strings.Contains(out, "[ecology]") || !strings.Contains(out, "earth") {
+		t.Fatalf("a refused heartbeat said nothing: %q", out)
+	}
+	// sqlite names the first column it cannot find, which on the pre-repair-7
+	// schema is global_step.
+	if !strings.Contains(out, "global_step") {
+		t.Fatalf("the line does not name the column the mesh refused: %q", out)
+	}
+	if n := strings.Count(out, "\n"); n != 1 {
+		t.Fatalf("one refused heartbeat printed %d lines: %q", n, out)
+	}
+
+	// Ten more beats of the same failure say nothing further.
+	again := captureStdout(t, func() {
+		for i := 0; i < 10; i++ {
+			sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40)
+		}
+	})
+	if again != "" {
+		t.Fatalf("the same failure was repeated %d times: %q", strings.Count(again, "\n"), again)
+	}
+
+	// A different failure is a different line: closing one column uncovers the
+	// next, and each one is said once.
+	for _, step := range []struct{ alter, want string }{
+		{"ALTER TABLE organisms ADD COLUMN global_step INTEGER", "gen_mag"},
+		{"ALTER TABLE organisms ADD COLUMN gen_mag REAL", "overlay_fade"},
+	} {
+		db.Exec(step.alter)
+		next := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) })
+		if !strings.Contains(next, step.want) {
+			t.Fatalf("after %q the mesh error was swallowed as a repeat: %q", step.alter, next)
+		}
+	}
+	// And once the schema is whole, the beat is silent again.
+	db.Exec("ALTER TABLE organisms ADD COLUMN overlay_fade REAL")
+	if quiet := captureStdout(t, func() { sr.Heartbeat(2, 262144, 0.1, 1.2, 4200, 3.25, 0.40) }); quiet != "" {
+		t.Fatalf("a heartbeat the mesh accepted still said %q", quiet)
 	}
 }

@@ -566,7 +566,7 @@ func TestWorldLedgerNeverWritesPreexistingTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.MeshDB.Close()
-	a.Heartbeat(2, 262144, 0.10, 1.25, 4200)
+	a.Heartbeat(2, 262144, 0.10, 1.25, 4200, 0, 0)
 	mesh := filepath.Join(dir, "mesh.db")
 
 	probe, err := sql.Open("sqlite", mesh)
@@ -696,7 +696,7 @@ func TestWitnessReadsTheLedgerItMayNotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.MeshDB.Close()
-	a.Heartbeat(2, 1000, 0, 1.0, 10)
+	a.Heartbeat(2, 1000, 0, 1.0, 10, 0, 0)
 	mesh := filepath.Join(dir, "mesh.db")
 
 	wdb, err := witnessOpenMesh(mesh)
