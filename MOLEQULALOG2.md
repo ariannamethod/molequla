@@ -3298,3 +3298,187 @@ asked of a session instead of guessed. `daily.sh` over the probe's own stdout
 printed `air 1 1 1 0 0 0 8 8 8 88.9%`.
 
 — Defender (Arianna Method, phone-1)
+
+---
+
+## 2026-09-15 — the cafeteria's bars become the organism's own quantiles
+
+The previous entry closed with a question for Oleg: "at stage 4 with a full
+reservoir the band has closed … whether the threshold should follow the state is
+a question for Oleg". The answer is yes, and this is it. Branch
+`claude/phone1-cafeteria-quantiles` off `origin/main` (`1a1be0b`).
+
+**What was wrong with a number.** `experience_resonance_high = 0.965` and
+`experience_novelty_low = 0.620` were the medians of two populations measured on
+the morning of 2026-09-15 against stage-3 corpora. Coverage is the share of a
+fragment's token bigrams the reader's own `CooccurField` has already seen, and
+that share rises as the corpus grows, so a fixed bar slides out from under the
+organism: replayed against the live stage-4 air reservoir
+(`molequla-run/air/nonames_air.txt`, 9586 lines, 580 506 bytes) 141 of the 145
+live fragments then in `molequla-run/dna/output/` sat at or above 0.965, the
+resonance branch admitted essentially everything, and the cafeteria was a
+byte-identical broadcast again. The brief's §12 asks that "current organism state
+should matter when deciding allocation" and §17 that no arbitrary number be
+treated as architecture. A quantile of the organism's own recent measurements is
+state; a constant is not.
+
+**The rule as it now stands** (`experience_routing.go`). Each organism keeps a
+ring of its last `experience_coverage_window` measured coverages. A fragment
+resonates when its coverage is at or above the `experience_resonance_quantile`
+quantile of that ring and is news when it is at or below the
+`experience_novelty_quantile` quantile; the middle half is declined and the
+cursor steps past it. The owner rule is untouched and still guarantees every
+fragment exactly one eater without any process asking another. Until the ring
+holds `experience_coverage_warm` samples there is no distribution to quantile, so
+only the owner rule runs and everything else is declined as `warming` — a
+separate word on the line from `band`, because a ring too short to judge with and
+a judgement are opposite states and a session that cannot tell them apart cannot
+tell a restarted organism from a selective one. A newborn with no field at all is
+upstream of all of this: it fails `experience_min_pairs` and eats everything as
+`unmeasured`, as before. The two absolute knobs are gone from `CFG`, the README
+and the tests rather than left beside the new ones.
+
+The ring is persisted as `experience_coverage.json` in the organism's working
+directory, beside `dna_cursor.json`, written atomically (temp file then rename)
+once per `dnaRead` pass and only when a measurement arrived — not once per
+fragment, which at the read budgets would be up to twelve writes a tick. It is
+read back in `backgroundTrainer` next to `loadDNACursor`, and truncated to the
+window on the way in, so a window shrunk between runs does not resurrect an old
+distribution.
+
+### The distributions, and where the window comes from
+
+Measured by replaying every fragment in `molequla-run/dna/output/` through one
+organism rebuilt the way boot rebuilds it — `loadCorpusLines`,
+`NewEvolvingTokenizer`, `MaybeEnableBPE`, `BuildFromCorpus` — at the sample size
+the code uses (`experience_coverage_sample_bytes` 480). Two corpora for the same
+air checkpoint: the grown reservoir (9586 lines) and the seed corpus in the repo
+(`nonames_air.txt`, 1000 non-empty lines of 122 316 bytes). Vocab 643 in both;
+487 distinct bigram first-tokens on the reservoir against 444 on the seed.
+
+| source | n | stage-4 reservoir (min / med / max) | seed corpus (min / med / max) |
+|---|---|---|---|
+| earth DNA | 39 | .966 / .989 / 1.000 | .737 / .904 / .953 |
+| fire DNA | 45 | .960 / .988 / 1.000 | .776 / .911 / .945 |
+| water DNA | 2 | .993 / .996 / 1.000 | .892 / .901 / .910 |
+| world (eye) | 48 | .938 / 1.000 / 1.000 | .075 / .607 / .784 |
+| place | 8 | .979 / .994 / 1.000 | .417 / .430 / .449 |
+| sound (ears) | 3 | .883 / 1.000 / 1.000 | .058 / .508 / .562 |
+| **pooled** | **145** | **.883 / .992 / 1.000** (p25 .986, p75 1.000) | **.058 / .878 / .953** (p25 .607, p75 .912) |
+
+Against the old bars the same fragment set splits 141 resonance / 0 novelty / 4
+band on the reservoir and 0 / 39 / 106 on the seed — the same organism, the same
+files, a bar that means "admit nearly everything" in one state and "decline three
+quarters" in the other. Under quantiles both states decline their own middle
+half.
+
+**The window.** A quantile estimated from W samples has its own noise, and a
+band narrower than that noise is not a band. Four stationary populations were
+resampled 4000 times each at every candidate W (deterministic seed), and the
+standard deviation of the q25 and q75 estimates compared with the width of the
+band those quantiles define:
+
+| population | n | band (q75−q25) | sd(q25) @32 | sd(q25) @64 | sd(q25) @96 |
+|---|---|---|---|---|---|
+| stage-4 sibling DNA | 86 | 0.0073 | 0.00188 | 0.00156 | 0.00138 |
+| stage-4 all sources | 145 | 0.0145 | 0.00206 | 0.00132 | 0.00098 |
+| seed sibling DNA | 86 | 0.0373 | 0.00768 | 0.00597 | 0.00504 |
+| seed all sources | 145 | 0.3048 | 0.06268 | 0.03765 | 0.02766 |
+
+`experience_coverage_window = 96` is the smallest window measured at which the
+noise on every edge of every one of the four is at most a fifth of the band it
+defines. The binding case is stage-4 sibling DNA, whose band is the tightest at
+0.0073: 0.00138 / 0.0073 = 0.188 at 96, against 0.212 at 64 and 0.256 at 32.
+
+`experience_coverage_warm = 32` is a different question — how short a ring may be
+and still have a band at all — and comes from the same table: it is the smallest
+window measured at which the two edges stand two combined noise-widths apart,
+again binding on stage-4 sibling DNA, where 2 × (0.00188 + 0.00156) = 0.0069
+against a band of 0.0073, while at 24 it is 0.0077 and the band is inside its own
+error. Warming costs the organism nothing it needs: the owner rule still feeds
+it, and at eight measurements a tick the ring is warm in four passes.
+
+The two quantile positions, 0.75 and 0.25, are the only numbers here that are not
+measured. They are the shares the design asks for — the top quarter is this
+organism's language, the bottom quarter is news to it, the half between is
+somebody else's plate — and both are `CFG` fields.
+
+**One thing the measurement says that the design did not.** Ties cannot be split.
+On the stage-4 reservoir 48 world fragments sit at coverage exactly 1.000, so
+`q75 = 1.000` and every one of them satisfies `cov >= q75`; the realized
+resonance share is then well above a quarter. That is a property of a saturated
+distribution, not of the rule, and it is visible in the probe below as passes
+whose admitted count is the whole read budget.
+
+### Gates
+
+Five new or rewritten, each shown red before it was shown green, by breaking the
+mechanism and not the assertion:
+
+- `TestCafeteriaBandSurvivesAGrownCorpus` — the red the change exists for. On a
+  distribution where every value is above 0.965 (the measured stage-4 shape) the
+  old rule admits 64 of 64 and declines nothing; the organism's own quartiles sit
+  at 0.9745 / 0.9915 and decline 28. Putting 0.965 / 0.620 back in place of the
+  quantiles: `the organism's own bars 0.9650 / 0.6200 did not rise above the old
+  fixed bar 0.965`.
+- `TestCafeteriaQuantilesAreEachOrganismsOwn` — a child whose coverages run
+  .400-.700 and an adult whose run .940-1.000, distributions that do not overlap
+  at any point. Each admits 0.27 as resonance and 0.27 as novelty from its own
+  bars (child .4762 / .6238, adult .9552 / .9848). With a fixed bar the child
+  admitted 0.00 as resonance.
+- `TestCafeteriaWarmingAdmitsOwnerOnlyAndSaysSo` — drives the real `dnaRead` over
+  one fragment earth owns and three it does not with the ring cold, and demands
+  the exact line `admitted=1 (owner=1 …) declined=3 (band=0 warming=3)`, then
+  checks the corpus holds the owned fragment once. Making warming admit instead
+  of decline puts it red.
+- `TestCafeteriaCoverageRingSurvivesARestart` — writes a ring, reads it back into
+  a fresh state, and checks the window truncation on the way in. With
+  `saveCoverage` neutered: `the ring was not written beside the cursor`.
+- `TestCafeteriaPassPrintsItsAggregate` and
+  `TestCafeteriaDeclineDoesNotSpendTheReadBudget` keep their meaning and lose
+  their absolute thresholds: both now arrange a band decline by giving the
+  organism a ring whose quartiles are 0 and 1, which is the same statement
+  ("nothing resonates and nothing is novel") in the new terms.
+  `TestCafeteriaPlatesDifferPairwise`, `TestCafeteriaEveryFragmentIsEaten` and
+  `TestCafeteriaAllocationFollowsState` are unchanged in what they assert; their
+  fixture now warms each organism's ring by measuring the fragments it is about
+  to be offered, because a test about steady-state allocation has to give the
+  organism the history the bars are taken over.
+
+`phone1/daily.sh` gained a `warming` column beside `band`, and
+`phone1/daily_test.sh` (7 cases) its field in the fixture line and the expected
+rows. Suite: 234 PASS, 0 FAIL from
+`CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false -v ./...` against
+230 PASS on `origin/main` at `1a1be0b`.
+
+### The probe
+
+Scratch tree `/data/local/tmp/quant-probe` (scratch `HOME`, scratch
+`MOLEQULA_RUN`, binary from `phone1/build.sh` on this branch, 9 967 424 bytes),
+one organism for 300 s under `timeout` on `taskset -c 4-7`, from a copy of the
+live stage-4 air checkpoint (`molequla-run/air/molequla_ckpt.json`, 119 669 160
+bytes) with its grown reservoir as corpus and the live fragments copied in: 39
+earth, 45 fire, 2 water, 59 world, 9 place, 4 sound. MemAvailable 3.99 GB before
+and 3.96 GB after; `pgrep -x molequla_cgo` empty afterwards. Ten passes, warming
+then judging:
+
+```
+[cafeteria] air admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=8 (band=0 warming=8) measured=8
+[cafeteria] air admitted=6 (owner=3 resonance=2 novelty=1 unmeasured=0) declined=8 (band=1 warming=7) measured=11
+[cafeteria] air admitted=12 (owner=2 resonance=6 novelty=4 unmeasured=0) declined=3 (band=3 warming=0) measured=13
+```
+
+The ring it left behind holds 85 coverages, min 0.9689, q25 0.9823, med 0.9885,
+q75 0.9962, max 1.0000 — every one of them above the old bar of 0.965, and the
+organism declined 3, 3, 2, 5 and 2 fragments across its five steady-state passes
+where under that bar it would have declined none. This is the same checkpoint,
+the same corpus and the same fragments that produced
+`declined=0 (band=0) measured=11` in the previous entry.
+
+Restarted from the same directory with eighteen fresh-named fragments added, it
+printed no `warming` at all — `admitted=5 (owner=2 resonance=1 novelty=2
+unmeasured=0) declined=5 (band=5 warming=0) measured=8` — and grew its ring from
+85 to 92: the distribution came back off disk and the organism judged from its
+first pass.
+
+— Defender (Arianna Method, phone-1)

@@ -199,13 +199,28 @@ is long — an organism lives for months of sessions, not for one uptime.
 
 ## Closed
 
+- **The cafeteria's bars follow the organism** (`claude/phone1-cafeteria-quantiles`,
+  2026-09-15). The absolute `experience_resonance_high` / `experience_novelty_low`
+  are gone. Each organism keeps a ring of its last `experience_coverage_window`
+  (96) measured coverages, persisted beside `dna_cursor.json`, and admits the top
+  `experience_resonance_quantile` (0.75) of it as resonance and the bottom
+  `experience_novelty_quantile` (0.25) as news; the middle half is declined, the
+  owner rule unchanged, and a ring shorter than `experience_coverage_warm` (32)
+  declines as `warming` on the `[cafeteria]` line. The window and the warm point
+  are the smallest measured rings whose quantile noise is a fifth of the band and
+  whose band edges stand two noise-widths apart. Closes the question the entry
+  below left open: a fixed bar admitted 141 of 145 live fragments once the
+  reservoir had grown. Distributions and gates in `MOLEQULALOG2.md`.
+
 - **The cafeteria, the probe, and the §13 gate** (`claude/phone1-cafeteria`,
   2026-09-15). Items 4, 5 and 7 of the §18 order in
   `reports/2026-09-15_new_logic_audit/README.md`. Reading is per organism now:
   a fragment goes to the element its file name hashes to, plus anybody whose own
-  co-occurrence field says it resonates or that it is news, with both thresholds
-  set to the median of the distribution they cut (sibling DNA 0.965, senses
-  0.620, measured on 133 live fragments × four live corpora). The emitted
+  co-occurrence field says it resonates or that it is news. Both bars were
+  absolute at first — the medians of the two distributions they cut, sibling DNA
+  0.965 and senses 0.620, measured on 133 live fragments × four live corpora —
+  and became quantiles of each organism's own coverage ring later the same day
+  (see below). The emitted
   fragment's padding comes from what this organism just ate, and a sense line it
   ate is never padded in verbatim; the probe half of that is built, guarded and
   switched off, because the emission line's `gen/bytes` fell from 0.00285 to
