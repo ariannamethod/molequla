@@ -1794,3 +1794,205 @@ air's 13, 10 of water's 13 and 4 of fire's 14. And the witness cannot see the se
 `sound` or `place` key in any `dna_cursor.json`, thirteen fragments waiting for the next session.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — where a 4.8 M-parameter organism keeps 900 MB, and the pages nobody asked the allocator to give back
+
+The 04:00 colony session left `hwm_mb=earth:755,air:1032,water:820,fire:1091`
+(`molequla-run/schedule.log`, `2026-09-15T06:01:55Z`, 237 samples over two
+hours), with all four organisms at stage 4 and 4.84-4.86 M parameters each
+(`molequla-run/daily/2026-09-15.md`). Nineteen megabytes of float32 weights, and
+a gigabyte of resident memory. This is where the rest of it lives, measured
+rather than reasoned about, and the one lever that was cheap enough to pull
+today.
+
+**How it was measured.** A profiling hook that is off unless `MOLEQULA_PPROF`
+names a directory: `memSnapshot(label)` prints `/proc/self/status` and
+`smaps_rollup` beside `runtime.MemStats` and a `mallinfo2` reading, and writes a
+heap profile; `memTapeSnapshot` walks the live notorch tape between the backward
+and the clear and sums the bytes in its outputs, its gradients, the mirrored
+parameters and the Chuck moment slots. Five call sites — before and after
+`LoadCheckpoint`, after a corpus rebuild, after a burst, after the checkpoint
+save — plus the first and last step of every training phase. With the variable
+unset every one of them is a string compare against an empty string.
+
+The probe: one organism started the way `phone1/launch.sh` starts it, in a
+scratch run root holding a copy of the live earth checkpoint (110 599 980 bytes,
+stage 4), its 1 883 617-byte corpus, its DNA cursor and the fragment tree, with
+`HOME` pointed at the scratch so the mesh is scratch too — `timeout -s TERM 900
+taskset -c 4-7 ./molequla_cgo --organism-id earth --element earth --evolution
+--cross-graze --corpus-overlay --max-organisms 4 --dna-extra-sources
+world,sound,place --max-growth-stage 4`, sampled every 2 s. The stage ceiling is
+there because the first unpinned run grew 4 → 5 inside the window and answered a
+different question (`embd 224 → 320`, `VmHWM` 1318 MB — growth is still the
+largest single event in an organism's life, as repair 9 recorded).
+
+**RSS timeline, 900 s, one organism, before the change.**
+
+| t | event | VmRSS | VmHWM |
+|---|---|---|---|
+| 0 s | process start | 11 MB | 11 MB |
+| 2 s | `LoadCheckpoint` returns | 163 MB | 163 MB |
+| 20 s | first corpus rebuild, field built | 206 MB | 206 MB |
+| 40 s | second rebuild | 210 MB | 262 MB |
+| 118 s | first burst, 32 steps, 7483 ms | 464 MB | 508 MB |
+| 128 s | checkpoint save (streamed) | 382 MB | 508 MB |
+| 130-700 s | rebuild every 30 ticks, no burst | 384-437 MB | 508-604 MB |
+| 735 s | second burst, 32 steps, 7363 ms | 522 MB | 562 MB |
+| 745 s | checkpoint save | 506 MB | 588 MB |
+| 900 s | end | 538 MB | 613 MB |
+
+Two events move memory: a burst, and the corpus rebuild that precedes it.
+Loading the 110 MB checkpoint costs 152 MB and is over in two seconds; the save
+costs nothing since repair 9 streamed it. Nothing else in the tick loop is
+visible at this resolution.
+
+**Go and C at the peak.** At the burst snapshot: `VmRSS` 464 MB, of which the Go
+runtime holds 321 MB of `Sys` with 28 MB handed back, so about 293 MB resident;
+the C allocator claims 150 MB of arena plus 36 MB of mappings. The Go *live*
+heap is 101 MB and is the same 101 MB at every one of the fifteen stage-4
+snapshots — the heap profile does not move all run.
+
+**Go side, per bucket** (`go tool pprof -top -inuse_space`, identical across all
+stage-4 snapshots):
+
+| bucket | MB |
+|---|---|
+| model weights and gradients, float64 (`readCheckpointStream` rows + `NewVecWithGrad`) | 87.3 |
+| n-gram and co-occurrence field (`CooccurField.BuildFromCorpus`) | 12.2 |
+| delta snapshot held across a burst (`GPT.SnapshotDeltas`) | 1.5 |
+| corpus `docs` (`loadCorpusLines`) | 1.0 |
+| **live** | **102.0** |
+| heap the collector holds and has not returned (`HeapIdle − HeapReleased`) | 47-147 |
+
+The field was the suspect and it is not the culprit: 12.2 MB of unigram, bigram,
+trigram, 4-gram and co-occurrence maps over a 1.9 MB corpus, and the rebuild is
+not doubled in practice because the temporary maps and the old ones only overlap
+for the length of one `BuildFromCorpus`. The float64 model is the Go side's real
+weight — 4 834 408 parameters at eight bytes of data and eight of gradient is
+73.8 MB, and 87.3 is that plus `*Vec` headers and allocator slack.
+
+**C side, per bucket** (tape census between backward and clear, T=96, D=224,
+L=5, V=750, 386 entries of which 125 are parameters):
+
+| bucket | MB |
+|---|---|
+| activations | 31.3 |
+| gradients (activations 30.5 + parameters 19.9) | 50.4 |
+| parameter mirror, float32 | 19.9 |
+| Chuck moment slots, m and v | 38.1 |
+| **live C tensors at the backward** | **139.7** |
+
+**Expected against measured, activations.** Counting the graph
+`ntBuildForward` records: fourteen tensors of T·D and four of T·4D per layer for
+the bare transformer; each applied delta adapter adds `B·x`, `A·(B·x)`, the
+scale and the add, which is three tensors at the weight's full output width —
+five weights at D and two at 4D per layer; the RRPRAM blend adds four at T·D per
+hybrid layer; then the embedding, the final norm, the logits at T·V and the
+lm_head adapter.
+
+| term | expected |
+|---|---|
+| bare graph, 5 layers | 12.30 MB |
+| delta adapters, 5 layers | 16.00 MB |
+| RRPRAM blend, 5 hybrid layers | 1.64 MB |
+| embedding, final norm, logits, lm_head adapter | 1.26 MB |
+| **expected total** | **31.20 MB** |
+| **measured** | **31.3 MB** |
+
+Two thirds of the activation memory is the adapters, not the transformer. That
+is worth knowing on its own and it is not what was fixed today.
+
+**Where the other 900 MB actually is.** 139.7 MB of live C tensors, and the
+allocator holding this:
+
+| moment | arena | mmapped | in use | free chunks kept | VmRSS |
+|---|---|---|---|---|---|
+| burst 1, step 0 | 87 MB | 56 MB | 84 MB | 3 MB | 371 MB |
+| burst 1, step 31 | 159 MB | 55 MB | 85 MB | 74 MB | 491 MB |
+| between bursts | 150 MB | 36 MB | **1 MB** | **148 MB** | 384-437 MB |
+| burst 2, step 31 | 318 MB | 34 MB | 106 MB | 212 MB | 561 MB |
+| between bursts | 270 MB | 34 MB | **4 MB** | **265 MB** | 536-584 MB |
+
+Nothing is leaked: every tensor the tape allocates is freed, and between bursts
+the allocator says it is holding four megabytes of live C memory. It is also
+holding 265 megabytes of free chunks it never returns. The tape builds and tears
+down 81.7 MB of activations and their gradients thirty-two times per burst;
+glibc raises its dynamic mmap threshold as those blocks are freed, so after the
+first bursts the tensors come from the sbrk arena instead of their own mappings,
+and a free there lengthens a free list rather than reaching the kernel. The
+arena ratchets one burst at a time — 87 → 150 → 318 → 270 over two bursts — and
+that ratchet, run for two hours instead of fifteen minutes, is `earth:755` and
+`fire:1091`.
+
+**The lever.** `releaseTrainingHeap` (`heap_trim.go`) calls `malloc_trim(0)`,
+which walks the free lists of every arena and hands the whole pages among them
+back with `madvise`. It runs once per training phase, registered in `ntTrainCore`
+*before* `defer m.free()` so that last-in-first-out ordering puts it after the
+mirror is freed and the tape is clear — nothing the organism owns is in flight
+at that instant. `CFG.TrimHeapAfterTrain` defaults true; false leaves the arena
+alone.
+
+**Before and after, the same 900 s probe from the same restored checkpoint,
+same flags, same cores.**
+
+| | mean VmRSS | max VmRSS | VmHWM |
+|---|---|---|---|
+| before | 474 MB | 602 MB | 613 MB |
+| after | 272 MB | 516 MB | 599 MB |
+
+The mean is the number that matters, because the peak is one instant and the
+trough is where the process sits: 202 MB off the resident set of every minute
+the organism is not training. The C side between bursts goes from 171-290 MB
+resident to 25-28 MB. The ratchet is what actually stops:
+
+    before   61s 213   122s 424   307s 447   492s 532   677s 549   862s 538   MB VmRSS
+             hwm 262       508        514        598        604        613
+    after    62s 231   123s 262   307s 288   492s 296   677s 274   862s 268   MB VmRSS
+             hwm 270       529        529        599        599        599
+
+Without the trim `VmHWM` climbs all run and had not stopped at 900 s. With it,
+the second burst sets 599 MB and the remaining 530 s do not move it. Burst wall
+time is unchanged — 7483 and 7363 ms before, 7369 and 7512 ms after — and burst
+one reports the same `avg loss 3.4052` in both arms.
+
+**Gates, shown red.** `TestHeapTrimReturnsTheTapeArena` runs a real 48-step
+burst on a small organism with the knob off — long enough that glibc has raised
+its dynamic mmap threshold, because while the tensors still come back as their
+own mappings a free returns them by itself and there is nothing for a trim to
+do, which is the state a fresh process starts in and not the state a colony
+session runs in. It then reads what the allocator holds, turns the knob on,
+calls the release, and requires `VmRSS` to fall while the in-use bytes do not
+rise. There is no expected byte count anywhere in it — it compares the process
+against itself — and six consecutive runs returned 16-18 MB each
+(`RSS 34052 → 18076 kB`, `28696 → 16524`, `34804 → 17096`, `34912 → 17192`,
+`34728 → 16972`, `33740 → 17620`). With the release body made a no-op it goes
+red as `the release returned nothing: VmRSS 28964 → 28964 kB, free chunks
+13412560 → 13412560 bytes`. `TestHeapTrimObeysItsKnob` requires the release to
+do nothing with the knob off. Suite: `CGO_ENABLED=1 taskset -c 4-7 go test
+-count=1 -buildvcs=false ./...` — **198 PASS, 2 SKIP, 0 FAIL**, twice in a row;
+baseline 196.
+
+**Ranked, what is left.**
+
+1. The Go heap ceiling. `HeapSys` reaches 311-371 MB for a 102 MB live heap
+   because the corpus rebuild churns hard and `GOGC` is at its default. A
+   `debug.SetMemoryLimit` sized from the organism's own measured working set
+   would take roughly 100-150 MB off the peak, paid in collector CPU on the
+   phone's big cores. Measure both before shipping either.
+2. The float64 model, 87.3 MB for 4.83 M parameters. The tape already trains in
+   float32 and mirrors back; `Vec.Data` and `Vec.Grad` as float32 halve it. It
+   touches every core and the checkpoint format, so it is a deliberate change,
+   not a cheap one.
+3. The arena still grows *within* a burst — 87 → 171 MB across thirty-two steps
+   — and that is what sets `VmHWM` now. A release between steps would cost one
+   `madvise` walk per step; the steps/s price has to be measured before this is
+   even a proposal.
+4. The adapter activations, 16 MB of the 31.3. `ntAdd(y, ntScale(ntSeqLinear(...)))`
+   records three tensors at full output width per adapter per weight; a fused
+   op in notorch would return about 10 MB of the step.
+5. `NewGPT(tok)` inside `LoadCheckpoint`, the 69 MB named in repair 10. It sets
+   the load high-water at 163 MB, which is far under the burst peak, so closing
+   it buys nothing at the peak — it is a startup-window win and it stays open
+   for the format-compatibility reason repair 10 gave.
+
+— Defender (Arianna Method, phone-1)
