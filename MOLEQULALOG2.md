@@ -3192,3 +3192,109 @@ put that binary into `molequla-run`, so 20:00Z is the first session with
 start.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-15 — the cafeteria says what it decided: one line per pass, a table per session
+
+The previous entry closed with an open question: "No `declined` lines were found
+in the stdout — whether the cafeteria declined anything is not logged at this
+level and is left to the next session to instrument." This is that
+instrumentation. Branch `claude/phone1-cafeteria-log` off `origin/main`
+(`4134d2a`).
+
+**One line per `dnaRead` pass, not per fragment and not on the `consumed`
+line.** `admits` is taken up to twelve times a tick — the two read budgets are
+`dna_max_reads_per_tick` 8 plus `dna_extra_reads_per_tick` 4 — so a line per
+fragment would be twelve lines a tick in a stdout that a session greps. The
+aggregate is printed once at the end of the pass by `cafeteriaTally.line`
+(`experience_routing.go`), from counters charged in the `dnaRead` loop at the
+`admits` call site:
+
+```
+[cafeteria] air admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=8 (band=8) measured=8
+```
+
+`admitted` is the sum of its four bracketed reasons and `declined` of its one,
+so the line can be checked against itself; `measured` is the coverage encodes
+the pass spent, the quantity `experience_max_measured_per_tick` (8) bounds.
+`unmeasured` is in the brackets because it is a real admit branch — a newborn
+with no field yet, or a fragment under `experience_min_pairs` — and a line whose
+total did not equal its reasons would be a lie the first time an embryo read
+anything. The per-fragment source and coverage are not printed at any level:
+the only `os.Getenv` debug switch on this path is `MOLEQULA_GPU_DEBUG`, which
+belongs to the GPU bridge, and this change adds no flag and no threshold.
+
+It is its own line rather than a widening of `[dna] … consumed` because that
+line prints only when bytes were added, and a pass that declines everything adds
+none — which is the pass worth seeing. Over the four current stdout files
+(`molequla-run/<e>/<e>.stdout`, four starts appended into each) the `consumed`
+lines number 68 against 160 `wrote` for earth, 76/144 air, 53/168 water, 77/286
+fire, so most passes leave no `consumed` line at all to widen. Making that line
+print on the empty passes would have meant a `consumed 0 bytes from 0 files: []`
+per tick and a different meaning for the byte and event totals `daily.sh`
+already sums out of it. The line is silent when `experience_routing` is off and
+when the pass judged nothing.
+
+**The table.** `phone1/daily.sh` gained a block that sums the `[cafeteria]`
+lines per organism since that organism's last `[ecology] Element:` banner — its
+boot line, of which each stdout currently holds four, because launches append.
+A decline rate belongs to a field and a corpus that both move between sessions,
+so the whole-file sum the older DNA-traffic block keeps would have averaged
+states that are not comparable; the existing block and its totals are untouched.
+Columns: passes, admitted, owner, resonance, novelty, unmeasured, declined,
+band, measured, decline share.
+
+**Gates, both shown red before they were shown green.**
+`TestCafeteriaPassPrintsItsAggregate` drives the real `dnaRead` over one
+fragment earth owns and one it declines and demands the exact line, then checks
+that line against the filesystem: the admitted fragment is in the corpus, the
+declined one is not, the cursor stands past both. Renaming `band=` to
+`refused=` in the printer put it red on the wanted string.
+`TestCafeteriaSaysNothingWhenNothingWasJudged` holds the silence of an empty
+pass. `phone1/daily_test.sh` (7 cases) runs `daily.sh` over a hand-written
+stdout fixture: an earlier start whose 99s must stay behind the banner, three
+passes to add up, an organism that judged nothing reading as zero rather than as
+a gap, a `[cafeteria] earth` line inside `fire.stdout` that must not enter
+fire's row, a missing stdout said rather than skipped, and a second run
+appending a second section. Dropping the banner reset from the awk turned
+earth's row into `earth 4 107 102 102 100 100 102 102 107 48.8%` against the
+wanted `earth 3 8 3 3 1 1 3 3 8 27.3%`. Suite: 230 PASS, 0 FAIL on the branch
+against 228 PASS on `origin/main` at `4134d2a`, both from
+`CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false -v ./...`.
+
+**The probe, and what it measured.** A scratch tree under
+`/data/local/tmp/cafelog-probe` (scratch `HOME`, scratch `MOLEQULA_RUN`, binary
+built with the `phone1/build.sh` recipe from the branch) ran one organism for
+120 s under `timeout` on `taskset -c 4-7`, from a copy of the live stage-4 air
+checkpoint (`molequla-run/air/molequla_ckpt.json`, 119 669 160 bytes) with the
+live fragments copied in: 38 `world`, 39 `earth`, 45 `fire`, 2 `water`.
+MemAvailable stayed at 4.1-4.2 GB throughout and `pgrep -x molequla_cgo` was
+empty afterwards.
+
+With the live air reservoir as its corpus (`nonames_air.txt`, 9586 lines,
+580 506 bytes) the pass declined nothing:
+
+```
+[cafeteria] air admitted=12 (owner=1 resonance=11 novelty=0 unmeasured=0) declined=0 (band=0) measured=11
+[dna] air consumed 40023 bytes from 12 files: [earth/gen_1789477644_42.txt …]
+```
+
+Eleven of eleven measured fragments — siblings and eye frames alike — sat at or
+above `experience_resonance_high` 0.965. The same checkpoint restarted against
+the seed corpus in the repo (1498 lines, 122 316 bytes) and the same fragments
+declined eight of nine, stopping the pass on the measurement cap:
+
+```
+[cafeteria] air admitted=1 (owner=1 resonance=0 novelty=0 unmeasured=0) declined=8 (band=8) measured=8
+```
+
+So the band is not a property of the fragments but of the corpus reading them,
+exactly as `experience_routing.go` says coverage is state — and at stage 4 with
+a full reservoir the band has closed: 0.965 was set that morning as the median
+of a sibling distribution measured on stage-3 organisms (n=120, p25 0.952,
+med 0.965), and it now sits under the whole of this organism's distribution.
+Whether the threshold should follow the state is a question for Oleg; nothing
+here changes it, and the point of the line is that the question can now be
+asked of a session instead of guessed. `daily.sh` over the probe's own stdout
+printed `air 1 1 1 0 0 0 8 8 8 88.9%`.
+
+— Defender (Arianna Method, phone-1)
