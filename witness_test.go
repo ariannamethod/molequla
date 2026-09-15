@@ -262,6 +262,15 @@ func TestWitnessNeverWritesBack(t *testing.T) {
 	if fs != 0 {
 		t.Fatal("field_steering exists — the arrow back is being drawn")
 	}
+	// The world ledger (ROADMAP 10) is the one table the witness may write,
+	// and it stays shut until an organ has written a fact: a tick with no
+	// facts.jsonl migrates nothing. What it may and may not touch once it is
+	// open is TestWorldLedgerNeverWritesPreexistingTables.
+	var wf int
+	db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name='world_facts'`).Scan(&wf)
+	if wf != 0 {
+		t.Fatal("world_facts was migrated without a single fact to put in it")
+	}
 	after, _ := os.Stat(frag)
 	if after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
 		t.Fatal("a DNA fragment changed under the witness")

@@ -639,6 +639,19 @@ Status: implemented (~280 lines, `notorchTrainSteps` + helpers in `molequla.go`)
 
 The mycelium sees the whole ecology and says what it sees. It is a fifth process of the same Go binary, `molequla --witness`, run from a directory beside the organisms' so that `../dna/output` is the same tree (`witness.go`, `witness_cgo.go`; since 2026-09-13 it replaces the Python `mycelium.py`). It reads two public traces — `mesh.db` and the DNA field — computes through the in-repo C engine (`am_method_field_*`, `am_harmonic_forward` in `ariannamethod.c`), and writes outward only: one line per tick on stdout and one JSON record per tick in `witness.jsonl`. It never writes into `mesh.db` (its connection is opened `query_only`), never writes or deletes in `dna/`, and no `field_steering` row exists any more; the Rust core's reader of that row degrades to its own temperature schedule. The four organism cores run without it. `--once` prints a single snapshot as JSON and exits, for a daily routine. Generation operator `η: Γ × Γ → Γ_new` — two personalities in resonance produce a third (interference pattern, not blend) — stays a description of the field, not a thing the witness performs.
 
+### The world ledger — change, not state
+
+The senses (`phone1/senses.sh`: the eye `senses/ocelli`, the ears `senses/ears`, and place) write prose fragments into `dna/output/{world,sound,place}/`, and beside each one a structured line into `$MOLEQULA_RUN/senses/facts.jsonl`. `molequla --world-ingest [--once]` reads those lines into a bitemporal table in the same mesh (`world_ledger.go`):
+
+    world_facts(id, source, subject, predicate, object,
+                valid_from, valid_to, recorded_at, provenance)
+
+`valid_from`/`valid_to` is when a fact held in the world; `recorded_at` is when molequla learned it. A contradicting observation closes the open row at the new fact's `valid_from` and opens a new one — nothing is deleted and nothing is overwritten, so a correction keeps the belief it corrected. An observation that repeats the open row writes no row at all, and only a change becomes food: one more fragment in `dna/output/world/`, in the same `gen_<unix>_<seq>.txt` form the organisms already eat with `--dna-extra-sources world,sound,place`. *The phone moved from A to B. The sky changed from fog to overcast. A person entered the front camera's frame. The rear camera's scene changed from X to Y. Speech was heard through the microphone for 12 s.*
+
+Perception is stored as perception. The eye's sentence is an `interpreted_as` fact carrying the camera, the weights, the quantisation and the conditions of the pass in `provenance`, never an `is` fact about the room — the balcony that the eye read as a bathroom on its first night is a true record of a reading and a false record of a place, and the table says which of the two it holds.
+
+The writer is its own process on purpose. The witness's connection stays `query_only`: on its tick it reads `world_facts` and prints `world <n> facts/<m> open`, and that is all it may do with it.
+
 ### What it computes
 
 | Quantity | Source |
@@ -818,7 +831,8 @@ spa_coherence.go         164 lines    Pure-Go SPA helper (sentence connectedness
 cross_graze.go           181 lines    Dario-style cross-organism logit injection (sibling DNA → rank-decay boost), cursor per sibling
 dna_field.go             208 lines    The DNA tree as a field: sources, cursors, numeric fragment order, writer-side pruning
 governor_phone.go        247 lines    Byte gates before division and before growth, oom_score_adj, heartbeat keeper, the evolution wait and its train abort
-witness.go               498 lines    The mycelium as a witness (`--witness`): reads mesh.db + the DNA field, says what it sees, writes nothing back
+witness.go               534 lines    The mycelium as a witness (`--witness`): reads mesh.db + the DNA field, says what it sees, writes nothing back
+world_ledger.go          778 lines    The world ledger (`--world-ingest`): facts.jsonl -> the bitemporal world_facts, and only a change becomes a fragment
 witness_cgo.go           73 lines     cgo bindings to am_method_field_* / am_harmonic_* (am_method_step deliberately unbound)
 ariannamethod/
   ariannamethod.c        8000 lines   AML/C autograd engine (the language) + SPA ops + HarmonicNet / METHOD field operators
@@ -861,7 +875,8 @@ notorch_trainer_test.go  73 lines     the positional table is trained (1)
 dna_field_test.go        262 lines    every reader eats every fragment, per-tick cap, extra sources, writer pruning by age and count (5)
 corpus_cap_test.go       83 lines     the corpus reservoir cap holds without REPL messages, on lines and bytes (1)
 graze_overlay_test.go    234 lines    cross-graze reaches sampling under the overlay, the overlay fades, penalty sign, pasture cursor (4)
-witness_test.go          272 lines    the witness reads what Go writes, schema errors surface, deltas across ticks, harmonics vs DFT, never writes back (6)
+witness_test.go          281 lines    the witness reads what Go writes, schema errors surface, deltas across ticks, harmonics vs DFT, never writes back (6)
+world_ledger_test.go     786 lines    repeats are silent, a correction closes and opens, the two clocks, the cursor, the move gate, the change vocabulary, one writer (12)
 sampling_test.go         99 lines     top-k / top-p / min-p / typical-p / softmax against the real functions (8)
 tests/test_all.sh        168 lines    Integration: four builds + element smoke tests
 
