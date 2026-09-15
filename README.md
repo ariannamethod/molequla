@@ -26,7 +26,7 @@ WHAT THIS IS:
 - Trainer: notorch tape (Chuck, **canonical** — `notorch_trainer.go` + `cgo_notorch.go`, GPU on CUDA / CPU otherwise) + AML/C autograd via CGO (~8000 lines, fallback via `--trainer aml`)
 - AML — a custom programming language for differentiable computation
 - Ontogenesis: embryo (10K params) → adult (10M params) — minutes on a seeded corpus, hours under natural cross-graze feed
-- DNA exchange: organisms write generated text for others to consume. The tree is a field, not a queue: readers keep cursors, the writer prunes its own output to the last 30 min and at most 256 fragments, and every organism's corpus is a reservoir capped at `max_corpus_lines` (8000) lines and `max_corpus_lines × max_line_chars` bytes in every mode, `--evolution` included
+- DNA exchange: organisms write generated text for others to consume. The tree is a field, not a queue: readers keep cursors, the writer prunes its own output to the last 30 min and at most 256 fragments, and every organism's corpus is a reservoir capped at `max_corpus_lines` (8000) lines and `max_corpus_lines × max_line_chars` bytes in every mode, `--evolution` included. A tick reads at most `dna_max_reads_per_tick` (8) fragments from the sibling elements and, under a second budget, `dna_extra_reads_per_tick` (4) from the read-only sources the senses write, so neither half of the field can starve the other; an eaten fragment is appended cut into sentences, none longer than `max_line_chars`, so the whole of it survives the corpus read instead of its first 240 bytes
 - Consciousness: 5 implemented features (dissonance, pattern breaking,
   self-prediction error, conscience, immune system)
 - Self-meta-learning: organism tracks which actions improve loss,
@@ -662,9 +662,10 @@ The writer is its own process on purpose. The witness's connection stays `query_
 | harmonics, dominant, confidence | `am_harmonic_forward`: the sine DFT of the field-entropy history, its dominant harmonic and `0.3 + 0.7·conf`; verified against the formula by `TestWitnessHarmonicsMatchTheDFT` |
 | pulse | novelty (organisms appeared or left), arousal (`min(1, 2·|ΔH|)`), Shannon entropy over organism entropies — all across ticks |
 | alerts | no organisms alive; entropy above 2.5; eight dampen decisions in a row |
-| DNA field | per writer: files, bytes, newest fragment; events `wrote` / `pruned` every fifth tick |
+| per organism | stage, params, entropy, `global_step`, and the overlay fade of its last generation |
+| DNA field | per writer: files, bytes, newest fragment; events `wrote` / `pruned` every fifth tick; the read-only sources the senses write are in this scan since 2026-09-15 |
 
-Not computed, and why: field coherence and organism resonance need a gamma vector per organism, and no core writes one — the old mycelium read columns that did not exist and reported a constant. Each organism's `global_step` (age in training steps) is in the mesh since 2026-09-13.
+Not computed, and why: field coherence and organism resonance need a gamma vector per organism, and no core writes one — the old mycelium read columns that did not exist and reported a constant. Each organism's `global_step` (age in training steps) is in the mesh since 2026-09-13, and beside it since 2026-09-15 its voice — `gen_mag`, the mean |logit| of the raw transformer at the first step of its last generation, and `overlay_fade`, how far the corpus overlay has faded out of it (1 = gone). The witness prints the fade per organism.
 
 ### Mesh Coordination
 

@@ -2069,3 +2069,73 @@ through `dnaRead`, then `loadCorpusLines` → `NewEvolvingTokenizer` →
 be in `cf.BigramByFirst`. Appending the fragment whole again, it goes red at the
 first step of that sentence with `docs hold 2 lines, 261 bytes, the fragment was
 5073 B`.
+
+**6. Fade and magnitude ride the heartbeat.** `model.lastGenMag`, the mean
+absolute raw logit at the first step of the last generation, and
+`model.lastOverlayWeight`, the overlay weight that magnitude bought, existed
+only in process memory and in the `mag=` and `fade=` of the organism's own
+`[dna]` line. §13 of the brief wants eligibility for sentence-boundary injection
+read from the voice rather than from the stage label, and nothing outside the
+organism could read the voice. `Heartbeat` now takes them as two more arguments
+and writes two more columns, `gen_mag` and `overlay_fade`, added the way repair
+7 added `global_step` — in the `CREATE TABLE` for a fresh mesh and by an
+idempotent `ALTER TABLE ... ADD COLUMN` for one that already exists. The keeper
+carries them between tick reports like the rest of the state, the witness reads
+them with `COALESCE(...,0)` so an organism that has never generated reads as
+zero rather than as a schema error, and the per-organism part of the witness
+line gained a field: `earth:s4/4100k/0.90/12000/f1.00`.
+
+Gates in `witness_test.go`. A fresh mesh must carry all three columns, the
+values must survive the round trip, and the line must contain the fade; a
+pre-repair-7 fixture — `organisms` with `element` and without `global_step`,
+`gen_mag` or `overlay_fade`, holding one row — must gain all three, keep its row,
+read back as `0` for a voice never reported, and take a later heartbeat
+correctly. Removing the two `ALTER`s: `migration did not add "gen_mag"` with the
+column list printed. Removing the columns from the `CREATE TABLE` as well: `a
+fresh mesh has no "gen_mag" column`.
+
+Live on the phone, one organism and the witness over a scratch tree with a
+scratch `HOME`, cores 4-7: the organism printed `[dna] earth wrote 5003 bytes to
+ecology | gen=67 mag=5.69 fade=1.00`, and the witness snapshot read `"gen_mag":
+5.7641914466417274`, `"overlay_fade": 1`, `"global_step": 432` and
+`"world": {"files": 1, "bytes": 130}` in the same pass — the whole chain of
+repairs 1, 2, 3 and 6 in one run. The `[dna] earth consumed 127 bytes from 1
+files: [world/gen_1789337521_2.txt]` line is repair 3 counting: a 130 B fragment
+minus its newline is 129, and 127 is what reached the corpus as three sentences,
+the two bytes being the spaces the cuts fell on.
+
+**Two things found and not fixed.** `dnaRead` appends with `O_APPEND` and does
+not check whether the corpus file ends in a newline, so the first sentence of a
+fragment is glued to the last line of a corpus that does not — visible in the
+probe above as `...microorganism[eye cam0 2026-09-13T22:12:01Z] A blurry...`.
+That is older than these repairs and unchanged by them, one malformed line per
+fragment either way. And `Heartbeat` discards the error from its `Exec`, so a
+mesh whose schema is narrower than the write stops beating silently; that is how
+`TestBeatKeeperRefreshesMeshWithoutTicks` went red here, 12 runs out of 12, on a
+fixture that was a hand copy of the schema — the same way it went red when
+repair 7 added `global_step`, as the comment in `meshForKeeperTest` records. The
+fixture was widened, which is the repair-7 answer, and the deeper one — a
+fixture that cannot drift, or a heartbeat that says when it failed — is left
+named rather than done.
+
+**Tests.** Before: 184 pass, 2 skip, 0 fail. After: 191 pass, 2 skip. Twenty runs
+of `CGO_ENABLED=1 taskset -c 4-7 go test -count=1 -buildvcs=false ./...` on cores
+4-7, 3.6-3.9 s each: 17 clean, 3 red, and every red one is
+`TestBeatKeeperRefreshesMeshWithoutTicks` failing with `SQL logic error: no such
+table: organisms` at `governor_phone_test.go:117` or `:127`. That is the known
+flake of this tree, and its mechanism is now named rather than assumed:
+`meshForKeeperTest` opens `sqlite` with the DSN `:memory:` through `database/sql`,
+whose pool is free to open a second connection, and a second connection to
+`:memory:` is a second, empty database. It is a different failure from the
+deterministic one above, which said `heartbeat is 600.2 s old after the keeper
+ran` and is gone. `phone1/launch_test.sh`: 5 pass, 0 fail. The two skips are
+`TestCheckpointMemoryProfile` and `TestStage4SavePeak`, which want
+`MOLEQULA_CKPT_MEASURE` and `MOLEQULA_HEAVY=1`.
+
+Items 4, 5, 7, 8, 9 and 10 of the audit's order are untouched: the cafeteria, the
+probe drawn from what was eaten, the §13 gate itself, `world_facts`, the change
+emitter and the last infrastructure block. Nothing here decides who receives
+what — it only makes sure that what is sent arrives, whole, and that the signals
+the allocator will need are visible from outside the organism.
+
+— Defender (Arianna Method, phone-1)

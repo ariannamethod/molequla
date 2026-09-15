@@ -155,6 +155,8 @@ type beatKeeper struct {
 	syn     float64
 	ent     float64
 	step    int
+	mag     float64
+	fade    float64
 	set     bool
 	stopped bool
 }
@@ -164,12 +166,13 @@ func newBeatKeeper(swarm *SwarmRegistry) *beatKeeper {
 }
 
 // Set records the latest state the tick loop reported.
-func (b *beatKeeper) Set(stage, nParams int, syn, ent float64, step int) {
+func (b *beatKeeper) Set(stage, nParams int, syn, ent float64, step int, mag, fade float64) {
 	if b == nil {
 		return
 	}
 	b.mu.Lock()
 	b.stage, b.nParams, b.syn, b.ent, b.step, b.set = stage, nParams, syn, ent, step, true
+	b.mag, b.fade = mag, fade
 	b.mu.Unlock()
 }
 
@@ -191,11 +194,12 @@ func (b *beatKeeper) beat() bool {
 	}
 	b.mu.Lock()
 	stage, nParams, syn, ent, step, set, stopped := b.stage, b.nParams, b.syn, b.ent, b.step, b.set, b.stopped
+	mag, fade := b.mag, b.fade
 	b.mu.Unlock()
 	if !set || stopped {
 		return false
 	}
-	b.swarm.Heartbeat(stage, nParams, syn, ent, step)
+	b.swarm.Heartbeat(stage, nParams, syn, ent, step, mag, fade)
 	return true
 }
 

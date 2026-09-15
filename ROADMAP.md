@@ -35,7 +35,8 @@ is long — an organism lives for months of sessions, not for one uptime.
   is one pass of eye, ears and place, and the scheduler gained a second kind of
   slot: nine senses slots a day in the gaps between the colony windows, capped
   at 600 s, skipped and logged if they meet a live colony. The organisms are
-  told to eat the result with `--dna-extra-sources world,sound,place`. Waiting
+  told to eat the result with `--dna-extra-sources world,sound,place`, and since
+  the routing repairs of 2026-09-15 so is the witness. Waiting
   on the merge: the daemon still runs the old conf and the binary in
   `$MOLEQULA_RUN` predates the flag.
 - **A ledger of change, not a stream of facts** (`claude/phone1-world-ledger`,
@@ -77,8 +78,10 @@ is long — an organism lives for months of sessions, not for one uptime.
    with f16) has to enter the growth byte gate, which today knows nothing about
    it — hence the crude fence, a MemAvailable floor plus the colony-window
    skip. Still open too: the sentence entering the corpus at every age but
-   cross-graze only at `fade = 1` / stage ≥ teen. Age is `global_step`, already
-   a column in mesh.db.
+   cross-graze only at `fade = 1` / stage ≥ teen. Age is `global_step` and the
+   voice is `gen_mag` / `overlay_fade`, all three columns in mesh.db since the
+   routing repairs of 2026-09-15, so the gate has its inputs and what is left
+   is the gate itself — audit §4 item 7.
 4. **Other VLMs for the same organ.** Alternative eyes measured on the phone
    with the same table (tok/s, wall, peak RSS, one global frame) and stored in
    sibling folders of the weights repo.
@@ -143,6 +146,16 @@ is long — an organism lives for months of sessions, not for one uptime.
 
 ## Closed
 
+- **Routing repairs 1, 2, 3 and 6** (`claude/phone1-routing-food`, 2026-09-15). The
+  first four items of the audit of `molequla_new_logic.md`
+  (`reports/2026-09-15_new_logic_audit/README.md` §4) that are routing rather than
+  infrastructure: the witness is told about the senses, the extra sources read
+  under their own per-tick budget, an eaten fragment enters the corpus cut into
+  sentences instead of truncated at 240 bytes, and the organism's voice — the raw
+  transformer magnitude and the overlay fade — rides the heartbeat into `mesh.db`
+  beside `global_step`. Items 4, 5, 7, 8, 9 and 10 of that list stay open; the
+  measurements are in `MOLEQULALOG2.md`.
+
 - **The sensing window, and hearing that is not only speech**
   (`claude/phone1-sensing-window`, 2026-09-15; molequla_new_logic.md §2, §3 and
   §18 steps 1-5). An eye pass is a window of `SENSES_EYE_WINDOW` frames taken
@@ -159,6 +172,7 @@ is long — an organism lives for months of sessions, not for one uptime.
   `make test-soundscape` 7 fixtures (red twice by moving a threshold). Numbers in
   `MOLEQULALOG2.md` and `senses/ears/EARSLOG.md`; the tagger port stays open above
   as item 7.
+
 - **The senses gathered into one folder** (`claude/phone1-senses-tree`,
   2026-09-13). Oleg's decision: the organs live inside molequla, in `senses/`,
   and neither gets a repository of its own. The eye came across from the

@@ -73,10 +73,12 @@ func meshForKeeperTest(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Skipf("sqlite unavailable: %v", err)
 	}
-	// The columns Heartbeat writes, global_step included (repair 7): a fixture
-	// narrower than the real schema made the UPDATE fail silently and this
-	// test red the day the column was added.
-	if _, err := db.Exec(`CREATE TABLE organisms(id TEXT PRIMARY KEY, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, status TEXT, global_step INTEGER)`); err != nil {
+	// The columns Heartbeat writes, global_step (repair 7) and the two voice
+	// columns (routing repair 6) included: a fixture narrower than the real
+	// schema makes the UPDATE fail silently — Heartbeat discards the Exec
+	// error — and this test went red on exactly that, twice now, the day a
+	// column was added. Widen it with the schema in initMeshDB.
+	if _, err := db.Exec(`CREATE TABLE organisms(id TEXT PRIMARY KEY, stage INTEGER, n_params INTEGER, syntropy REAL, entropy REAL, last_heartbeat REAL, status TEXT, global_step INTEGER, gen_mag REAL, overlay_fade REAL)`); err != nil {
 		db.Close()
 		t.Skipf("sqlite exec: %v", err)
 	}
@@ -110,7 +112,7 @@ func TestBeatKeeperRefreshesMeshWithoutTicks(t *testing.T) {
 		t.Fatalf("keeper beat before any state was reported (age %.0f s)", age)
 	}
 
-	sr.Heartbeat(3, 1100000, 0.3, 0.4, 4200) // the tick loop reports once, then blocks
+	sr.Heartbeat(3, 1100000, 0.3, 0.4, 4200, 7.9, 1.0) // the tick loop reports once, then blocks
 	time.Sleep(120 * time.Millisecond)
 	age, stage, status := heartbeatRow(t, db, "a")
 	if age > 5 {

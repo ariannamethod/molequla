@@ -5706,10 +5706,22 @@ func (sr *SwarmRegistry) initMeshDB() error {
 		n_params INTEGER, syntropy REAL, entropy REAL,
 		last_heartbeat REAL, parent_id TEXT,
 		status TEXT DEFAULT 'alive',
-		element TEXT, global_step INTEGER)`)
+		element TEXT, global_step INTEGER,
+		gen_mag REAL, overlay_fade REAL)`)
 	// Migrations for existing databases
 	db.Exec("ALTER TABLE organisms ADD COLUMN element TEXT")
 	db.Exec("ALTER TABLE organisms ADD COLUMN global_step INTEGER") // repair 7: age in training steps, for the witness and for gates
+	// Routing repair 6: the voice, beside the age. gen_mag is the mean |logit|
+	// of the raw transformer at the first step of the last generation and
+	// overlay_fade is 1 - the overlay weight that magnitude bought, the two
+	// numbers dnaWrite already prints as mag= and fade= and that nothing
+	// outside the process could see. §13 of molequla_new_logic.md wants the
+	// sentence-boundary gate keyed on the voice rather than on the stage
+	// label; these are the columns it reads. Same idempotent ALTER as
+	// global_step above: an error on an existing column is the expected
+	// outcome and is discarded like the two before it.
+	db.Exec("ALTER TABLE organisms ADD COLUMN gen_mag REAL")
+	db.Exec("ALTER TABLE organisms ADD COLUMN overlay_fade REAL")
 	if err != nil {
 		db.Close()
 		return err
@@ -5806,15 +5818,19 @@ func (sr *SwarmRegistry) ReserveChildSlot(childID string, pid int, element strin
 }
 
 // Heartbeat performs periodic state update in mesh.db. globalStep is the
-// organism's age in training steps (repair 7), visible to the witness.
-func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int) {
+// organism's age in training steps (repair 7); genMag and overlayFade are its
+// voice (routing repair 6) — the raw transformer magnitude at the first step of
+// the last generation, and how far the corpus overlay has faded out of it.
+// Both were process-local until now, readable only in the organism's own
+// stdout, so no gate outside the process could follow the voice.
+func (sr *SwarmRegistry) Heartbeat(stage, nParams int, syntropy, entropy float64, globalStep int, genMag, overlayFade float64) {
 	if sr.MeshDB == nil {
 		return
 	}
 	sr.MeshDB.Exec(
-		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=? WHERE id=?",
-		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, sr.OrganismID)
-	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep) // nil-safe; the keeper repeats this state
+		"UPDATE organisms SET stage=?,n_params=?,syntropy=?,entropy=?,last_heartbeat=?,status='alive',global_step=?,gen_mag=?,overlay_fade=? WHERE id=?",
+		stage, nParams, syntropy, entropy, float64(time.Now().UnixMilli())/1000.0, globalStep, genMag, overlayFade, sr.OrganismID)
+	sr.keeper.Set(stage, nParams, syntropy, entropy, globalStep, genMag, overlayFade) // nil-safe; the keeper repeats this state
 }
 
 // DiscoverPeers finds other living organisms.
@@ -7068,12 +7084,16 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 				nP += m.Nout * m.Nin
 			}
 			gs := model.globalStep
+			// The voice, read under the same lock dnaWrite reads it under
+			// (routing repair 6). fade = 1 means the overlay is gone and the
+			// speech is the transformer's own.
+			genMag, genFade := model.lastGenMag, 1-model.lastOverlayWeight
 			model.mu.Unlock()
 			lastEntropy := 0.0
 			if len(syntracker.EntropyHistory) > 0 {
 				lastEntropy = syntracker.EntropyHistory[len(syntracker.EntropyHistory)-1]
 			}
-			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs)
+			swarm.Heartbeat(stage, nP, syntracker.SyntropyTrend, lastEntropy, gs, genMag, genFade)
 			// Update swarm info for hibernate decisions
 			peers := swarm.DiscoverPeers(60)
 			syntracker.SwarmInfo = &SwarmPeerInfo{Peers: peers}
@@ -7568,8 +7588,9 @@ func main() {
 	for _, m := range model.Base {
 		seedParams += m.Nout * m.Nin
 	}
+	seedMag, seedFade := model.lastGenMag, 1-model.lastOverlayWeight
 	model.mu.Unlock()
-	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep)
+	swarm.Heartbeat(seedStage, seedParams, 0, 0, seedStep, seedMag, seedFade)
 
 	if evolution {
 		fmt.Println("molequla is alive. [evolution] Autonomous mode — background trainer running. Ctrl+C to stop.")
