@@ -496,6 +496,15 @@ func ntTrainCore(model *GPT, tok *EvolvingTokenizer, docs []string, steps, seqLe
 			// caller releases model.mu so the exit path can save it.
 			break
 		}
+		// The ceiling on one turn (training_turn.go). Same shape as the abort
+		// above and the same guarantee: pullBack mirrors back what ran, so the
+		// caller re-queues for the steps that are left rather than for all of
+		// them. `step > 0` is load-bearing — a chunk that could return zero steps
+		// would send ntTrainInTurns round its loop for ever, paying the mirror
+		// cost each time and never advancing.
+		if step > 0 && trainTurnCeilingReached() {
+			break
+		}
 		ids := tok.Encode(docs[rand.Intn(len(docs))])
 		if len(ids) < 2 {
 			continue
@@ -580,14 +589,15 @@ func ntSequenceLoss(model *GPT, tok *EvolvingTokenizer, ids []int) (float64, []f
 }
 
 // ntBurstTrain — ecology micro-burst on the notorch path. Mirrors amlBurstTrain
-// (aml_trainer.go:252): fixed burst LR scaled by embryo/current embd.
-func ntBurstTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, burstLR float64) {
+// (aml_trainer.go:252): fixed burst LR scaled by embryo/current embd. Returns the
+// steps that ran, which is what the turn's ceiling made of the steps asked for.
+func ntBurstTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, burstLR float64) int {
 	if CFG.Trainer == "aml" {
 		amlBurstTrain(model, tok, docs, steps, burstLR)
-		return
+		return steps
 	}
 	if len(docs) == 0 || steps <= 0 {
-		return
+		return 0
 	}
 	model.mu.Lock()
 	defer model.mu.Unlock()
@@ -599,18 +609,29 @@ func ntBurstTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, 
 	tStart := time.Now()
 	embryoEmbd := CFG.GrowthStages[0][1]
 	lr := burstLR * float64(embryoEmbd) / float64(model.NEmbd)
+	g0 := model.globalStep
 	avg, n, ms := ntTrainCore(model, tok, docs, steps, model.BlockSize, func(int) float64 { return lr })
+	// The freeze counter is decremented by the steps that ran, never by the steps
+	// asked for. Under the turn's ceiling a burst can be cut in two, and a counter
+	// charged for the whole request each time is the duplicated-invariant bug the
+	// tree already paid for once (ff6ad49, the colony stuck at adolescent).
+	ran := model.globalStep - g0
 	if model.growthFreezeRemaining > 0 {
-		model.growthFreezeRemaining -= steps
+		model.growthFreezeRemaining -= ran
 		if model.growthFreezeRemaining < 0 {
 			model.growthFreezeRemaining = 0
 		}
 	}
 	if n > 0 {
-		fmt.Printf("[notorch] burst complete: %d steps, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d | start=%s end=%s\n",
-			steps, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount(),
+		note := ""
+		if ran < steps {
+			note = fmt.Sprintf(" (cut at the turn's ceiling, %d requested)", steps)
+		}
+		fmt.Printf("[notorch] burst complete: %d steps%s, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d | start=%s end=%s\n",
+			ran, note, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount(),
 			tStart.UTC().Format(ntBurstStamp), time.Now().UTC().Format(ntBurstStamp))
 	}
+	return ran
 }
 
 // ntBurstStamp is the wall-clock form on the burst line: UTC to the
@@ -629,13 +650,13 @@ func ntStepsPerSec(n int, ms float64) float64 {
 // (aml_trainer.go:139): cosine LR driven by molequla's cosineLR (so the
 // post-growth Chuck-state reset, S1, costs no LR-schedule continuity — the
 // schedule lives in cosineLR, not in Chuck's internal macro counter).
-func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, overrides ...int) {
+func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int, overrides ...int) int {
 	if CFG.Trainer == "aml" {
 		amlTrainSteps(model, tok, docs, steps, overrides...)
-		return
+		return steps
 	}
 	if len(docs) == 0 || steps <= 0 {
-		return
+		return 0
 	}
 	model.mu.Lock()
 	defer model.mu.Unlock()
@@ -655,8 +676,10 @@ func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int,
 		return lr
 	}
 	avg, n, ms := ntTrainCore(model, tok, docs, steps, seqLen, lrFor)
+	// Steps that ran, not steps asked for — see the note in ntBurstTrain.
+	ran := model.globalStep - g0
 	if model.growthFreezeRemaining > 0 {
-		model.growthFreezeRemaining -= steps
+		model.growthFreezeRemaining -= ran
 		if model.growthFreezeRemaining < 0 {
 			model.growthFreezeRemaining = 0
 		}
@@ -664,7 +687,6 @@ func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int,
 	if n > 0 {
 		// Report the steps that ran, not the steps that were asked for: a warmup
 		// cut short by a shutdown used to announce the full 1600 it never did.
-		ran := model.globalStep - g0
 		note := ""
 		if ran < steps {
 			note = fmt.Sprintf(" (stopped early, %d requested)", steps)
@@ -672,4 +694,5 @@ func ntWarmupTrain(model *GPT, tok *EvolvingTokenizer, docs []string, steps int,
 		fmt.Printf("[notorch] warmup complete: %d steps%s, avg loss %.4f | %.0fms %.1f steps/s | gpu-dispatch=%d\n",
 			ran, note, avg, ms, ntStepsPerSec(n, ms), ntGPUDispatchCount())
 	}
+	return ran
 }

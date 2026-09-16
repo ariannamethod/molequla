@@ -299,6 +299,27 @@ type Config struct {
 	SerialBursts            bool    `json:"serial_bursts"`              // one training phase in the colony at a time. Off = four tapes at once, which is right on a GPU host (4 concurrent organisms, 99% util measured 2026-06-03) and wrong on a phone.
 	TrainingLockTTLSeconds  float64 `json:"training_lock_ttl_seconds"`  // how long a training_lock row stands without a refresh. 30 s, the value the lock has carried since it was written, and about four times the measured stage-4 burst of 7 400 ms (design §1.1). The holder re-stamps three times inside it, so this bounds a dead holder, not a slow one.
 	TrainingTurnPollSeconds float64 `json:"training_turn_poll_seconds"` // how often a waiting organism re-asks. 0.5 s against that 7 400 ms burst: fourteen polls per turn, and at most half a second of a freed tape going unused.
+	// The ceiling on one turn. A phase that reaches it mirrors its weights back,
+	// releases the turn and re-queues for the steps it has left, so no single
+	// phase — and no bug inside one — can park the colony. 120 s comes from two
+	// measurements on this phone over the four colony sessions in
+	// molequla-run/*/*.stdout (2026-09-15T20:21 to 2026-09-16T21:57): the longest
+	// single step loop of 233 timed micro-bursts was 103.3 s (fire), so an ordinary
+	// burst is never cut in two; and re-entry — ntNewMirror, register, pullBack,
+	// free, malloc_trim, read as the burst line's start=/end= wall minus its own
+	// step-loop ms — costs a mean of 370 ms and a maximum of 1 169 ms, so yielding
+	// every 120 s spends 0.31 % of the tape on rebuilding it. It is seconds and
+	// not steps because steps/s spans 215.4 at the embryo to 0.4 at stage 5: a
+	// step-count chunk would be half a second at one end and 33 min at the other.
+	// 0 disables the ceiling, which is the behaviour before 2026-09-16.
+	TrainTurnCeilingSeconds float64 `json:"train_turn_ceiling_seconds"`
+	// Who goes next among equal priorities: the organism that has trained least
+	// this session (true), or the one that has waited longest (false, the
+	// behaviour before 2026-09-16). Longest-wait hands out equal *turns*, and a
+	// turn is not an equal amount of tape: measured on 2026-09-16 the adult's
+	// burst is 76.0 s against the teen's 58.0 s, so equal turns give the adult
+	// 31 % more tape than the teen. Least-spent-first hands out equal seconds.
+	TrainTurnFairSpend bool `json:"train_turn_fair_spend"`
 	// The wait every mesh write is allowed inside sqlite before it gives up.
 	// mesh.db is written by four organisms' heartbeats, by the training queue
 	// and its refresher, and by the world ledger's ingest, each from its own
@@ -471,6 +492,8 @@ var CFG = Config{
 	SerialBursts:            true,
 	TrainingLockTTLSeconds:  30.0,
 	TrainingTurnPollSeconds: 0.5,
+	TrainTurnCeilingSeconds: 120.0, // > the longest measured burst (103.3 s of 233); re-entry costs 370 ms mean, 0.31 % of the tape
+	TrainTurnFairSpend:      true,
 	MeshBusyTimeoutMS:       5000, // 11.3x the 441.5 ms worst measured wait; a quarter of the 20 s beat
 	OomScoreAdj:            300,  // lmkd takes the organism before Termux (which sits at 0). Tunable; 0 = leave untouched.
 	TrimHeapAfterTrain:     true, // one malloc_trim per training phase, where nothing is in flight; false leaves the arena alone.
@@ -5811,6 +5834,28 @@ type SwarmRegistry struct {
 	growthStop  chan struct{} // closed by ReleaseGrowthLock; stops the lock refresher (repair 9)
 	trainMu     sync.Mutex
 	trainStop   chan struct{} // closed by ReleaseTrainingLock; stops the lock refresher (resonator step 1)
+	// Seconds of tape this organism has had this session, in milliseconds. The
+	// fairness key of §2.3, charged by ntTrainInTurns around every chunk and
+	// published into the queue row on every poll. It lives on the registry and
+	// not in a package variable because the fairness gate runs four organisms in
+	// one test process, and a colony-wide counter would make all four equal.
+	trainSpentMs atomic.Int64
+}
+
+// AddTrainingSpent charges one finished chunk of training to this organism.
+func (sr *SwarmRegistry) AddTrainingSpent(d time.Duration) {
+	if sr == nil || d <= 0 {
+		return
+	}
+	sr.trainSpentMs.Add(d.Milliseconds())
+}
+
+// TrainingSpentSeconds is the fairness key as the queue writes it.
+func (sr *SwarmRegistry) TrainingSpentSeconds() float64 {
+	if sr == nil {
+		return 0
+	}
+	return float64(sr.trainSpentMs.Load()) / 1000.0
 }
 
 // StartKeeper launches the heartbeat keeper: from now until stop closes, the
@@ -5940,11 +5985,22 @@ func (sr *SwarmRegistry) initMeshDB() error {
 	// organism killed while waiting stops blocking its siblings after one TTL
 	// instead of forever.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS training_queue(
-		organism_id TEXT PRIMARY KEY, since REAL, seen REAL, priority INTEGER)`)
+		organism_id TEXT PRIMARY KEY, since REAL, seen REAL, priority INTEGER, spent REAL)`)
 	if err != nil {
 		db.Close()
 		return err
 	}
+	// `spent` is how many seconds of training this organism has already had this
+	// session, and it is the fairness key: least-spent-first hands out equal
+	// seconds of tape where longest-wait hands out equal turns. It arrives with
+	// every poll from the asking process, exactly as `priority` does, because the
+	// figure belongs to the process and not to the row — ReleaseTrainingLock
+	// deletes the row so that the organism which has just trained goes to the
+	// back, and a column that had to survive that deletion would be a second
+	// place for one invariant to live. The same ALTER as the organisms table's
+	// five: an error on a mesh.db that already has the column is the expected
+	// outcome and is discarded.
+	db.Exec("ALTER TABLE training_queue ADD COLUMN spent REAL")
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS mitosis_lock(
 		organism_id TEXT PRIMARY KEY, acquired_at REAL)`)
 	if err != nil {
@@ -6135,19 +6191,50 @@ func (sr *SwarmRegistry) Unregister() {
 
 // The two priorities of the queue (resonator design §2.3). The design names
 // three keys in order: an organism that has just grown and is at stage N+1
-// untrained, then the steepest loss trend, then the longest wait. The middle
-// key is not implemented and the reason is a fact about the schema rather than
-// a choice: the ordering key §2.3 names is the mean of the last eight burst
-// deltas, which lives in SyntropyTracker.BurstHistory inside each process, and
-// the mesh column that looks like it — `syntropy` — is the entropy trend
-// (molequla.go, SyntropyTrend = oldMean - newMean over EntropyHistory), not the
-// loss trend. Publishing the loss trend would be another column, and step 0 is
-// the only column this work adds. So the order here is: grown-and-unwarmed
-// first, everyone else longest-wait first.
+// untrained, then the steepest loss trend, then the longest wait.
+//
+// trainTurnGrown is the first key and it is worth exactly one chunk. §2.3 keys
+// it on an organism "whose warmup has not run"; once a chunk of that warmup has
+// run the organism is neither unwarmed nor untrained, so ntTrainInTurns drops it
+// to trainTurnBurst for every chunk after the first. Without that decay the
+// ceiling of TrainTurnCeilingSeconds would be theatre: a warmup would release
+// the turn and win it straight back, because nothing outranks the first key.
+//
+// The middle key is still not implemented, and the reason is still a fact about
+// the schema: §2.3's key is the mean of the last eight burst deltas, which lives
+// in SyntropyTracker.BurstHistory inside each process, and the mesh column that
+// looks like it — `syntropy` — is the entropy trend (SyntropyTrend = oldMean -
+// newMean over EntropyHistory), not the loss trend. It could travel with the
+// request the way `spent` does, and it was left out for a measured reason rather
+// than an absent one: it would sit below `spent`, and `spent` is a float of
+// milliseconds that four organisms never hold in common, so the tiebreak would
+// never fire. Under the resonator (step 4) the request row carries the trend
+// anyway and the key costs nothing; until then it would be an ordering that
+// cannot be shown to order anything.
 const (
-	trainTurnBurst = 0 // an ordinary micro-burst
-	trainTurnGrown = 1 // a stage transition's warmup: at stage N+1 and untrained
+	trainTurnBurst = 0 // an ordinary micro-burst, or any chunk after a warmup's first
+	trainTurnGrown = 1 // a stage transition's warmup, first chunk: at stage N+1 and untrained
 )
+
+// trainTurnAheadFairSpend and trainTurnAheadLongestWait are the two orderings of
+// the queue as a SQL predicate over `q` (another waiter) and `me`: the rows that
+// must train before this organism. Which one is in force is CFG.TrainTurnFairSpend,
+// and it is a switch rather than a rewrite so that the before/after of
+// 2026-09-16 is measurable on one binary.
+const trainTurnAheadFairSpend = `q.priority > me.priority
+	     OR (q.priority = me.priority
+	         AND (COALESCE(q.spent, 0.0) < COALESCE(me.spent, 0.0)
+	              OR (COALESCE(q.spent, 0.0) = COALESCE(me.spent, 0.0) AND q.since < me.since)))`
+
+const trainTurnAheadLongestWait = `q.priority > me.priority
+	     OR (q.priority = me.priority AND q.since < me.since)`
+
+// trainTurnNow is the clock the queue reads, in seconds. It is a variable for
+// one reason: the fairness gate replays a two-hour session against this SQL in
+// milliseconds of real time, and a comparator can only be shown to order by
+// spend rather than by arrival if arrival can be placed where the test wants it.
+// Everything else — the TTL, the refresher, the ceiling — keeps the real clock.
+var trainTurnNow = func() float64 { return float64(time.Now().UnixMilli()) / 1000.0 }
 
 // trainingLockRefreshSeconds is the TTL divided so that three refreshes fall
 // inside it: two lost ones still cannot expire a holder that is alive.
@@ -6172,21 +6259,28 @@ func (sr *SwarmRegistry) AcquireTrainingTurn(priority int) bool {
 	if sr.MeshDB == nil {
 		return true // no mesh = solo, always proceed
 	}
-	now := float64(time.Now().UnixMilli()) / 1000.0
+	now := trainTurnNow()
 	ttl := CFG.TrainingLockTTLSeconds
 	if ttl <= 0 {
 		ttl = 30.0
 	}
 	cutoff := now - ttl
+	spent := sr.TrainingSpentSeconds()
 	// Join the queue, or re-stamp the row if this organism is already in it.
 	// `since` is written once and never moved while the organism waits: it is
 	// the longest-wait key, and a poll that refreshed it would make a waiter
-	// that polls often the youngest waiter there is.
+	// that polls often the youngest waiter there is. `priority` and `spent` are
+	// the opposite — they are this poll's answer to "how badly" and "how much
+	// have you had already", and both can change between polls.
 	sr.MeshDB.Exec(
-		"INSERT OR IGNORE INTO training_queue(organism_id, since, seen, priority) VALUES(?,?,?,?)",
-		sr.OrganismID, now, now, priority)
-	sr.MeshDB.Exec("UPDATE training_queue SET seen=?, priority=? WHERE organism_id=?",
-		now, priority, sr.OrganismID)
+		"INSERT OR IGNORE INTO training_queue(organism_id, since, seen, priority, spent) VALUES(?,?,?,?,?)",
+		sr.OrganismID, now, now, priority, spent)
+	sr.MeshDB.Exec("UPDATE training_queue SET seen=?, priority=?, spent=? WHERE organism_id=?",
+		now, priority, spent, sr.OrganismID)
+	ahead := trainTurnAheadFairSpend
+	if !CFG.TrainTurnFairSpend {
+		ahead = trainTurnAheadLongestWait
+	}
 	result, err := sr.MeshDB.Exec(
 		`INSERT OR REPLACE INTO training_lock(organism_id, acquired_at)
 		 SELECT ?, ? WHERE NOT EXISTS (
@@ -6194,8 +6288,7 @@ func (sr *SwarmRegistry) AcquireTrainingTurn(priority int) bool {
 		 ) AND NOT EXISTS (
 		   SELECT 1 FROM training_queue q, training_queue me
 		   WHERE me.organism_id = ? AND q.organism_id != me.organism_id AND q.seen > ?
-		     AND (q.priority > me.priority
-		          OR (q.priority = me.priority AND q.since < me.since))
+		     AND (`+ahead+`)
 		 )`,
 		sr.OrganismID, now, sr.OrganismID, cutoff, sr.OrganismID, cutoff)
 	if err != nil {
@@ -7328,11 +7421,12 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// exists to remove. The warmup enters at trainTurnGrown: §2.3's
 			// first key is the organism that has grown and is at stage N+1
 			// untrained, and it is already holding the growth lock.
-			warmupLocked := false
-			if swarm != nil && (CFG.SerialBursts || CFG.CoordinateWarmup) {
-				swarm.WaitTrainingTurn(trainTurnGrown, "warmup")
-				warmupLocked = true
-			}
+			// Since 2026-09-16 the turn is taken per chunk inside ntTrainInTurns
+			// rather than once around all three sub-phases: at stage 5 those three
+			// held it for 4 796.3 s together (1 968.3 + 1 521.8 + 1 306.2, water,
+			// 2026-09-15 20:00Z), and three siblings waited about a thousand
+			// seconds each for one burst behind them.
+			warmupGated := swarm != nil && (CFG.SerialBursts || CFG.CoordinateWarmup)
 
 			embryoEmbd := CFG.GrowthStages[0][1]
 			warmupScale := int(math.Ceil(math.Sqrt(float64(model.NEmbd) / float64(embryoEmbd))))
@@ -7348,9 +7442,15 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			earlySteps := int(float64(backpropSteps) * 0.4)
 			midSteps := int(float64(backpropSteps) * 0.3)
 			lateSteps := backpropSteps - earlySteps - midSteps
-			ntWarmupTrain(model, tok, docs, earlySteps, 8) // very short seqs, batch=1
-			ntWarmupTrain(model, tok, docs, midSteps, 16)  // short seqs, batch=1
-			ntWarmupTrain(model, tok, docs, lateSteps, 32) // medium seqs, batch=1
+			// Only the first sub-phase asks at trainTurnGrown: after it the
+			// organism has trained at stage N+1 and §2.3's first key no longer
+			// describes it. The two behind it queue on spend like any burst.
+			ntTrainInTurns(swarm, warmupGated, trainTurnGrown, "warmup", earlySteps,
+				func(n int) int { return ntWarmupTrain(model, tok, docs, n, 8) }) // very short seqs, batch=1
+			ntTrainInTurns(swarm, warmupGated, trainTurnBurst, "warmup", midSteps,
+				func(n int) int { return ntWarmupTrain(model, tok, docs, n, 16) }) // short seqs, batch=1
+			ntTrainInTurns(swarm, warmupGated, trainTurnBurst, "warmup", lateSteps,
+				func(n int) int { return ntWarmupTrain(model, tok, docs, n, 32) }) // medium seqs, batch=1
 			// Phase B: notorch for delta adapters (40%, no autograd = much faster)
 			// notorchTrainSteps DISABLED in warmup — diverges at stage 5 (loss 3.5→116)
 			// notorchTrainSteps(model, tok, docs, notorchDeltaSteps, CFG.NotorchLR)
@@ -7364,9 +7464,6 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			SaveCheckpoint(model, tok, "")
 			model.mu.Unlock()
 
-			if warmupLocked && swarm != nil {
-				swarm.ReleaseTrainingLock()
-			}
 			dbLogGrowth(db, model, tok, docs, 0.0, fmt.Sprintf("warmup_stage_%d", currentStage))
 			fmt.Printf("[trainer] warmup complete at stage %d. base may freeze now, like a proud fossil.\n", currentStage)
 			releaseGrowth() // the peak is over — the next sibling may grow
@@ -7427,20 +7524,20 @@ func backgroundTrainer(db *sql.DB, model *GPT, tok *EvolvingTokenizer, qbuf *Qua
 			// was where the lock was taken, not that it was taken. Measured on
 			// this phone 2026-09-15: with the gate around the whole block instead
 			// of the tape, a sibling waited 224.0s for a burst of 10.4s.
-			burstTurn := swarm != nil && (CFG.SerialBursts || CFG.CoordinateWarmup)
-			if burstTurn {
-				swarm.WaitTrainingTurn(trainTurnBurst, "burst")
-			}
-			// notorch: gradient-free delta training (no backward pass, no compute graph)
-			ntBurstTrain(model, tok, docs, CFG.MicroSteps, burstLR)
-			memSnapshot("burst")
-			// Released before the loss is measured again and before the
-			// checkpoint is written: the tape is gone by here, and holding a
+			// The turn is taken and released inside ntTrainInTurns, once per
+			// chunk, and released before the loss is measured again and before
+			// the checkpoint is written: the tape is gone by then, and holding a
 			// colony-wide turn across a 110 MB JSON write buys the colony
-			// nothing and costs the next organism its tick.
-			if burstTurn {
-				swarm.ReleaseTrainingLock()
-			}
+			// nothing and costs the next organism its tick. At 120 s the ceiling
+			// is above every burst measured on this phone (the longest of 162 was
+			// 103.3 s), so an ordinary burst is one chunk and this is the same
+			// single turn it has always been; a burst that does run long yields
+			// and re-queues for the rest instead of parking the colony.
+			burstTurn := swarm != nil && (CFG.SerialBursts || CFG.CoordinateWarmup)
+			// notorch: gradient-free delta training (no backward pass, no compute graph)
+			ntTrainInTurns(swarm, burstTurn, trainTurnBurst, "burst", CFG.MicroSteps,
+				func(n int) int { return ntBurstTrain(model, tok, docs, n, burstLR) })
+			memSnapshot("burst")
 
 			model.mu.Lock()
 			// Measure loss after burst
@@ -7943,6 +8040,10 @@ func main() {
 				earlySteps := int(float64(backpropSteps) * 0.4)
 				midSteps := int(float64(backpropSteps) * 0.3)
 				lateSteps := backpropSteps - earlySteps - midSteps
+				// No turn and no ceiling here on purpose: this is the first-launch
+				// climb of an organism with no checkpoint, and it runs before
+				// swarm.Register(), so there is no queue to join and nothing to
+				// yield to. The turn begins with the tick loop.
 				ntWarmupTrain(model, tok, docs, earlySteps, 8) // very short seqs, batch=1
 				ntWarmupTrain(model, tok, docs, midSteps, 16)  // short seqs, batch=1
 				ntWarmupTrain(model, tok, docs, lateSteps, 32) // medium seqs, batch=1
