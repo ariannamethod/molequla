@@ -172,8 +172,25 @@ is long — an organism lives for months of sessions, not for one uptime.
      is grown-and-unwarmed first, then longest wait — §2.3's middle key, the
      loss trend, is not implemented because the mesh has no column for it and
      step 0 is the only column this work adds.
-   - Next: step 2, the GGUF writer and a mappable checkpoint beside the JSON
-     one. Nothing beyond step 1 is built.
+   - **2 — the checkpoint as a GGUF** (`6d5091d` + `a832466` + `8311461`,
+     Defender, 2026-09-16). `molequla_ckpt.gguf` beside `molequla_ckpt.json`,
+     every matrix and adapter as an F32 tensor with the shape, growth clock,
+     tokenizer and alpha as metadata, written through notorch's new
+     `gguf_write*` and read back from the mapping straight into the organism's
+     own arrays — no decode buffer, and no throwaway `NewGPT` on that path.
+     On the live air checkpoint: 134 095 293 B of JSON against 25 815 360 B of
+     GGUF, a save of 2 025 ms against 62 ms, a load of 4 136 ms and +179 MB of
+     high-water against 146 ms and +130 MB; on water, stage 5, 256 665 647 B
+     against 48 614 016 B and 7 905 ms against 200 ms. The JSON stays the
+     interchange format and is renamed first, so a GGUF that fails to write is
+     removed rather than left stale. Gates: 32 steps from either file give the
+     same avg loss exactly (air 0.7088575524976477, water 1.5836318209767342);
+     a truncated, a foreign and a stale sibling each fall back with one line;
+     the NewGPT counter reads 0 on the binary path. Chuck's moments are not in
+     it — they live in the tape, no restart has ever carried them, and §2.2
+     gives them to the resonator's own file. The remaining +130 MB is the
+     float64 weight-and-gradient pair, which step 3 is what removes.
+   - Next: step 3, sleep as a mapping. Nothing beyond step 2 is built.
 
 ## Later
 

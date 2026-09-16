@@ -3765,3 +3765,174 @@ install`. Step 2 of the resonator design — the checkpoint as a mapped GGUF fil
 instead of 250 MB of JSON — is now unblocked.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-16 — the checkpoint stops being decimal text
+
+Step 2 of `docs/resonator_design.md`. An organism's weights are written twice
+now: `molequla_ckpt.json` exactly as before, and `molequla_ckpt.gguf` beside it,
+F32 tensor by F32 tensor with a directory in front, which is a file that can be
+mapped instead of parsed. The JSON stays the interchange format and stays the
+organism's life; the GGUF is the copy the machine can read at the speed it
+trains at, and it is what the sleeper of step 3 and the resonator of step 4 both
+wait on.
+
+### The format, and what is in which file
+
+The binary sibling carries every `model.Base` matrix and every delta adapter as
+a two-dimensional F32 tensor — `base.<key>`, `delta.<module>.<key>.A` and `.B` —
+plus `init_embed_snapshot`, and beside them the metadata a loader needs:
+`molequla.block_count`, `.embedding_length`, `.attention.head_count`,
+`.context_length`, `.vocab_size` and `.head_types` for the shape,
+`.global_step`, `.growth_step_offset`, `.last_warmup_stage` and
+`.corpus_ingested_total` for the growth clock, `tokenizer.ggml.tokens` with
+`molequla.tokenizer.merges`, `.bpe_enabled` and `.trained_chars` for the mouth.
+`ActiveAlpha` goes in as its JSON text rather than as an f32 array, because it
+is not a weight but a scalar the burst multiplies by, and rounding it would be a
+change to the graph rather than to storage. Alignment is 32 and is not written:
+`gguf_open` computes the data offset as `(pos + 31) & ~31` without consulting
+`general.alignment`, so any other value produces a file the library cannot read.
+
+**Chuck's moment slots are not in it, and not in a sibling either.** §2.2 of the
+design gives them their own `moments.gguf` that only the resonator maps, and the
+reason they are not written today is older than the design: they live in the
+notorch tape, `nt_tape_chuck_step` keeps m and v per registered parameter, the
+tape is process-local, and no restart has ever carried them across — there is no
+accessor in `notorch.h` that would let Go read them, and adding one is notorch
+work that belongs to step 4, which is the only thing that would read the file.
+Writing them now would mean writing state nothing loads. What the file does
+carry is the fact, in one key, `molequla.chuck_moments = false`, so a reader can
+tell "this checkpoint has no optimizer state" from "the writer did not know
+about optimizer state".
+
+**The file is float32 and the JSON is float64**, so preferring the binary looks
+like discarding half of every mantissa. It is not, and the gate that says so is
+`TestTrainedWeightsAreAlreadyFloat32`: the notorch mirror flattens every trained
+weight to float32 before the first forward (`ntFlattenMatrix`) and writes
+float32 back into the float64 rows on `pullBack`, so after one burst every
+weight the trainer touches is already exactly `float64(float32(w))`. A fresh
+organism's random draws have a float64 tail; a trained one has none. The fixture
+asserts the tail exists before the burst, or the gate would be measuring nothing.
+
+**If one of the two writes fails, the JSON wins.** It is written to a temp file
+and renamed first, unconditionally, and only then is the GGUF written and
+renamed. A GGUF that cannot be written or cannot be renamed is *removed* rather
+than left behind, and the save still returns success with one line on stderr:
+losing the sibling costs a slower next load and nothing else, while a stale
+binary beside a fresh JSON is the one failure that could hand an organism
+weights it has already moved past. The same reasoning covers the crash case,
+which no rename discipline can prevent — a process killed between the two
+renames leaves a GGUF older than the JSON, so the load compares the two mtimes
+and refuses a sibling that is behind.
+
+**On load the binary is preferred when it is fresh and when it agrees with the
+JSON about which organism it is.** The identity is a SHA-256 of the tokenizer —
+every token and merge, length-prefixed, since a token may contain any byte — and
+of the three dimensions that are the growth stage, which is the same triple
+`CurrentGrowthStage` matches on. It is read off the front of the JSON, where
+`cfg` and `tokenizer` are the first two fields, so the check costs tens of
+kilobytes rather than the whole document; a JSON that reaches `base` before
+showing both gives up and the JSON path runs.
+
+### The table, measured on this phone
+
+Two live organisms, copied out of `molequla-run` into `/data/local/tmp` (flash,
+not the tmpfs), measured on cores 4-7 outside the colony window with
+MemAvailable at 4.0-4.5 GB, one phase per process because `VmHWM` is a mark for
+the life of a process:
+
+    MOLEQULA_GGUF_MEASURE=<copy>/molequla_ckpt.json \
+    MOLEQULA_GGUF_PHASE=save|load-json|load-gguf|parity \
+    CGO_ENABLED=1 go test -count=1 -buildvcs=false -run TestGGUFCheckpointMeasure -v .
+
+| | air, stage 4 | water, stage 5 |
+|---|---|---|
+| base parameters / vocab / delta modules | 4 877 416 / 783 / 6 | 11 147 184 / 813 / 2 |
+| JSON on disk | 134 095 293 B | 256 665 647 B |
+| GGUF on disk | 25 815 360 B | 48 614 016 B |
+| smaller by | 108 279 933 B (5.19×) | 208 051 631 B (5.28×) |
+| JSON save | 2 025 ms, VmHWM +29 MB | 3 071 ms, +42 MB |
+| GGUF save | 62 ms, VmHWM +0 MB | 104 ms, +0 MB |
+| JSON load | 4 136 ms, RSS +179 MB, HWM +179 MB, NewGPT×1 | 7 905 ms, RSS +368 MB, HWM +368 MB, NewGPT×1 |
+| GGUF load | 146 ms, RSS +106 MB, HWM +130 MB, NewGPT×0 | 200 ms, RSS +191 MB, HWM +238 MB, NewGPT×0 |
+| load faster by | 28.3× | 39.5× |
+| load peak lower by | 49 MB | 130 MB |
+| avg loss, 32 steps, from the GGUF | 0.7088575524976477 | 1.5836318209767342 |
+| avg loss, 32 steps, from the JSON | 0.7088575524976477 | 1.5836318209767342 |
+
+Two of those numbers are smaller than the design estimated and one is larger, and
+all three differences have the same cause. The design counted 19 337 632 B of
+f32 for a 4 834 408-parameter organism; air's file is 25 815 360 B because the
+parameter count in the design is `model.Base` only — air's base is 19 509 664 B,
+its embedding snapshot 701 568 B, and the six delta modules' adapters and the
+metadata make up the remaining 5 604 128 B. The design also expected the load's
++152 MB of resident set to collapse, and it has not: it falls from +179 MB to
++130 MB on air. The 49 MB that went is the throwaway model `NewGPT` used to
+build and `LoadCheckpoint` used to replace; what stays is the float64 pair —
+every loaded parameter allocates `Data` and `Grad` as float64, 16 bytes per
+weight — and that is 78 MB on air's base alone. **Step 2 cannot remove it; step
+3 is where it goes**, because a sleeper generates from the mapping and has no
+float64 copy at all. On disk the saving is larger than the estimate: 103 MB on
+air rather than 91, and 198 MB on water.
+
+The save-side numbers close the other half of repair 10. The streamed JSON
+writer still costs +29 to +42 MB of high-water; the GGUF writer costs +0,
+because nothing bigger than one row is ever alive — every tensor is declared
+first, as the format requires, and then delivered a row at a time through
+`gguf_write_tensor_begin/_chunk_f32/_end`.
+
+### The gates, and what red looked like
+
+| gate | red |
+|---|---|
+| loss parity, GGUF against JSON, 32 steps, same seed | shape declared `{Nout, Nin}` instead of `{Nin, Nout}`: the round trip caught `l0.wr_a` coming back 8x64 for 64x8, and the parity arm died in cgo with `SIGSEGV` |
+| a truncated GGUF falls back to the JSON with one line | cuts at 2, 50 and 97 percent: the first fails in `gguf_open`, the other two in the row bounds check — all three print the line and the organism starts |
+| a foreign tokenizer is refused | identity comparison disabled: the foreign organism's `wte[7][3] = -0.128…` loaded in place of this one's `-0.077…` |
+| a GGUF older than the JSON is refused | mtime comparison disabled: the stale file was used and the NewGPT counter did not move |
+| no throwaway model on the GGUF path | `newGPTShell` swapped back for `NewGPT`: the counter read 1 where it must read 0 |
+| the writer refuses a ragged matrix and leaves no file | — (the JSON save survives the refusal and the organism still loads) |
+| a trained weight is already its own float32 image | — (goes red the day the trainer keeps a float64 weight) |
+
+248 tests green, 2 heavy measurements skipped, on `CGO_ENABLED=1 go test -count=1
+-buildvcs=false ./...` — 240 green before this work, and the three that had to
+move with the format did so for a stated reason rather than by being relaxed:
+the two that are about the JSON's own byte exactness now load with the sibling
+removed, and the shutdown test, which is the production resume, asserts the
+float32 image it will now get.
+
+### `tests/test_all.sh` cannot run on this node, and what was checked instead
+
+The four-core script fails at its build section on phone-1 and did so before
+this work: its Go line is `go build -o … molequla.go`, a single-file build of a
+multi-file package that cannot compile here (`undefined: gpuReady`, which lives
+in `gpu_bridge.go`); `cargo` and `node` are not installed in the chroot; and
+`libsqlite3-dev` is absent, so `gcc … -lsqlite3` has nothing to link. What could
+be run was run: `molequla.c` builds clean with the Termux toolchain over
+`ssh -p 8022 localhost` (`clang -O2 -Wno-format-truncation -o molequla_c
+molequla.c -lm -lsqlite3 -lpthread`, 107 432 B).
+
+Reading the three other cores settles the question the script was standing in
+for, and corrects the premise. The **C core does not read this JSON at all**: its
+`CFG.ckpt_path` is `molequla.ckpt` and `load_checkpoint` is `fread` over its own
+binary layout. The **JS core** keeps its checkpoint in IndexedDB. Only the
+**Rust core** reads `molequla_ckpt.json`, through `serde_json` into its own
+`CheckpointData`, without `deny_unknown_fields`. The JSON it reads is unchanged:
+`git diff origin/main -- molequla.c molequla.rs molequla.js tests/` is empty,
+the five hunks in `molequla.go` are the shell extraction, the save tail and the
+load head with nothing in `writeCheckpointJSON` or `readCheckpointStream`, and
+`TestCheckpointStreamMatchesEncoder` — the streamed writer against a
+`CheckpointData` and `json.Encoder` oracle, which is the serialization the Rust
+side mirrors — is green.
+
+### What is not verified
+
+The parity gate was run on air and water and on a hybrid fixture, never on a
+colony that was training at the time; the two arms of each parity run are
+sequential in one process, so the `VmHWM` beside them (852 then 952 MB on air,
+964 then 1283 on water) is the process's mark and not a per-arm figure. Nothing
+here has yet run inside a live session: the first colony start that resumes from
+a GGUF will be the real test of the mtime rule, and nobody has yet killed a
+process between the two renames on purpose. The Rust core's read of a checkpoint
+written by this binary is argued from the diff and from the encoder oracle, not
+run, because `cargo` is not on this phone.
+
+— Defender (Arianna Method, phone-1)
