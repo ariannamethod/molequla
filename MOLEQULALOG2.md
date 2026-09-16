@@ -4097,7 +4097,7 @@ branch, and `build.sh` will do it outside a window before anything here runs.
 
 — Defender (Arianna Method, phone-1)
 
-## 2026-09-16 — the session that wrote the binary checkpoint, and the queue that became the bottleneck
+## 2026-09-16 — the session that wrote the binary checkpoint (its queue paragraph is corrected in the entry below)
 
 The 20:00Z session ran on `02148cd`, the first binary that writes a GGUF
 checkpoint beside the JSON one. Scheduler line: `dur=7200 elapsed=7318
@@ -4126,23 +4126,32 @@ Yesterday's fixed bar gave the same four organisms 3 %, 5 %, 23 % and 92 %; the
 first session on own quantiles gave 20-51 %; this one lands inside ten points
 for all four. The rings are doing what the rule was written for.
 
-**The training turn is now the throughput bottleneck.** Fifty-six bursts waited
-their turn this session against fifteen in the first serialised session, and
-the waiting totalled 4737 s — median 33 s, maximum 1005 s. Bursts completed
-fell with it: earth 8, air 13, water 8, fire 12, where the 04:00Z session on
-the same lock had 32, 44, 28 and 48. The arithmetic is plain: an adult's burst
-is a median 76 s (earth, 8 bursts, 647 s of training in a two-hour session) and
-a teen's 58 s (air, 13 bursts, 768 s), so four organisms sharing one turn
-cannot spend more than a fraction of the session training, and the fraction
-shrinks as they grow. DNA written fell the same way — earth 38 fragments, water
-49, against 238 and 236 in the morning.
+**The training turn: the figures first published here were mis-scoped, and the
+corrected ones say something else.** `molequla-run/*/*.stdout` is appended
+across sessions and never rotated — eight `[ecology] Element:` banners stand in
+each file tonight — so a `grep -c` over the file, or over its last 900 KB,
+counts every session it holds. The 4737 s of waiting and the 56 waits published
+in the first version of this paragraph are the four stamped sessions together;
+**this session waited 444.7 s over eleven waits** (earth 2/83.2 s, air 3/159.1 s,
+water 2/83.3 s, fire 4/119.1 s, counted from this session's own banner). The
+32/44/28/48 they were compared against are cumulative file totals, not the
+04:00Z session: per session the colony's burst count is flat, 38 to 43 across
+the four windows, and this session's 8/13/8/12 sits inside that. What grew is
+the burst itself — a median 76.0 s for earth against a think time of 874.0 s —
+so four organisms ask for about a third of the tape between them.
 
-This is the resonator's case measured rather than argued: serialising the tape
-saves the memory it was meant to save, and the cost is turns. Step 4 changes
-what waits — one workshop the organisms visit, instead of four workshops of
-which only one may run — and the sleep policy of step 5 shortens the queue by
-taking the adults out of it while they keep speaking. Neither is built; the
-number to beat is 4737 s of waiting.
+**The queue is therefore not the steady-state bottleneck. One long phase inside
+it is.** The ~1000 s waits belong to earth's 1200.8 s stage-5 warmup, which
+takes the turn as one indivisible unit; the bursts either side of water's
+4796.3 s warmup carry no `start=` stamp, so that one predates the stamped
+binary and cannot be dated. That is the thing worth fixing, and it is fixed in
+the entry below rather than by the resonator: a phase that runs long yields its
+turn between chunks and re-queues. Step 4 still changes what waits — one
+workshop the organisms visit, instead of four of which only one may run — and
+step 5 still shortens the queue by taking sleeping adults out of it. The number
+to beat is this session's 444.7 s, and the synthetic replay of the same session
+with one serialised warmup puts it at 4067.3 s before the yield and 1255.6 s
+after.
 
 **Peaks rose again**: earth 2134 MB and fire 2027 against 1648 and 1867 in the
 midday session, with the colony's free memory never below the 1 GB the watch
