@@ -2002,7 +2002,14 @@ type GPT struct {
 	mu sync.Mutex // protects model during concurrent access
 }
 
-func NewGPT(tok *EvolvingTokenizer) *GPT {
+// newGPTShell builds everything about an organism that is not a weight: the
+// dimensions from CFG, the residual scale, the conscience state and the
+// pre-computed per-layer key strings. NewGPT fills it with random matrices; a
+// checkpoint that arrives with its own matrices takes the shell and skips the
+// filling, which is the 69 MB a GGUF load does not pay (checkpoint_gguf.go).
+// Nothing here draws from math/rand, so the shell leaves the global stream where
+// it found it.
+func newGPTShell(tok *EvolvingTokenizer) *GPT {
 	gpt := &GPT{
 		Tok:       tok,
 		NLayer:    CFG.NLayer,
@@ -2017,6 +2024,39 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 	gpt.deltaAlphaScale = 1.0 // conscience: full delta influence by default
 	gpt.lastWarmupStage = -1  // no stage warmed up yet
 	gpt.notorchSeed = 0xDEAD_BEEF
+
+	// Pre-compute layer key strings to avoid fmt.Sprintf per ForwardStep call
+	gpt.layerKeys = make([]layerKeySet, CFG.NLayer)
+	for li := 0; li < CFG.NLayer; li++ {
+		pfx := fmt.Sprintf("l%d.", li)
+		lk := layerKeySet{
+			wq:  pfx + "wq",
+			wk:  pfx + "wk",
+			wv:  pfx + "wv",
+			wo:  pfx + "wo",
+			fcG: pfx + "fc_g",
+			fcV: pfx + "fc_v",
+			fc2: pfx + "fc2",
+			wrA: pfx + "wr_a",
+			wrB: pfx + "wr_b",
+		}
+		nHeads := len(CFG.HeadTypes)
+		if nHeads > 0 {
+			lk.headPattern = make([]string, nHeads)
+			lk.headAlpha = make([]string, nHeads)
+			for h := 0; h < nHeads; h++ {
+				lk.headPattern[h] = fmt.Sprintf("l%d.h%d.w_pattern", li, h)
+				lk.headAlpha[h] = fmt.Sprintf("l%d.h%d.alpha", li, h)
+			}
+		}
+		gpt.layerKeys[li] = lk
+	}
+	return gpt
+}
+
+func NewGPT(tok *EvolvingTokenizer) *GPT {
+	gptConstructions.Add(1)
+	gpt := newGPTShell(tok)
 
 	V := tok.VocabSize
 	gpt.Base["wte"] = NewMatrixParam(V, CFG.NEmbd, 0.08)
@@ -2049,33 +2089,6 @@ func NewGPT(tok *EvolvingTokenizer) *GPT {
 		}
 		// Inc2: per-layer low-rank RRPRAM factors (Resonance form, op 33).
 		gpt.ensureRRPRAMFactors(li)
-	}
-
-	// Pre-compute layer key strings to avoid fmt.Sprintf per ForwardStep call
-	gpt.layerKeys = make([]layerKeySet, CFG.NLayer)
-	for li := 0; li < CFG.NLayer; li++ {
-		pfx := fmt.Sprintf("l%d.", li)
-		lk := layerKeySet{
-			wq:  pfx + "wq",
-			wk:  pfx + "wk",
-			wv:  pfx + "wv",
-			wo:  pfx + "wo",
-			fcG: pfx + "fc_g",
-			fcV: pfx + "fc_v",
-			fc2: pfx + "fc2",
-			wrA: pfx + "wr_a",
-			wrB: pfx + "wr_b",
-		}
-		nHeads := len(CFG.HeadTypes)
-		if nHeads > 0 {
-			lk.headPattern = make([]string, nHeads)
-			lk.headAlpha = make([]string, nHeads)
-			for h := 0; h < nHeads; h++ {
-				lk.headPattern[h] = fmt.Sprintf("l%d.h%d.w_pattern", li, h)
-				lk.headAlpha[h] = fmt.Sprintf("l%d.h%d.alpha", li, h)
-			}
-		}
-		gpt.layerKeys[li] = lk
 	}
 
 	gpt.AddDeltaModule(1.0)
@@ -3759,7 +3772,32 @@ func SaveCheckpoint(model *GPT, tok *EvolvingTokenizer, path string) error {
 		os.Remove(tmpPath)
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+
+	// The binary sibling, second and never at the JSON's expense. The JSON is the
+	// organism's life and the format the C, Rust and JS cores read; the GGUF is
+	// the mappable copy of the same weights (docs/resonator_design.md §2.2). So
+	// the JSON is renamed first and unconditionally, and a GGUF that cannot be
+	// written is REMOVED rather than left behind: a stale binary beside a fresh
+	// JSON is the one failure that could hand an organism weights it has already
+	// moved past. Losing the sibling costs a slower next load and nothing else,
+	// so the save still succeeds — loudly.
+	gp := ggufPathFor(path)
+	tmpG := gp + ".tmp"
+	if err := writeCheckpointGGUF(tmpG, model, tok); err != nil {
+		os.Remove(tmpG)
+		os.Remove(gp)
+		fmt.Fprintf(os.Stderr, "[ckpt] %s written, %s not: %v\n", path, gp, err)
+		return nil
+	}
+	if err := os.Rename(tmpG, gp); err != nil {
+		os.Remove(tmpG)
+		os.Remove(gp)
+		fmt.Fprintf(os.Stderr, "[ckpt] %s written, %s not renamed: %v\n", path, gp, err)
+	}
+	return nil
 }
 
 // writeCheckpointJSON streams the checkpoint that CheckpointData describes,
@@ -4210,6 +4248,24 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 	if path == "" {
 		path = CFG.CkptPath
 	}
+
+	// The binary sibling first when it is there and agrees with the JSON about
+	// which organism this is. Everything below stays the JSON path exactly as it
+	// was: it is what the C, Rust and JS cores write, and a checkpoint from any of
+	// them arrives with no GGUF beside it and loads here.
+	if gp, ok := ggufCheckpointFresh(path); ok {
+		want, err := checkpointIdentityFromJSON(path)
+		if err == nil {
+			model, tok, err := loadCheckpointGGUF(docs, gp, want)
+			if err == nil {
+				return model, tok, nil
+			}
+			fmt.Printf("[ckpt] %s not used (%v) — loading the JSON checkpoint\n", gp, err)
+		} else {
+			fmt.Printf("[ckpt] %s not used (the JSON's identity is unreadable: %v) — loading the JSON checkpoint\n", gp, err)
+		}
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, nil, err

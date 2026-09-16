@@ -441,6 +441,11 @@ func TestCheckpointStreamRoundTrip(t *testing.T) {
 	if err := SaveCheckpoint(model, tok, path); err != nil {
 		t.Fatalf("SaveCheckpoint: %v", err)
 	}
+	// This test is about the JSON decoder, and its weights are a fresh organism's
+	// float64 draws, so the binary sibling goes: a GGUF checkpoint is float32 by
+	// design and would make the exact comparison below about rounding instead of
+	// about the walk. The sibling has its own round trip in checkpoint_gguf_test.
+	os.Remove(ggufPathFor(path))
 	back, tokBack, err := LoadCheckpoint([]string{"the organism speaks"}, path)
 	if err != nil {
 		t.Fatalf("LoadCheckpoint: %v", err)
@@ -521,7 +526,12 @@ func TestSaveOnShutdownBeatsTheDebouncer(t *testing.T) {
 	if back.globalStep != 4242 {
 		t.Fatalf("the shutdown checkpoint holds step %d, want 4242", back.globalStep)
 	}
-	if back.Base["wte"].Rows[0].Data[0] != 0.4242 {
+	// The resume is the production one — both files on disk, the binary sibling
+	// preferred — so the weight comes back as its float32 image. That is the
+	// format's own precision, not a loss: the notorch mirror flattens every weight
+	// to float32 before the first forward and writes float32 back on pullBack, so
+	// a trained weight is already exactly this value (TestTrainedWeightsAreAlreadyFloat32).
+	if back.Base["wte"].Rows[0].Data[0] != float64(float32(0.4242)) {
 		t.Fatalf("the shutdown checkpoint holds stale weights: %v", back.Base["wte"].Rows[0].Data[0])
 	}
 	t.Logf("shutdown save: %d → %d bytes, step 41 → %d", len(before), len(after), back.globalStep)
@@ -733,6 +743,10 @@ func TestCheckpointRoundTripIsByteIdentical(t *testing.T) {
 	if err := SaveCheckpoint(model, tok, first); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
+	// Byte identity is a property of the JSON format, so the load has to come
+	// through the JSON: the float32 sibling would re-serialise rounded values and
+	// the two files would differ for a reason that is not the format's.
+	os.Remove(ggufPathFor(first))
 	back, backTok, err := LoadCheckpoint([]string{"the organism speaks"}, first)
 	if err != nil {
 		t.Fatalf("LoadCheckpoint: %v", err)
