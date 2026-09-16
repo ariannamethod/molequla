@@ -162,6 +162,12 @@ is long — an organism lives for months of sessions, not for one uptime.
      as `/pN`. Gates: a fresh mesh and a mesh created without the column both
      end with it, four live organisms show four non-zero peaks, and the schema
      alert stays quiet. It decides nothing on its own; steps 4 and 5 read it.
+     Repaired 2026-09-16 (Defender): the keeper replayed the cached peak
+     between tenth ticks, so the column read 490 MB for an organism holding
+     1691, and it now reads `/proc/self/status` at every beat. Beside it,
+     `phone1/schedule.sh` gained `rss_sum_max_mb` — the largest sum of live
+     resident sets over a session, which is the colony figure §4.2 needs and
+     the per-process high-water marks cannot give.
    - **1 — burst admission** (`ea35094` + `bcc6bdc`, Defender, 2026-09-15). `training_lock`
      promoted from an optional flag to the colony's admission gate behind
      `CFG.SerialBursts` (default on; `--no-serial-bursts` for a GPU host), with

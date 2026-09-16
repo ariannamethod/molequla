@@ -3936,3 +3936,163 @@ written by this binary is argued from the diff and from the encoder oracle, not
 run, because `cargo` is not on this phone.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-16 — the peak read at the beat, and the colony measured as one body
+
+Two numbers about memory were wrong in two different ways, and both of them are
+read by §4 of `docs/resonator_design.md` before step 5 can be written. One was
+published stale; the other was never measured at all. Neither is an organism
+change: this is bookkeeping, and bookkeeping is what a policy stands on.
+
+### The peak the keeper replayed
+
+Flagged in this file on 2026-09-15 under "Noted for the sleep policy, not fixed
+here" and fixed now. At 20:31Z the witness printed
+`earth:s5/11156k/0.00/5982/f1.00/p490` while `/proc/24540/status` held
+`VmHWM: 1732008 kB` — 1691 MB, understated 3.45×, and the same `p490` for the
+last 401 witness lines of the session.
+
+The mechanism was never the keeper failing. `molequla.go` reads the peak fresh
+at the call, `swarm.Heartbeat(..., ownPeakRSSMB())`, and that call sits behind
+`if swarm != nil && tickCount%10 == 0`. A stage-5 tick is one ~85 s burst
+(`earth.stdout`, `start=2026-09-15T20:27:21.648Z end=2026-09-15T20:28:47.304Z`),
+so ten of them are a quarter of an hour apart, and in between `beatKeeper.beat()`
+re-sent the figure `Set` had cached, every 20 s, peak included. The organism
+doing the most work is the one whose column rots most, and §4.2 picks the
+largest `C_i` to sleep, so a policy built on that column would have reached for
+the wrong organism — or, at `p490` against `p745`, for one of the small ones.
+
+The repair is one read in `governor_phone.go`: `beat()` calls the peak reader
+itself and publishes the larger of what it reads and what it cached. Larger,
+not simply fresher, because `VmHWM` never falls — a read that fails returns 0
+and leaves the cached figure standing, and a read that succeeds is never older
+than the cache. The next `Heartbeat` folds the new value back into the cache, so
+the keeper's own figure is monotone too.
+
+The other seven fields stay replayed, and that is a decision rather than an
+omission. Stage, parameter count, syntropy, entropy, global step, generation
+magnitude and overlay fade are training state that the tick loop owns and reads
+under `model.mu`; they are true as of the tick that computed them and nothing
+else can derive them without taking that lock — the lock a multi-minute warmup
+is holding, which is the entire reason this keeper exists. The peak is not
+training state. It belongs to the process rather than to the model, it is
+monotone, and it costs one `/proc/self/status` read.
+
+**What the read costs.** `BenchmarkOwnPeakRSSMB`, `taskset -c 0-3`, this phone
+with the colony live on cores 4-7:
+
+```
+goos: linux
+goarch: arm64
+pkg: github.com/ariannamethod/molequla
+BenchmarkOwnPeakRSSMB-4   	   20000	     71955 ns/op
+```
+
+72 us per read: one `os.ReadFile` of a 60-line pseudo-file and a scan for one
+prefix. Four keepers beating every 20 s is 0.2 reads per second across the
+colony, so the fresh peak costs the phone 14 us of CPU per second — against a
+stage-5 burst of 85 000 000 us. The reason to weigh it at all is that it is the
+first per-beat syscall in the keeper; the answer is that it does not register.
+
+### The colony's simultaneous footprint
+
+`phone1/schedule.sh` sampled every organism's `VmHWM` every 30 s and reported
+`hwm_mb=earth:1691,air:1185,water:1295,fire:1305,witness:15`. Those are
+per-process lifetime high-water marks, four numbers reached at four moments that
+have no relation to one another, and the question step 1 exists for is whether
+four peaks ever stood at the same moment. This file said so on 2026-09-15: after
+`SerialBursts` the per-organism peaks rose (earth 1416→1691, air 861→1185) while
+the colony never fell below 1 GB free, and *the simultaneity claim itself is not
+measured by these numbers and wants a sampler that records the sum of resident
+sets, not the per-process high-water marks*.
+
+So the sampler now reads `VmHWM` and `VmRSS` out of the same
+`/proc/<pid>/status` in one `awk`, sums the resident sets of whatever is alive at
+that instant, keeps the largest sum of the session with the moment it was seen,
+and keeps the least `MemAvailable` read beside it. The session line gains
+`rss_sum_max_mb=N at HH:MM:SSZ mem_min_mb=M` next to the `hwm_mb=` it already
+had. The sum is of the live set: a process that died between the `alive` check
+and the read contributes nothing, rather than having its last reading carried
+forward into a colony state that never existed. A session that never saw a live
+organism prints `rss_sum_max_mb=-` rather than a colony of 0 MB.
+
+Two numbers because they answer two questions. The sum says what the colony
+held; the minimum says how close the machine came to the wall. They are the two
+sides of the §4.2 arithmetic, which reads a floor against `MemAvailable` and a
+cost against the organisms, and they need not come from the same tick.
+
+Every memory reading in `schedule.sh` now goes through one `PROC` path, overrid-
+able as `MOLEQULA_SCHED_PROC` — the same shape as the `MOLEQULA_SCHED_NOW` the
+slot arithmetic has always been driven by, and what lets the gate run the real
+`run_session` against a colony it controls.
+
+### The gates, and what red looked like
+
+`phone1/schedule_test.sh`: **55 pass, 0 fail**, up from 46. The colony in the new
+cases is real `sleep` processes with real pids, so `alive` is the kernel's answer
+and not a stub's, with a tree of fake `/proc` entries under
+`MOLEQULA_SCHED_PROC` that the gate rewrites mid-session.
+
+- *The sum is the largest, not the last.* earth holds 500 MB throughout, air goes
+  200 → 700 → 200 MB, and `MemAvailable` dips to 400 MB and comes back. Green:
+  `rss_sum_max_mb=1200 at HH:MM:SSZ … mem_min_mb=400`. Red, with the maximum
+  replaced by a plain assignment: `rss_sum_max_mb=700 at 20:15:44Z` — the last
+  sample's sum, taken after the burst was over, with the 1200 MB moment gone.
+  Four checks red.
+- *A death mid-session leaves the sum on the live set.* earth 500 MB and air
+  900 MB, then air is killed and earth grows to 1000 MB. Green:
+  `rss_sum_max_mb=1400`. Red, with the sum taken over the per-process high-water
+  marks instead of the live resident sets: `rss_sum_max_mb=1900 at 20:16:14Z`,
+  which is dead air's 900 standing beside earth's grown 1000 — a colony that
+  never existed, and exactly the error the whole change is about. Two checks red.
+- *An empty colony reports no sum.* `rss_sum_max_mb=-` with `mem_min_mb=` still
+  filled.
+- The `hwm_mb=` column keeps working through all of it
+  (`hwm_mb=earth:500,air:700`), and the 46 slot-arithmetic and prekill cases are
+  untouched.
+
+Go: **248 PASS, 3 SKIP, 0 FAIL** (`CGO_ENABLED=1 go test -count=1 -buildvcs=false
+-v ./...`, `taskset -c 0-3`), against 246 PASS, 3 SKIP, 0 FAIL measured on
+`02148cd` in a second worktree. The three skips are the environment-gated
+measurement tests and skip on either commit.
+
+- `TestBeatKeeperReadsThePeakFreshWithoutTicks` is the red gate for the keeper.
+  One `Heartbeat` at 490 MB, the reader then moved to 1691, and no tick after
+  that — the 2026-09-15 pair. Green it publishes 1691 and then tracks to 1700 on
+  the beat after. Red on the replay: `governor_phone_test.go:199: a keeper beat
+  with no tick in between published peak_rss_mb=490, want the live 1691 MB`.
+- `TestTheWitnessPeakFollowsProcWithinTheSampleInterval` closes the loop through
+  the column the policy actually reads. The reader is the real `ownPeakRSSMB` —
+  a stub would prove the plumbing and not the reading — the process's own
+  `VmHWM` is grown and released first so the mark is stable, a `Heartbeat`
+  publishes a quarter of it as the stale tick figure, and the witness line is
+  then read against two `/proc` readings taken either side of the keeper's own.
+  They bracket it exactly, because `VmHWM` never falls. Red on the replay:
+  `witness_test.go:741: the witness still prints the tick's peak 15 MB while
+  /proc holds 60 MB`.
+- `TestBeatKeeperRefreshesMeshWithoutTicks` stays green and says one thing more.
+  Its reader is pinned at 100 MB, below the 412 MB the tick loop reports, so it
+  still asserts that the keeper carries the last `Heartbeat`'s state, and now
+  also that a smaller reading never overwrites a larger cached one.
+- The step-0 gates — `TestMeshCarriesThePeakOnAFreshDatabase`,
+  `TestMeshMigratesADatabaseWithoutThePeakColumn`,
+  `TestTheWitnessLineShowsFourNonZeroPeaks` — are untouched and green.
+
+### What is not verified
+
+Neither fix has run inside a live session. The colony was up on cores 4-7 for
+all of this and no probe was run against it, so the first evidence that the
+witness's `pN` tracks `/proc` on a real stage-5 organism, and the first real
+`rss_sum_max_mb`, both come from the 20:00Z session on the next build. Until
+then there is no measured answer to whether `SerialBursts` bought simultaneity —
+only a sampler that can now produce one. The 3.45× understatement is the
+measurement from 2026-09-15 and is not re-measured here.
+
+The mandatory `go build -a` was started and stopped: with four organisms in a
+burst it took MemAvailable to 551 MB, and a full rebuild is not worth reaching
+for lmkd during a live session. The colony came back to 2 221 MB with all
+eleven processes on their original pids. What compiled the package with cgo was
+`go test`, which links the same C; the binary itself has not been linked on this
+branch, and `build.sh` will do it outside a window before anything here runs.
+
+— Defender (Arianna Method, phone-1)
