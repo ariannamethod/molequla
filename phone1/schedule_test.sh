@@ -227,5 +227,163 @@ else
     bad "a missing prekill command is logged and the slot runs: $(tr '\n' '|' < "$TMP/slot.out")"
 fi
 
+# ── the colony's simultaneous footprint ─────────────────────────────────────
+# hwm_mb reports four per-process lifetime high-water marks, and four marks
+# reached at four different moments cannot say whether four peaks ever stood
+# together — the question SerialBursts was landed to change, and the one the
+# 2026-09-15 session could not answer (MOLEQULALOG2.md, "the third session").
+# rss_sum_max_mb is the answer: the largest sum of *current* resident sets over
+# the session, with the least MemAvailable beside it.
+#
+# The colony here is real processes with real pids, so `alive` is the kernel's
+# answer and not a stub's, and a tree of fake /proc entries under
+# MOLEQULA_SCHED_PROC that the gate rewrites mid-session. run_session is the
+# code under test, driven by `schedule.sh __slot` exactly as the prekill cases
+# above drive it.
+
+FPROC="$TMP/proc"
+
+# launch stub: one `sleep` per organism named in GATE_RSS (name:rss_kB:hwm_kB),
+# its pid in the pid file, its memory in the fake /proc.
+cat > "$STUB/launch.sh" <<'EOF'
+#!/bin/bash
+for spec in $GATE_RSS; do
+    n="${spec%%:*}"; rest="${spec#*:}"; rss="${rest%%:*}"; hwm="${rest##*:}"
+    sleep 60 </dev/null >/dev/null 2>&1 &
+    p=$!
+    echo "$p" > "$MOLEQULA_RUN/pids/$n.pid"
+    mkdir -p "$MOLEQULA_SCHED_PROC/$p"
+    printf 'Name:\tmolequla_cgo\nVmHWM:\t%d kB\nVmRSS:\t%d kB\n' "$hwm" "$rss" > "$MOLEQULA_SCHED_PROC/$p/status"
+done
+echo launched
+EOF
+chmod +x "$STUB/launch.sh"
+
+# stop stub: end the fake colony the way stop.sh ends the real one.
+cat > "$STUB/stop.sh" <<'EOF'
+#!/bin/bash
+for f in "$MOLEQULA_RUN"/pids/*.pid; do
+    [ -f "$f" ] || continue
+    case "$f" in *schedule.pid) continue ;; esac
+    p="$(cat "$f" 2>/dev/null)"
+    [ -n "$p" ] && kill "$p" 2>/dev/null
+    rm -f "$f"
+done
+echo stopped
+EOF
+chmod +x "$STUB/stop.sh"
+
+# pstat <pid> <hwm_kB> <rss_kB>: rewrite one fake status file whole and move it
+# into place, so a sample never reads a half-written one.
+pstat() {
+    printf 'Name:\tmolequla_cgo\nVmHWM:\t%d kB\nVmRSS:\t%d kB\n' "$2" "$3" > "$FPROC/$1/.new"
+    mv "$FPROC/$1/.new" "$FPROC/$1/status"
+}
+
+# memfree <MB>: rewrite the fake MemAvailable.
+memfree() {
+    printf 'MemTotal:        7603028 kB\nMemFree:          330000 kB\nMemAvailable: %d kB\n' $(( $1 * 1024 )) > "$FPROC/.meminfo"
+    mv "$FPROC/.meminfo" "$FPROC/meminfo"
+}
+
+# waitpids: block until the launch stub has written both pid files.
+waitpids() {
+    local i=0
+    while [ $i -lt 100 ]; do
+        [ -s "$TMP/run/pids/earth.pid" ] && [ -s "$TMP/run/pids/air.pid" ] && return 0
+        i=$((i + 1)); sleep 0.1
+    done
+    return 1
+}
+
+# memprep: a clean run directory and a clean fake /proc, before the mutator
+# that rewrites it is backgrounded.
+memprep() {
+    rm -rf "$TMP/run" "$FPROC"; mkdir -p "$TMP/run/pids" "$FPROC"
+    rm -f "$TMP/android.seen"
+    memfree 1500
+}
+
+# memslot <GATE_RSS> : run a six-second colony slot against the fake tree.
+memslot() {
+    env -u ANDROID_STUB_RC PATH="$TMP/bin:$PATH" MOLEQULA_RUN="$TMP/run" \
+        MOLEQULA_SCHED_PROC="$FPROC" GATE_RSS="$1" \
+        SCHEDULE_CONF=/dev/null SCHEDULE_SLOTS="$D" SCHEDULE_DUR=6 \
+        SCHEDULE_SAMPLE=1 SCHEDULE_GRACE=1 SENSES_CMD='true' \
+        bash "$STUB/schedule.sh" __slot colony > "$TMP/slot.out" 2>&1
+    memline="$(cat "$TMP/run/schedule.log" 2>/dev/null)"
+}
+
+# has <name> <pattern>: the session line matches.
+has() {
+    case "$memline" in
+        *"$2"*) ok "$1" ;;
+        *) bad "$1: line is '$memline'" ;;
+    esac
+}
+hasnt() {
+    case "$memline" in
+        *"$2"*) bad "$1: line is '$memline'" ;;
+        *) ok "$1" ;;
+    esac
+}
+
+# Case 1: the sum rises in the middle of the session and falls back before the
+# end. earth holds 500 MB throughout; air goes 200 -> 700 -> 200 MB. The peak
+# sum is 1200 MB and the last sum is 700 MB, so a sampler that reports the last
+# reading instead of the largest prints 700 and this goes red. MemAvailable
+# dips to 400 MB at the same time and comes back up.
+memprep
+(
+    waitpids || exit 0
+    ap="$(cat "$TMP/run/pids/air.pid")"
+    sleep 1.5
+    pstat "$ap" 716800 716800; memfree 400
+    sleep 2
+    pstat "$ap" 716800 204800; memfree 1500
+) &
+memslot "earth:512000:512000 air:204800:204800"
+wait
+
+has  "the session line carries the simultaneous footprint" "rss_sum_max_mb=1200 at "
+has  "and the least MemAvailable of the session"           "mem_min_mb=400"
+hasnt "and not the last sample's sum"                      "rss_sum_max_mb=700"
+case "$memline" in
+    *"rss_sum_max_mb=1200 at "[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z*) ok "the peak sum is stamped with the moment it was seen" ;;
+    *) bad "the peak sum is stamped with the moment it was seen: '$memline'" ;;
+esac
+has  "the per-process high-water marks are still there"    "hwm_mb=earth:500,air:700"
+
+# Case 2: one organism dies mid-session and the survivor grows afterwards. The
+# sum is of the live set at each instant: 500 + 900 while both are up, then
+# 1000 alone. A sampler that carried air's last reading forward would print
+# 1900, which never happened on this phone.
+memprep
+(
+    waitpids || exit 0
+    ep="$(cat "$TMP/run/pids/earth.pid")"; ap="$(cat "$TMP/run/pids/air.pid")"
+    sleep 1.5
+    kill "$ap" 2>/dev/null
+    while kill -0 "$ap" 2>/dev/null; do sleep 0.05; done
+    pstat "$ep" 1024000 1024000
+) &
+memslot "earth:512000:512000 air:921600:921600"
+wait
+
+has  "a death mid-session leaves the sum on the live set" "rss_sum_max_mb=1400 at "
+hasnt "and does not carry the dead organism's last reading" "rss_sum_max_mb=1900"
+
+# A slot that never sees a live organism has no sum to report and says so
+# rather than reporting a colony of 0 MB.
+memprep
+printf '#!/bin/bash\necho launched\nexit 0\n' > "$STUB/launch.sh"
+env -u ANDROID_STUB_RC PATH="$TMP/bin:$PATH" MOLEQULA_RUN="$TMP/run" \
+    MOLEQULA_SCHED_PROC="$FPROC" SCHEDULE_CONF=/dev/null SCHEDULE_SLOTS="$D" \
+    SCHEDULE_DUR=2 SCHEDULE_SAMPLE=1 SCHEDULE_GRACE=1 \
+    SENSES_CMD='true' bash "$STUB/schedule.sh" __slot colony > "$TMP/slot.out" 2>&1
+memline="$(cat "$TMP/run/schedule.log" 2>/dev/null)"
+has "an empty colony reports no sum, not zero" "rss_sum_max_mb=-"
+has "and still reports the memory it saw"      "mem_min_mb=1500"
+
 printf '\n%d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

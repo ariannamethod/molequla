@@ -18,6 +18,8 @@
 #        schedule.sh in-window <HH:MM|epoch> — is that moment inside a colony
 #                                              window (exit 0) or not (exit 1)
 #        MOLEQULA_SCHED_NOW=<epoch>        — pretend it is that moment (tests)
+#        MOLEQULA_SCHED_PROC=<dir>         — read memory from this tree instead
+#                                              of /proc (tests)
 #        schedule.sh __slot colony|senses [epoch] — run one slot now, without
 #                                              the daemon, for the gate
 # Configuration: phone1/schedule.conf, or SCHEDULE_CONF=<file>, or the same
@@ -32,6 +34,10 @@ PIDF="$PIDDIR/schedule.pid"
 LOGF="$RUN/schedule.log"
 OUTF="$RUN/schedule.out"
 NAMES="earth air water fire witness"
+# Every memory reading in this file goes through one path, so the gate can put a
+# tree of its own under it and drive the real sampler against a colony it
+# controls. /proc everywhere else.
+PROC="${MOLEQULA_SCHED_PROC:-/proc}"
 
 # --- configuration: defaults, then the file, then the environment -----------
 CONF="${SCHEDULE_CONF:-$HERE/schedule.conf}"
@@ -143,6 +149,7 @@ next_any() {
 
 iso() { date -u -d "@$1" +%FT%TZ; }
 hhmm() { date -u -d "@$1" +%H:%M; }
+hhmmss() { date -u -d "@$1" +%H:%M:%SZ; }
 
 human_gap() {
     local d="$1"
@@ -156,7 +163,7 @@ alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 # under it (same walk as status.sh).
 real_pid() {
     local p="$1" c
-    while [ -r "/proc/$p/comm" ] && [ "$(cat "/proc/$p/comm" 2>/dev/null)" = "timeout" ]; do
+    while [ -r "$PROC/$p/comm" ] && [ "$(cat "$PROC/$p/comm" 2>/dev/null)" = "timeout" ]; do
         c="$(pgrep -P "$p" 2>/dev/null | head -1)"
         [ -n "$c" ] || break
         p="$c"
@@ -174,21 +181,54 @@ live_names() {
     printf '%s' "${out# }"
 }
 
-mem_avail_mb() { awk '/^MemAvailable:/{printf "%.0f", $2/1024}' /proc/meminfo; }
+mem_avail_mb() { awk '/^MemAvailable:/{printf "%.0f", $2/1024}' "$PROC/meminfo"; }
 
 # --- the daemon -------------------------------------------------------------
 log_session() { printf '%s\n' "$*" >> "$LOGF"; }
 
-sample_hwm() {
-    local n p rp kb
+# One pass over the live colony, two different readings out of the same
+# /proc/<pid>/status.
+#
+# VmHWM is per-process and lifetime — the largest each organism ever was — and
+# it is what hwm_mb has always reported. It cannot answer the question the
+# burst lock was landed to change. After SerialBursts the per-organism peaks
+# rose (earth 1416->1691, air 861->1185) while the colony never fell below 1 GB
+# free, and four high-water marks that happened at four different moments say
+# nothing about whether four peaks ever stood together (MOLEQULALOG2.md,
+# 2026-09-15, "the third session": *the simultaneity claim itself is not
+# measured by these numbers and wants a sampler that records the sum of
+# resident sets*). This is that sampler.
+#
+# VmRSS is what a process is holding at this instant. The sum of VmRSS across
+# whatever is alive right now, maximised over the session, is the colony's
+# simultaneous footprint, and it is the number to compare session against
+# session to see whether serialising the bursts bought anything. A process that
+# died between `alive` and the read contributes nothing to it, which is the
+# point: the sum is of the live set at that instant, not of the last figure
+# each name reported.
+#
+# MemAvailable is read at the same tick and its minimum kept, because the sum
+# says what the colony held and the minimum says how close the machine came to
+# the wall — the two halves of the §4.2 sleep arithmetic, which reads a floor
+# against MemAvailable and a cost against the organisms.
+sample_mem() {
+    local n p rp kb rss sum=0 free
     for n in $NAMES; do
         p="$(cat "$PIDDIR/$n.pid" 2>/dev/null)"
         alive "$p" || continue
         rp="$(real_pid "$p")"
-        kb="$(awk '/^VmHWM:/{print $2}' "/proc/$rp/status" 2>/dev/null)"
+        kb=""; rss=""
+        read -r kb rss < <(awk '/^VmHWM:/{h=$2} /^VmRSS:/{r=$2} END{if (h != "") print h, r+0}' "$PROC/$rp/status" 2>/dev/null)
         [ -n "$kb" ] || continue
         if [ -z "${HWM[$n]:-}" ] || [ "$kb" -gt "${HWM[$n]}" ]; then HWM[$n]="$kb"; fi
+        sum=$((sum + rss))
     done
+    if [ "$sum" -gt "${RSS_SUM_MAX:-0}" ]; then
+        RSS_SUM_MAX="$sum"
+        RSS_SUM_AT="$(date -u +%s)"
+    fi
+    free="$(mem_avail_mb)"
+    if [ -n "$free" ] && { [ -z "$MEM_MIN" ] || [ "$free" -lt "$MEM_MIN" ]; }; then MEM_MIN="$free"; fi
 }
 
 hwm_field() {
@@ -200,6 +240,19 @@ hwm_field() {
     printf '%s' "${out#,}"
 }
 
+# The simultaneous footprint for the session line: the largest sum of resident
+# sets seen, the moment it was seen, and the least MemAvailable of the session.
+# A session with no sample that found a live organism has no sum to report and
+# says so rather than reporting 0 MB.
+rss_field() {
+    if [ "${RSS_SUM_MAX:-0}" -gt 0 ] && [ -n "${RSS_SUM_AT:-}" ]; then
+        printf 'rss_sum_max_mb=%d at %s mem_min_mb=%s' \
+            $(( (RSS_SUM_MAX + 512) / 1024 )) "$(hhmmss "$RSS_SUM_AT")" "${MEM_MIN:--}"
+    else
+        printf 'rss_sum_max_mb=- mem_min_mb=%s' "${MEM_MIN:--}"
+    fi
+}
+
 set_oom_adj() {
     local n p rp done_=0
     [ -n "$SCHEDULE_OOM_ADJ" ] || return 0
@@ -207,7 +260,7 @@ set_oom_adj() {
         p="$(cat "$PIDDIR/$n.pid" 2>/dev/null)"
         alive "$p" || continue
         rp="$(real_pid "$p")"
-        echo "$SCHEDULE_OOM_ADJ" > "/proc/$rp/oom_score_adj" 2>/dev/null && done_=$((done_ + 1))
+        echo "$SCHEDULE_OOM_ADJ" > "$PROC/$rp/oom_score_adj" 2>/dev/null && done_=$((done_ + 1))
     done
     echo "[schedule] oom_score_adj=$SCHEDULE_OOM_ADJ on $done_ organism(s)"
 }
@@ -250,13 +303,13 @@ prekill() {
 
 # run_session <slot-epoch>: launch, watch, cap, confirm down, log one line.
 run_session() {
-    local slot="$1" t0 t1 mem0 mem1 out rc reason elapsed left samples=0
+    local slot="$1" t0 t1 mem0 mem1 out rc reason elapsed left samples=0 RSS_SUM_MAX=0 RSS_SUM_AT="" MEM_MIN=""
     declare -A HWM=()
 
     left="$(live_names)"
     if [ -n "$left" ]; then
         t0="$(date -u +%s)"
-        log_session "$(iso "$t0") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t0") dur=$SCHEDULE_DUR elapsed=0 reason=skipped-running alive=${left// /,} mem_mb=$(mem_avail_mb) hwm_mb=- samples=0"
+        log_session "$(iso "$t0") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t0") dur=$SCHEDULE_DUR elapsed=0 reason=skipped-running alive=${left// /,} mem_mb=$(mem_avail_mb) hwm_mb=- rss_sum_max_mb=- mem_min_mb=- samples=0"
         echo "[schedule] slot $(hhmm "$slot"): colony already up ($left) — slot skipped"
         return 0
     fi
@@ -280,7 +333,7 @@ run_session() {
         fi
         t1="$(date -u +%s)"
         left="$(live_names)"
-        log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$((t1 - t0)) reason=$reason alive=${left:--} mem_mb=${mem0}->$(mem_avail_mb) prekill_mb=$PREKILL_MB hwm_mb=- samples=0"
+        log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$((t1 - t0)) reason=$reason alive=${left:--} mem_mb=${mem0}->$(mem_avail_mb) prekill_mb=$PREKILL_MB hwm_mb=- rss_sum_max_mb=- mem_min_mb=- samples=0"
         return 0
     fi
 
@@ -289,7 +342,7 @@ run_session() {
     local deadline=$((t0 + SCHEDULE_DUR + SCHEDULE_GRACE))
     reason=""
     while :; do
-        sample_hwm
+        sample_mem
         samples=$((samples + 1))
         t1="$(date -u +%s)"
         if [ -z "$(live_names)" ]; then
@@ -312,7 +365,7 @@ run_session() {
     t1="$(date -u +%s)"
     mem1="$(mem_avail_mb)"
     elapsed=$((t1 - t0))
-    log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$elapsed reason=$reason alive=${left:--} mem_mb=${mem0}->${mem1} prekill_mb=$PREKILL_MB hwm_mb=$(hwm_field) samples=$samples"
+    log_session "$(iso "$t1") kind=colony slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") dur=$SCHEDULE_DUR elapsed=$elapsed reason=$reason alive=${left:--} mem_mb=${mem0}->${mem1} prekill_mb=$PREKILL_MB hwm_mb=$(hwm_field) $(rss_field) samples=$samples"
     echo "[schedule] slot $(hhmm "$slot") done: reason=$reason elapsed=${elapsed}s MemAvailable ${mem0}->${mem1} MB"
     return 0
 }
@@ -375,7 +428,7 @@ loop() {
         late=$(($(date -u +%s) - target))
         if [ "$late" -gt "$SCHEDULE_CATCHUP" ]; then
             echo "[schedule] slot $(iso "$target") kind=$kind reached ${late}s late — skipped"
-            log_session "$(iso "$(date -u +%s)") kind=$kind slot=$(hhmm "$target") start=- end=- dur=$SCHEDULE_DUR elapsed=0 reason=missed late=${late}s mem_mb=$(mem_avail_mb) hwm_mb=- samples=0"
+            log_session "$(iso "$(date -u +%s)") kind=$kind slot=$(hhmm "$target") start=- end=- dur=$SCHEDULE_DUR elapsed=0 reason=missed late=${late}s mem_mb=$(mem_avail_mb) hwm_mb=- rss_sum_max_mb=- mem_min_mb=- samples=0"
         elif [ "$kind" = senses ]; then
             run_senses "$target"
         else

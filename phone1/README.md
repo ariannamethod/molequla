@@ -66,13 +66,14 @@ sleeps to the next slot in naps of at most a minute, each decided against the
 wall clock because a long `sleep` does not count the time a phone spends
 suspended; runs `launch.sh $SCHEDULE_DUR`; writes `SCHEDULE_OOM_ADJ` (500) into
 the organisms' `oom_score_adj`, so that a memory squeeze costs a checkpointed
-organism instead of the whole terminal; samples every organism's `VmHWM` every
+organism instead of the whole terminal; samples the colony's memory every
 30 s; and when the cap has passed calls `stop.sh` on every path, which clears
 the pid files and releases the wake lock. One line per session goes into
 `$MOLEQULA_RUN/schedule.log` with `kind=colony`, the slot, the start and end,
 the reason (`capped`, `early-exit`, `overran`, `skipped-running`,
-`launch-failed`, `missed`), MemAvailable before and after, and the
-per-organism VmHWM peak; a senses slot writes the same line with
+`launch-failed`, `missed`), MemAvailable before and after, the
+per-organism VmHWM peak, and the colony's simultaneous footprint; a senses
+slot writes the same line with
 `kind=senses`, its reason (`ok`, `timeout`, `failed-rc<N>`,
 `skipped-colony-window`, `skipped-colony-alive`) and the fragments the pass
 reported; the
@@ -84,6 +85,22 @@ is logged as `skipped-running` and left alone. A slot reached more than
 reboot, a session that starts hours late is not the session that was scheduled.
 `/usr/local/bin/defender-services.sh` calls `schedule.sh start` so the daemon
 comes back after a reboot.
+
+The session line carries two different memory readings and they answer two
+different questions. `hwm_mb=earth:1691,air:1185,…` is each organism's `VmHWM`,
+a per-process lifetime high-water mark: the largest that organism ever was,
+whenever that was. `rss_sum_max_mb=N at HH:MM:SSZ mem_min_mb=M` is the colony
+as one thing: `N` is the largest sum of *current* resident sets the sampler
+ever saw across whatever was alive at that instant, `HH:MM:SSZ` is when it saw
+it, and `M` is the least MemAvailable of the session. Four high-water marks
+reached at four different moments cannot say whether four peaks ever stood
+together, which is exactly what `SerialBursts` was landed to change — after it,
+per-organism peaks rose while the colony never fell below 1 GB free
+(`MOLEQULALOG2.md`, 2026-09-15, "the third session"). `rss_sum_max_mb` is the
+number to compare session against session to see whether serialising the bursts
+bought anything, and it is the left-hand side of the §4.2 sleep arithmetic in
+`docs/resonator_design.md`. A session that never saw a live organism prints
+`rss_sum_max_mb=-` rather than a colony of 0 MB.
 
 `SCHEDULE_PREKILL` (default `android am kill-all`) is run in the real Android
 environment immediately before a colony session, and its MemAvailable before
