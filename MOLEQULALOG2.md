@@ -4153,3 +4153,274 @@ binary. It is now: `build.sh` at 22:11Z linked `81270a6`, which also carries
 the fresh peak on every beat.
 
 — Defender (Arianna Method, phone-1)
+
+---
+
+## 2026-09-16 — the turn becomes a bounded unit, and the fifth session's figures re-counted from the artifacts
+
+Two things are in this entry. The first is a correction: the paragraph above
+that calls the training turn the throughput bottleneck counts a window it does
+not name, and re-counting the same files says something different about where
+the queue hurts. The second is the work that follows from the corrected
+reading — a ceiling on how long one phase may hold the colony's turn, and a
+queue ordered by the tape an organism has already had rather than by how long
+it has stood in line.
+
+### The re-count
+
+The four `molequla-run/*/*.stdout` files are appended across sessions, not
+rotated per session: the earliest burst stamp in them is
+`start=2026-09-15T20:21:03.569Z` (air) and the latest
+`start=2026-09-16T21:57:27.664Z` (earth), so one file spans four colony
+windows. Grouping every `[notorch] burst complete` line by the session its
+`start=` falls in, and attributing each `[trainer] burst admitted after …s`
+line to the burst that follows it:
+
+| session | bursts | waits | burst waiting |
+|---|---|---|---|
+| 2026-09-15 20:00Z | 38 | 15 | 3 425.8 s |
+| 2026-09-16 04:00Z | 43 | 15 | 363.4 s |
+| 2026-09-16 12:00Z | 40 | 15 | 503.0 s |
+| 2026-09-16 20:00Z | 41 | 11 | 444.7 s |
+
+The four rows sum to 162 bursts and 4 736.9 s over 56 waits, which is the
+4 737 s and the fifty-six of the paragraph above, to a tenth of a second. It is
+a four-session total. The 20:00Z session it is attributed to waited 444.7 s
+over 11 waits.
+
+The burst counts settle the rest of it. Per organism the 20:00Z session gave
+earth 8, air 13, water 8 and fire 12, exactly as reported — and the 04:00Z
+figures it was set against, 32 / 44 / 28 / 48, are that same file counted from
+the top: earth had 17 bursts before 2026-09-15T20:21, plus 7 in the 09-15
+20:00Z session, plus 8 in the 04:00Z session, which is 32. Air is 18 + 12 + 14 =
+44, water 13 + 7 + 8 = 28, fire 23 + 12 + 13 = 48. A cumulative total was
+compared against one session and read as a four-fold collapse. Per session the
+burst count is flat: 38, 43, 40, 41.
+
+So bursts completed did not fall. What changed between the morning and the
+evening is what a burst costs: the per-organism median burst in the 20:00Z
+session is earth 76.0 s, air 58.0 s, water 75.7 s, fire 71.6 s, against a
+think time between bursts — the gap from one burst's `end=` to the next one's
+`start=`, less the wait printed between them — of 874.0 s, 474.7 s, 786.8 s and
+509.5 s. Four organisms at that duty cycle ask for about a third of the tape,
+and 444.7 s of waiting in 7 200 s is what a third of a tape looks like. **The
+queue is not the steady-state bottleneck. A single long phase inside it is.**
+
+That is the 2026-09-15 20:00Z row, and it is the one row where the waiting is
+large: 3 425.8 s, with air waiting 1 005.4 s, fire 988.5 s and water 958.1 s
+for one burst each. What they waited behind is earth's stage-5 warmup, the three
+lines immediately above earth's first stamped burst of that session
+(`earth/earth.stdout`: `800 steps … 610344ms`, `600 steps … 298843ms`,
+`600 steps … 291698ms`, then `warmup complete at stage 5`, then
+`start=2026-09-15T20:27:21.648Z`) — 1 200.8 s of training taken as a single
+turn, which is what three siblings waiting about a thousand seconds each looks
+like from the other side.
+
+There is a larger one in the files and it needs its provenance stated rather
+than borrowed: water's stage-5 warmup, `800 steps … 1968328ms` then
+`600 steps … 1521817ms` then `600 steps … 1306197ms`, is 4 796.3 s for the same
+2 000 steps. The bursts on either side of it carry no `start=` stamp, so it
+predates the stamped binary and its session cannot be dated from these
+artifacts. Two complete stage-5 warmups, the same 2 000 steps, 1.67 steps/s
+against 0.42 — the spread is session conditions, not stage, and both are
+replayed below because a ceiling is worth what the longest phase costs.
+
+### What the numbers set
+
+Two measurements set the two knobs, and both come from the burst lines
+themselves.
+
+A burst's own length: 233 timed bursts across the four sessions, median 58.9 s,
+p90 83.5 s, longest 103.3 s (fire). So a ceiling of 120 s never cuts an
+ordinary burst, and the 16 % headroom is above the largest burst any of the
+four has produced at stage 5.
+
+The cost of yielding: each burst line carries `start=` and `end=` beside its
+own step-loop `ms`, and the difference between them is everything a phase does
+outside the step loop — `ntNewMirror`, `register`, `pullBack`, `free`,
+`malloc_trim`. Over the 162 lines that carry both stamps it is a mean of 370 ms,
+median 315 ms, p90 599 ms, maximum 1 169 ms. At a 120 s ceiling that is 0.31 %
+of training time spent rebuilding the tape, and the whole 4 796.3 s warmup
+becomes 41 chunks costing about 15 s of re-entry.
+
+The ceiling is in seconds and not in steps because steps/s spans 215.4 at the
+embryo (`air/air.stdout`, `warmup complete: 160 steps … 743ms`) and 0.4 at
+stage 5. A chunk of fixed step count would be half a second at one end of
+ontogeny and 33 min at the other.
+
+### What landed
+
+`CFG.TrainTurnCeilingSeconds` (120.0) and `CFG.TrainTurnFairSpend` (true), and
+`training_turn.go` behind them.
+
+A phase now runs as a sequence of chunks through `ntTrainInTurns`: take the
+turn, arm the ceiling, train, mirror the weights back, release, re-queue for
+what is left. `ntTrainCore` reads the deadline at a step boundary exactly where
+it already reads `trainAborting()`, and the guarantee is the one the abort path
+already had — `pullBack` mirrors the tape into `model.Base` on the way out
+whatever stopped the loop, so a cut phase is progress kept. Two invariants make
+it safe: the deadline is checked only at `step > 0`, so a chunk always advances
+and the loop cannot spin; and a chunk that runs nothing ends the phase instead
+of paying another rebuild for another nothing.
+
+`trainTurnGrown`, §2.3's first key, is now worth one chunk. §2.3 keys it on an
+organism "whose warmup has not run", and after one chunk that sentence is
+false. Without the decay the ceiling would be theatre: nothing outranks the
+first key, so a warmup would release the turn and win it straight back, at
+370 ms a time. The gate for it reads the holder's `priority` column from inside
+each chunk.
+
+The queue's second key is now the seconds of tape an organism has had this
+session. `training_queue` gained a `spent REAL` column by the same idempotent
+`ALTER` as the organisms table's five, fed from an atomic on `SwarmRegistry`
+that `ntTrainInTurns` charges around every chunk, and written into the row on
+every poll exactly as `priority` is — the figure belongs to the process, and
+`ReleaseTrainingLock` deletes the row so that the organism which has just
+trained goes to the back. Longest-wait stays available as
+`CFG.TrainTurnFairSpend=false`, which is what makes the before/after below
+measurable on one binary.
+
+Longest-wait is not fairness because it hands out equal *turns*, and a turn is
+not an equal amount of tape: at 76.0 s against 58.0 s, equal turns give the
+adult 31 % more of it than the teen. The red run says it in the gate's own
+voice — with `TrainTurnFairSpend=false` two organisms 150 s apart in spend take
+`map[air:4 earth:4]` of eight turns.
+
+§2.3's middle key, the steepest loss trend, is still not implemented, and the
+reason has changed from "there is no column" to a measured one. It could travel
+with the request exactly as `spent` does. It would sit below `spent`, and
+`spent` is a float of accumulated milliseconds that two organisms never hold in
+common, so the tiebreak would never fire. It is left to step 4, where the
+resonator's request row carries the trend anyway.
+
+### The before and after
+
+The same synthetic session through both orderings, driving the real
+`AcquireTrainingTurn` against a real `mesh.db` with the queue's clock injected
+so that 7 200 s replay in milliseconds (`TestTheSameSessionWaitsLessUnderTheNewTurn`).
+Every input is one of the measurements above: the four per-organism burst
+medians and think times of the 20:00Z session, a measured stage-5 warmup, and
+370 ms per chunk boundary. The arms differ as the two versions of the code do —
+without the ceiling the warmup is one turn taken at `trainTurnGrown`, with it the
+three sub-phases are queued separately and cut into chunks of which only the
+first carries the key. It is run twice, once with each of the two stage-5
+warmups the artifacts hold.
+
+The warmup measured under the serialised lock, 1 200.9 s, which is what the code
+produces today:
+
+```
+  origin/main (one turn per warmup, longest-wait)
+  burst waiting 4067.3s over 35 waits | bursts 34 | warmup 1200.8s of 1200.9s in 1 chunks, waiting 0.0s | tape busy 3612.6s of 7200s
+    earth  bursts= 7 burst_wait= 1304.2s (n= 7)
+    air    bursts=11 burst_wait= 1394.8s (n=11)
+    water  bursts= 6 burst_wait=   36.5s (n= 6) warmup= 1200.8s in  1 chunks
+    fire   bursts=10 burst_wait= 1331.8s (n=11)
+
+  this branch (120 s ceiling, least-spent-first)
+  burst waiting 1255.6s over 39 waits | bursts 39 | warmup 1200.8s of 1200.9s in 12 chunks, waiting 540.8s | tape busy 3879.5s of 7200s
+    earth  bursts= 8 burst_wait=  372.3s (n= 8)
+    air    bursts=13 burst_wait=  433.2s (n=13)
+    water  bursts= 6 burst_wait=  103.4s (n= 6) warmup= 1200.8s in 12 chunks waiting 540.8s
+    fire   bursts=12 burst_wait=  346.8s (n=12)
+```
+
+And the longest one in the files, 4 796.3 s, which predates the lock:
+
+```
+  origin/main (one turn per warmup, longest-wait)
+  burst waiting 14692.7s over 14 waits | bursts 14 | warmup 4796.3s of 4796.3s in 1 chunks, waiting 0.0s | tape busy 5752.1s of 7200s
+    earth  bursts= 3 burst_wait= 4844.2s (n= 3)
+    air    bursts= 5 burst_wait= 4921.2s (n= 5)
+    water  bursts= 2 burst_wait=    0.0s (n= 2) warmup= 4796.3s in  1 chunks
+    fire   bursts= 4 burst_wait= 4927.3s (n= 4)
+
+  this branch (120 s ceiling, least-spent-first)
+  burst waiting 2422.5s over 32 waits | bursts 31 | warmup 4796.3s of 4796.3s in 41 chunks, waiting 1944.0s | tape busy 6960.0s of 7200s
+    earth  bursts= 7 burst_wait=  529.5s (n= 8)
+    air    bursts=13 burst_wait=  728.1s (n=13)
+    water  bursts= 0 burst_wait=    0.0s (n= 0) warmup= 4796.3s in 41 chunks waiting 1944.0s
+    fire   bursts=11 burst_wait= 1164.9s (n=11)
+```
+
+**4 067.3 s → 1 255.6 s** on the first, with bursts completed 34 → 39 and the
+tape going from 3 612.6 s busy to 3 879.5 s; **14 692.7 s → 2 422.5 s** on the
+second, bursts 14 → 31, tape 5 752.1 s → 6 960.0 s of 7 200. The warmup finishes
+in all four runs — under the ceiling it fills the tape the siblings are not
+using instead of blocking it — and it pays for that in waiting of its own,
+540.8 s over 12 chunks and 1 944.0 s over 41, which is named here rather than
+netted out of the totals.
+
+The per-organism figures are the check on the model. Under the new turn on the
+worst-case arm the three siblings complete 7, 13 and 11 bursts in a session that
+contains a stage-5 warmup, where the 2026-09-16 20:00Z session — which has no
+`warmup complete` line in it at all — completed 8, 13, 8 and 12. For a sibling,
+a ceiling turns a session with an eighty-minute warmup in it into a session
+without one.
+
+Against the 4 737 s of the paragraph above: that figure is four sessions, of
+which 3 425.8 s is the one session with a stage-5 warmup in it. The nearest
+like-for-like is the first arm, 4 067.3 s of burst waiting for one modelled
+session containing one measured serialised warmup, which the ceiling and the
+spend order take to 1 255.6 s. The replay is a model — a waiter is admitted the
+instant the turn frees, where a live one is up to
+`CFG.TrainingTurnPollSeconds` behind, and think time is a constant per organism
+rather than a distribution — so its absolute total belongs to the model and not
+to a session. Both approximations apply to both arms of both runs.
+
+### The gates, and what red looked like
+
+Six new gates in `training_turn_fair_test.go`; the suite is 254 PASS / 3 SKIP
+against 248 / 3 on `0e1e0bc`
+(`CGO_ENABLED=1 go test -count=1 -buildvcs=false ./...`, `taskset -c 4-7`).
+Each was made red by removing the mechanism, not by editing the assertion:
+
+- ordering, with `CFG.TrainTurnFairSpend=false`:
+  `turn 1 went to "earth", want "air" — the order is by arrival, not by spend`,
+  and `the organism that had trained least did not get more turns: map[air:4 earth:4]`;
+- the grown key's decay, with `p = trainTurnBurst` dropped from the chunk loop:
+  `chunk 2 asked at priority 1, want trainTurnBurst (0)`;
+- the ceiling over the real step loop, with the `trainTurnCeilingReached()`
+  break removed from `ntTrainCore`:
+  `the ceiling cut the burst at 20 steps, want exactly 1`;
+- the replay, with its second arm run at the old knobs: the two arms come out
+  identical and the comparison fails.
+
+The fixture that busies the tape took one round of correction of its own. It
+first held the turn through `AcquireTrainingTurn`, which is the thing under
+test, so the red run reported `fire could not take the turn to queue the others
+behind it` where the finding was four turns each. It now writes the lock row
+directly.
+
+`TestNoTwoTrainingPhasesOverlap` stays green with its ungated control arm
+overlapping first (`ungated: 30 overlapping cross-organism pairs in 12
+phases`): yielding between chunks does not let two phases run at once. The TTL
+gate is unchanged and green — a holder killed with `kill -9` still frees the
+turn after `CFG.TrainingLockTTLSeconds`, and the refresher still keeps a slow
+one.
+
+Also fixed on the way, because chunking would otherwise have created it: the
+post-growth freeze counter was decremented by the steps a phase was *asked*
+for. A phase cut in two would have charged it twice for one run of steps, which
+is the duplicated-invariant pattern of `ff6ad49` with a new cause. Both
+`ntBurstTrain` and `ntWarmupTrain` now charge `model.globalStep - g0`, and both
+return it, which is what the chunk loop subtracts from what it still owes.
+
+### Not verified
+
+No colony has run this. The next window is 04:00Z and the binary in
+`molequla-run` predates the branch (`BUILD`: `81270a6 2026-09-16T22:11:05Z`);
+what a live session does to the 444.7 s and to the warmup's wall time is
+unmeasured, and so is the re-entry cost at stage 5 specifically — the 370 ms mean
+is pooled across all four organisms and all stages. The first-launch climb in
+`main()` still takes no turn and has no ceiling, because it runs before
+`swarm.Register()` and there is no queue to join; it is reached only by an
+organism whose checkpoint did not load, so it is colony genesis rather than every
+session, and it is unchanged and unmeasured. The consequence of the grown key's
+decay in a
+session with a saturated tape is untested in the live case: the replay's
+siblings leave the tape idle two thirds of the time and the warmup finishes,
+but a colony with four adults and no idle tape would give a warmup a quarter of
+the session, and 4 796.3 s does not fit in 1 800 s.
+
+— Defender (Arianna Method, phone-1)

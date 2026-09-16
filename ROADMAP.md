@@ -178,6 +178,31 @@ is long — an organism lives for months of sessions, not for one uptime.
      is grown-and-unwarmed first, then longest wait — §2.3's middle key, the
      loss trend, is not implemented because the mesh has no column for it and
      step 0 is the only column this work adds.
+   - **1b — the turn as a bounded, accounted unit** (`claude/phone1-fair-turn`,
+     Defender, 2026-09-16). Step 1 bounded how many tapes exist at once and left
+     unbounded how long one phase holds the one tape: a stage-5 warmup measured
+     4 796.3 s and took a single turn for all three of its sub-phases, and in
+     that session three siblings waited about a thousand seconds each for one
+     burst. Now `CFG.TrainTurnCeilingSeconds` (120 s, above the longest of 233
+     measured bursts at 103.3 s, against a measured re-entry cost of 370 ms =
+     0.31 %) cuts any phase at a step boundary and re-queues it for the rest,
+     with `pullBack` keeping what ran; §2.3's first key is worth one chunk,
+     because a grown organism that keeps it wins back every turn it releases;
+     and the order below it is the seconds of tape already had this session
+     (`spent` column, `CFG.TrainTurnFairSpend`), because longest-wait hands out
+     equal turns and a turn is 76.0 s for an adult against 58.0 s for a teen.
+     Replaying one synthetic session built from those measurements through both
+     orderings, with the stage-5 warmup measured under the serialised lock
+     (1 200.9 s): burst waiting 4 067.3 s → 1 255.6 s, bursts 34 → 39, tape busy
+     3 612.6 s → 3 879.5 s of 7 200, warmup still finishing. With the longest
+     warmup the artifacts hold (4 796.3 s, pre-lock): 14 692.7 s → 2 422.5 s and
+     bursts 14 → 31. Six gates, each
+     shown red by removing its mechanism. Also corrected here: the 4 737 s that
+     MOLEQULALOG2 attributed to the 20:00Z session is a four-session total over
+     appended stdout files (that session waited 444.7 s), and the 32/44/28/48
+     burst counts it was set against are cumulative file totals — per session
+     the count is flat at 38, 43, 40, 41, and what grew is the burst itself.
+     Open: no colony has run this; the first window is 04:00Z.
    - **2 — the checkpoint as a GGUF** (`6d5091d` + `a832466` + `8311461`,
      Defender, 2026-09-16). `molequla_ckpt.gguf` beside `molequla_ckpt.json`,
      every matrix and adapter as an F32 tensor with the shape, growth clock,
@@ -196,7 +221,10 @@ is long — an organism lives for months of sessions, not for one uptime.
      it — they live in the tape, no restart has ever carried them, and §2.2
      gives them to the resonator's own file. The remaining +130 MB is the
      float64 weight-and-gradient pair, which step 3 is what removes.
-   - Next: step 3, sleep as a mapping. Nothing beyond step 2 is built.
+   - Next: step 3, sleep as a mapping. Nothing beyond step 2 is built. Step 4
+     inherits the amended §2.3: the resonator hands back every ceiling, or a
+     request it cannot interrupt for eighty minutes is the same wall in another
+     process.
 
 ## Later
 

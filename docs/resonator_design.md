@@ -294,6 +294,44 @@ Who trains next, in order of precedence:
 3. **The organism that has waited longest.** A plateaued adult still gets turns;
    it just gets them last. Starvation is a bug, not a policy.
 
+Amended 2026-09-16, after step 1 ran for four sessions. Three things about this
+order changed, and step 4 inherits them rather than the list above.
+
+**A turn is bounded.** `CFG.TrainTurnCeilingSeconds` (120 s) is the longest one
+phase may hold the turn; past it the phase mirrors its weights back, releases and
+re-queues for the steps it has left. The two numbers behind the default are
+measured on the phone across the four sessions in `molequla-run/*/*.stdout`: the
+longest single micro-burst of 233 was 103.3 s, so an ordinary burst is never cut,
+and re-entry — mirror in, `pullBack`, `free`, `malloc_trim`, read as a burst
+line's `start=`/`end=` wall minus its own step-loop ms — is a mean of 370 ms over
+162 phases, so yielding every 120 s costs 0.31 % of training time. §2.5 above
+says the organism "hands in a turn whose step count is the whole warmup": it does
+not any more, and the resonator must not either. The two complete stage-5 warmups
+in the artifacts are 1 200.8 s (earth, under the serialised lock, 1.67 steps/s)
+and 4 796.3 s (water, before it, 0.42 steps/s) for the same 2 000 steps, and a
+request that cannot be interrupted for twenty minutes — let alone eighty — is the
+same wall whichever process serves it. The resonator hands *back* every ceiling,
+or it inherits the queue the ceiling was written to drain.
+
+**Key 1 is worth one chunk.** "An organism that has just grown" means one whose
+warmup *has not run*, and after the first chunk that is no longer true. Without
+the decay the ceiling does nothing: nothing outranks key 1, so a yielding warmup
+wins its own turn straight back, at 370 ms an attempt.
+
+**Key 3 is spend, not wait.** Longest-wait hands out equal turns, and a turn is
+not an equal amount of tape — the adult's burst is a median 76.0 s against the
+teen's 58.0 s, so equal turns give the adult 31 % more of it. The order below key
+1 is now the seconds of tape an organism has had this session, ascending, with
+longest-wait as the tiebreak, carried in a `spent REAL` column of
+`training_queue` written on every poll exactly as `priority` is
+(`CFG.TrainTurnFairSpend`, true; false restores longest-wait).
+
+Key 2, the loss trend, is still unimplemented, and the reason is no longer the
+schema. It could travel with the request exactly as `spent` does. It would sit
+below `spent`, and `spent` is accumulated milliseconds that two organisms never
+hold in common, so the tiebreak it would occupy never fires. Under the resonator
+the request row of §2.6 carries the trend anyway, and there it is free.
+
 The byte gate stays where it is and changes its input. `growthGateDecision`
 charges three times the organism's own `VmHWM` plus a floor, and under the
 resonator the organism's own high-water is about 44 MB while the event being
