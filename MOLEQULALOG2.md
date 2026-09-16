@@ -4096,3 +4096,60 @@ eleven processes on their original pids. What compiled the package with cgo was
 branch, and `build.sh` will do it outside a window before anything here runs.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-16 — the session that wrote the binary checkpoint, and the queue that became the bottleneck
+
+The 20:00Z session ran on `02148cd`, the first binary that writes a GGUF
+checkpoint beside the JSON one. Scheduler line: `dur=7200 elapsed=7318
+reason=overran mem_mb=3441->4260 prekill_mb=3398->3419 hwm_mb=earth:2134,
+air:1359,water:1563,fire:2027,witness:15 samples=237`.
+
+**The binary checkpoint is written; nothing has yet been read from one.** All
+four organisms booted at 20:00Z from JSON, because no GGUF existed then — the
+earliest is `earth/molequla_ckpt.gguf` at 21:49Z, written by this session's
+own first save. The four files now on disk are earth 49 MB beside 261 MB of
+JSON, water 47 beside 252, fire 27 beside 140, air 24 beside 127 — the ratios
+the bench predicted (5.19× and 5.28× on air and water). The first live resume
+from a mapped checkpoint is therefore the 04:00Z session, and it is still an
+unproven path; the fallbacks that guard it (JSON written first and always, a
+GGUF refused on mtime, on tokenizer identity, on truncation) are unit-gated
+only.
+
+**The mesh held.** Zero `mesh refused the heartbeat` lines across all four
+organisms for the second session running, counted from this session's banner.
+`busy_timeout` has now covered two full sessions without a dropped beat, where
+the two before it lost six between them.
+
+**The cafeteria settled.** Declined as a share of judged: earth 30 %, air 32 %,
+fire 32 %, water 35 % — over 33 to 42 passes each and 160-259 fragments judged.
+Yesterday's fixed bar gave the same four organisms 3 %, 5 %, 23 % and 92 %; the
+first session on own quantiles gave 20-51 %; this one lands inside ten points
+for all four. The rings are doing what the rule was written for.
+
+**The training turn is now the throughput bottleneck.** Fifty-six bursts waited
+their turn this session against fifteen in the first serialised session, and
+the waiting totalled 4737 s — median 33 s, maximum 1005 s. Bursts completed
+fell with it: earth 8, air 13, water 8, fire 12, where the 04:00Z session on
+the same lock had 32, 44, 28 and 48. The arithmetic is plain: an adult's burst
+is a median 76 s (earth, 8 bursts, 647 s of training in a two-hour session) and
+a teen's 58 s (air, 13 bursts, 768 s), so four organisms sharing one turn
+cannot spend more than a fraction of the session training, and the fraction
+shrinks as they grow. DNA written fell the same way — earth 38 fragments, water
+49, against 238 and 236 in the morning.
+
+This is the resonator's case measured rather than argued: serialising the tape
+saves the memory it was meant to save, and the cost is turns. Step 4 changes
+what waits — one workshop the organisms visit, instead of four workshops of
+which only one may run — and the sleep policy of step 5 shortens the queue by
+taking the adults out of it while they keep speaking. Neither is built; the
+number to beat is 4737 s of waiting.
+
+**Peaks rose again**: earth 2134 MB and fire 2027 against 1648 and 1867 in the
+midday session, with the colony's free memory never below the 1 GB the watch
+would have reported. The cause is not established here — the session both grew
+and began writing a second checkpoint file — and the sampler that would answer
+it (`rss_sum_max_mb`, merged at 20:30Z in `81270a6`) was not yet in the running
+binary. It is now: `build.sh` at 22:11Z linked `81270a6`, which also carries
+the fresh peak on every beat.
+
+— Defender (Arianna Method, phone-1)
