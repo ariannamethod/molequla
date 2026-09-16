@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -117,6 +118,13 @@ func TestBeatKeeperRefreshesMeshWithoutTicks(t *testing.T) {
 	stale := float64(time.Now().UnixMilli())/1000.0 - 600 // ten minutes ago
 	db.Exec(`INSERT INTO organisms(id,stage,n_params,syntropy,entropy,last_heartbeat,status) VALUES(?,?,?,?,?,?,?)`, "a", 2, 1000, 0.1, 0.2, stale, "alive")
 	sr := &SwarmRegistry{OrganismID: "a", MeshDB: db}
+	// The keeper now reads the live peak at every beat. Pin the reader below
+	// the value the tick loop reports, so this test still asserts what it was
+	// written to assert — the keeper carries the last Heartbeat's state — and
+	// asserts one thing more: a smaller reading never overwrites a larger
+	// cached one, because VmHWM does not fall.
+	sr.keeper = newBeatKeeper(sr)
+	sr.keeper.peakFn = func() int64 { return 100 }
 
 	stop := make(chan struct{})
 	defer close(stop)
@@ -150,6 +158,68 @@ func TestBeatKeeperRefreshesMeshWithoutTicks(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	if _, _, status := heartbeatRow(t, db, "a"); status != "sleeping" {
 		t.Fatalf("a hibernating organism was written back as %q by the keeper", status)
+	}
+}
+
+// The gate for the stale peak (MOLEQULALOG2.md, "the third session"). The tick
+// loop beats on tickCount%10 and a stage-5 tick is one ~85 s burst, so for
+// minutes at a time the only writer of peak_rss_mb is this keeper. If it
+// replays the cached figure, the column reports what the organism held ten
+// ticks ago while the organism goes on growing: on 2026-09-15 that was 490 MB
+// published against a real 1691 MB, understated 3.45x and unmoved for 401
+// witness lines. The numbers below are that pair. On the code before this fix
+// the keeper writes 490 and this test goes red.
+func TestBeatKeeperReadsThePeakFreshWithoutTicks(t *testing.T) {
+	db := meshForKeeperTest(t)
+	defer db.Close()
+	db.Exec(`INSERT INTO organisms(id,stage,n_params,syntropy,entropy,last_heartbeat,status) VALUES(?,?,?,?,?,?,?)`,
+		"earth", 5, 11156000, 0.1, 0.2, nowSec(), "alive")
+	sr := &SwarmRegistry{OrganismID: "earth", MeshDB: db}
+
+	var live atomic.Int64
+	live.Store(490) // what earth's VmHWM was at the tick that beat
+	sr.keeper = newBeatKeeper(sr)
+	sr.keeper.peakFn = live.Load
+
+	stop := make(chan struct{})
+	defer close(stop)
+	sr.StartKeeper(stop, 20*time.Millisecond)
+
+	// One tick, then the burst that the tick loop is inside for the next ten
+	// ticks. Nothing calls Heartbeat again; only the keeper beats.
+	sr.Heartbeat(5, 11156000, 0.0, 0.0, 5982, 7.9, 1.0, live.Load())
+	live.Store(1691)
+	time.Sleep(120 * time.Millisecond)
+
+	var peak int64
+	if err := db.QueryRow(`SELECT COALESCE(peak_rss_mb,0) FROM organisms WHERE id=?`, "earth").Scan(&peak); err != nil {
+		t.Fatal(err)
+	}
+	if peak != 1691 {
+		t.Fatalf("a keeper beat with no tick in between published peak_rss_mb=%d, want the live 1691 MB", peak)
+	}
+
+	// And the cache moved with it: the next beat does not fall back to 490.
+	live.Store(1700)
+	time.Sleep(60 * time.Millisecond)
+	if err := db.QueryRow(`SELECT COALESCE(peak_rss_mb,0) FROM organisms WHERE id=?`, "earth").Scan(&peak); err != nil {
+		t.Fatal(err)
+	}
+	if peak != 1700 {
+		t.Fatalf("the peak stopped tracking after one refresh: %d MB, want 1700", peak)
+	}
+}
+
+// What the fresh read costs, since it now runs on every beat of every organism.
+// The keeper beats every 20 s and there are four of them.
+func BenchmarkOwnPeakRSSMB(b *testing.B) {
+	if _, err := os.Stat("/proc/self/status"); err != nil {
+		b.Skip("no /proc/self/status on this host")
+	}
+	for i := 0; i < b.N; i++ {
+		if ownPeakRSSMB() <= 0 {
+			b.Fatal("ownPeakRSSMB read 0 on a running process")
+		}
 	}
 }
 

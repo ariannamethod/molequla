@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -674,4 +675,76 @@ func TestTheWitnessLineShowsFourNonZeroPeaks(t *testing.T) {
 	if sum != 3698 {
 		t.Fatalf("the four peaks sum to %d MB, want the measured 3698", sum)
 	}
+}
+
+// Step 0 published the peak; this is the gate that it is the peak *now*. The
+// witness reads peak_rss_mb out of the mesh and prints it as `pN`, and between
+// two tenth ticks the only process writing that column is the keeper. So: an
+// organism whose peak grows after its last tick, a keeper beating on its own
+// clock, and the witness line read against /proc/self/status. The reader here
+// is the real ownPeakRSSMB — a stub would prove the plumbing and not the
+// reading — and the two /proc readings taken either side of the keeper's own
+// bracket it, which is exact because VmHWM never falls.
+func TestTheWitnessPeakFollowsProcWithinTheSampleInterval(t *testing.T) {
+	if _, err := os.Stat("/proc/self/status"); err != nil {
+		t.Skip("no /proc/self/status on this host")
+	}
+	witnessTestMesh(t)
+	sr := NewSwarmRegistry("earth", "earth")
+	if err := sr.Register(); err != nil {
+		t.Fatal(err)
+	}
+	defer sr.MeshDB.Close()
+
+	// Grow this process's high-water mark, then let it go: VmHWM keeps the mark
+	// after the pages are freed, which is what makes the rest deterministic.
+	grow := make([]byte, 48<<20)
+	for i := range grow {
+		grow[i] = 1
+	}
+	_ = grow[len(grow)-1]
+	grow = nil
+	runtime.GC()
+
+	before := ownPeakRSSMB()
+	if before <= 0 {
+		t.Fatalf("ownPeakRSSMB = %d on a running process", before)
+	}
+	// The tick loop's last beat, carrying a peak from long ago — earth's
+	// measured `p490` against a real 1691 MB (MOLEQULALOG2.md, 2026-09-15).
+	stale := before / 4
+	if stale >= before {
+		t.Fatalf("the fixture is not stale: %d against %d", stale, before)
+	}
+
+	stop := make(chan struct{})
+	defer close(stop)
+	sr.StartKeeper(stop, 20*time.Millisecond)
+	sr.Heartbeat(5, 11156000, 0.0, 0.0, 5982, 7.9, 1.0, stale)
+	time.Sleep(120 * time.Millisecond) // six keeper beats, no tick
+	after := ownPeakRSSMB()
+
+	db, err := witnessOpenMesh(filepath.Join(swarmDir, "mesh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	orgs, err := witnessReadField(db, nowSec())
+	if err != nil {
+		t.Fatalf("witness: mesh schema alert: %v", err)
+	}
+	if len(orgs) != 1 {
+		t.Fatalf("witness sees %d organisms, want 1", len(orgs))
+	}
+	got := orgs[0].PeakRSSMB
+	if got == stale {
+		t.Fatalf("the witness still prints the tick's peak %d MB while /proc holds %d MB", stale, after)
+	}
+	if got < before || got > after {
+		t.Fatalf("the witness printed p%d, outside the /proc readings %d..%d taken either side of the keeper's", got, before, after)
+	}
+	if line := (witnessSnapshot{Organisms: orgs}).line(); !strings.Contains(line, fmt.Sprintf("/p%d", got)) {
+		t.Fatalf("the witness line does not carry the peak p%d: %s", got, line)
+	}
+	t.Logf("stale tick peak %d MB, /proc %d..%d MB, witness p%d", stale, before, after, got)
 }

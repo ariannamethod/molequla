@@ -145,8 +145,29 @@ func applyOomScoreAdj(path string, v int) (string, error) {
 // beatKeeper repeats the organism's last reported heartbeat on its own clock,
 // so the mesh sees the organism as alive while the tick loop is blocked inside
 // an inline warmup after growth. SwarmRegistry.Heartbeat feeds it the fresh
-// values; the keeper only re-sends them. Stop() silences it for good, so a
-// hibernating organism is never written back as alive.
+// values; the keeper re-sends them, except the peak, which it reads for itself
+// at every beat. Stop() silences it for good, so a hibernating organism is
+// never written back as alive.
+//
+// The peak is the one field the keeper must not replay. Measured 2026-09-15 at
+// 20:31Z: the witness printed `earth … p490` while /proc/24540/status held
+// `VmHWM: 1732008 kB` — 1691 MB, understated 3.45x, and unmoved for 401
+// witness lines (MOLEQULALOG2.md, "the third session"). The tick loop reads
+// ownPeakRSSMB() at the call site but beats only on tickCount%10, and a stage-5
+// tick is one ~85 s burst, so ten of them are a long way apart; between them
+// this keeper replayed a cached figure every 20 s. §4.2 of
+// docs/resonator_design.md keys the sleep policy on the largest C_i, so the
+// organism doing the most work was the one whose column rotted most.
+//
+// The other fields stay replayed on purpose. Stage, parameter count, syntropy,
+// entropy, global step, generation magnitude and overlay fade are training
+// state the tick loop owns: they are read under model.mu and are only true as
+// of the tick that computed them, so re-deriving them here would mean taking
+// that lock — the lock a multi-minute warmup is holding, which is the whole
+// reason this keeper exists. The peak is not training state. It belongs to the
+// process, not to the model; it costs one /proc/self/status read; and it is
+// monotone, so a fresh reading can never contradict a cached one, only
+// supersede it.
 type beatKeeper struct {
 	mu      sync.Mutex
 	swarm   *SwarmRegistry
@@ -160,10 +181,15 @@ type beatKeeper struct {
 	peak    int64 // VmHWM in MB (resonator design, step 0)
 	set     bool
 	stopped bool
+	// peakFn reads the live high-water RSS. It is ownPeakRSSMB on a running
+	// organism and a stub in the gate, because a test that grows the real
+	// process to drive this would be measuring the Go runtime's allocator
+	// rather than the keeper.
+	peakFn func() int64
 }
 
 func newBeatKeeper(swarm *SwarmRegistry) *beatKeeper {
-	return &beatKeeper{swarm: swarm}
+	return &beatKeeper{swarm: swarm, peakFn: ownPeakRSSMB}
 }
 
 // Set records the latest state the tick loop reported.
@@ -187,8 +213,9 @@ func (b *beatKeeper) Stop() {
 	b.mu.Unlock()
 }
 
-// beat sends one heartbeat with the last recorded state. Returns false when
-// nothing has been recorded yet, the keeper is stopped, or there is no mesh.
+// beat sends one heartbeat with the last recorded training state and a peak
+// read now. Returns false when nothing has been recorded yet, the keeper is
+// stopped, or there is no mesh.
 func (b *beatKeeper) beat() bool {
 	if b == nil || b.swarm == nil {
 		return false
@@ -196,9 +223,18 @@ func (b *beatKeeper) beat() bool {
 	b.mu.Lock()
 	stage, nParams, syn, ent, step, set, stopped := b.stage, b.nParams, b.syn, b.ent, b.step, b.set, b.stopped
 	mag, fade, peak := b.mag, b.fade, b.peak
+	read := b.peakFn
 	b.mu.Unlock()
 	if !set || stopped {
 		return false
+	}
+	// VmHWM only ever rises, so the larger of the two is the true one: a read
+	// that fails returns 0 and leaves the cached figure standing, and a read
+	// that succeeds is never older than the cache.
+	if read != nil {
+		if fresh := read(); fresh > peak {
+			peak = fresh
+		}
 	}
 	b.swarm.Heartbeat(stage, nParams, syn, ent, step, mag, fade, peak)
 	return true
