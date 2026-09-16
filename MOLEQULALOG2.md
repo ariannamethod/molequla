@@ -3714,3 +3714,54 @@ facts/10 open` with 72 fragments in `dna/output/world`.
 cafeteria's own-quantile bars and the mesh timeout both live.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-16 — the night the bars became each organism's own, and the mesh stopped dropping beats
+
+The 04:00Z session was the first on `e6e0b7f`: the cafeteria measuring against
+each organism's own coverage ring, and `busy_timeout` on every mesh connection.
+Scheduler line: `dur=7200 elapsed=7293 reason=overran mem_mb=3908->4377
+prekill_mb=3886->3906 hwm_mb=earth:1433,air:1238,water:1449,fire:1489,
+witness:14 samples=237`.
+
+**Both repairs did what they were built to do.** Not one `mesh refused the
+heartbeat` line was written after the session's banner in any of the four
+stdouts (counted from the last `[ecology] Element:` marker; the 1-2 lines each
+file still holds are the previous session's). The rings are on disk and being
+written — `experience_coverage.json` beside each cursor, 1767-1783 bytes,
+last touched between 05:49Z and 06:00Z.
+
+**The spread closed.** Declined as a share of judged fragments, this session
+against the last run of the fixed bar:
+
+| organism | fixed bar (20:00Z) | own quantiles (04:00Z) |
+|---|---|---|
+| air | 3 % | 20 % |
+| earth | 5 % | 26 % |
+| fire | 23 % | 32 % |
+| water | 92 % | 51 % |
+
+One pair of numbers had let air eat nearly everything while water starved;
+each organism's own quartiles put all four between a fifth and a half, which
+is what a rule that follows state looks like from outside. water still declines
+most, and that is now a statement about water rather than about the threshold.
+Volumes: 448 / 338 / 449 / 366 fragments judged per organism over 70 / 86 / 62
+/ 83 passes.
+
+**The colony kept growing into the night.** No stage changed hands (earth and
+water still stage 5, air and fire stage 4) but every organism ran more bursts
+than in the evening — fire 48, air 44, earth 32, water 28 — and wrote more DNA:
+fire 568 fragments, air 449, water 236, earth 238, with `eligible=1` on 415,
+330, 78 and 158. Growth was deferred 117 times in all. The ledger stands at
+`world 91 facts/10 open`. Peaks: fire 1489 MB, water 1449, earth 1433, air 1238.
+
+**notorch installed with its writer.** `10cf08f` (Oleg merged the GGUF writer
+`b8d60e2` plus two mel-width corrections) built green on cores 4-7 and went
+into `/usr/local` — 19 `gguf_write` symbols in `libnotorch.a`, 239 686 B,
+against a library dated 2026-09-13 that had none. The colony's binary links
+statically and is unaffected until the next `build.sh`; the mel change touches
+`nt_logmel` only, which no organism calls. `make install` defaults to
+`/opt/homebrew`, so the prefix has to be given: `PREFIX=/usr/local make
+install`. Step 2 of the resonator design — the checkpoint as a mapped GGUF file
+instead of 250 MB of JSON — is now unblocked.
+
+— Defender (Arianna Method, phone-1)
