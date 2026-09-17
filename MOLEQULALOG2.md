@@ -4898,3 +4898,63 @@ session. Nothing here touches what the sleeper of step 3 or the resonator of
 step 4 will do with the answer; it only makes the answer exist.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-17 — the night the organisms woke from a mapped file, and the machine ran out of room
+
+The 20:00Z session ran on `79a4461`, the first binary that says where a boot
+came from. It said it four times:
+
+```
+[ckpt] earth resumed from molequla_ckpt.gguf — 49.4 MB, read in 244 ms, peak +258 MB
+[ckpt] air   resumed from molequla_ckpt.gguf — 28.2 MB, read in 184 ms, peak +155 MB
+[ckpt] water resumed from molequla_ckpt.gguf — 50.8 MB, read in 307 ms, peak +268 MB
+[ckpt] fire  resumed from molequla_ckpt.gguf — 27.3 MB, read in 282 ms, peak +149 MB
+```
+
+**All four resumed from the mapped binary checkpoint** — the first live proof
+of step 2, against the bench's own JSON figures for the same organisms, 3258 ms
+for air and 8926 ms for water. Eighteen and twenty-nine times faster, and the
+line that says so is now in the log rather than in a measurement someone has
+to repeat.
+
+**The colony has run out of room, and the session line is what says it.** With
+the samplers of `81270a6` finally in the running script: `rss_sum_max_mb=3563
+at 20:28:34Z mem_min_mb=498`, against per-organism peaks of earth 2408, water
+2370, fire 2299, air 2237 MB. **498 MB of free memory is the lowest this node
+has recorded**, and Samsung's lmkd was working during the session — `am_kill`
+took `com.sec.unifiedwfc`, `turbo`, `acore` and two calendar providers at
+21:30:57Z and 21:52:16Z (device-local 00:30 and 00:52). It took no organism and
+it did not take Termux; there was still cache to reclaim before it reached
+`oom_score_adj=500`. The sum of resident sets is the number to watch from here,
+and the reason the sleep policy of step 5 stopped being an optimisation: air
+and fire are stage 4 and asked to grow 9 and 11 times this session, and four
+adults at these peaks do not fit in this phone.
+
+**The turn's ceiling fired, and only where it should have.** Three times, all
+on `water`, the adult with the longest bursts: `burst complete: 31 steps (cut at
+the turn's ceiling, 32 requested) … 120624ms`, then `burst yielded the turn
+after 121.6s, 1 of 32 steps left (spent 316.7s this session)`. The work is not
+lost — the step count says 31 of 32 and the phase resumes — and the other three
+organisms never met the ceiling, which is what a 120 s cap set above the
+longest honest burst is supposed to do. Queue waiting this session: twelve
+waits, 540 s in total (air 251, water 184, fire 86, earth 19), against 444.7 s
+the night before with no ceiling at all.
+
+**Everything else held.** No `mesh refused the heartbeat` for the fourth
+session running. The cafeteria declined 29-32 % for every organism, the third
+session inside ten points. Bursts: fire 11, air 10, water 8, earth 7; DNA
+written fire 111, air 99, earth 31, water 27, with `eligible=1` on 111, 44, 31
+and 12. The ledger stands at `world 155 facts/10 open`. The wall-clock caps of
+`b4a5f45` and `3fd1092` carried two senses slots with the new fields in their
+lines — `suspend_s=1 strays=0` at 17:00Z and `suspend_s=0 strays=0` at 19:00Z,
+136 s against a 600 s cap, nothing left behind.
+
+**One thing the prekill does that was not intended.** `am kill-all` at the
+session's start killed `com.termux.api` (logcat `am_kill … kill all background`
+at 20:00:05Z), which is the process `termux-camera-photo`,
+`termux-microphone-record` and `termux-location` reach through. No senses slot
+runs inside a colony window, and Android restarts it on demand, so nothing was
+lost tonight; it is recorded because a future pass that starts seconds after a
+colony session ends will pay for it.
+
+— Claude (Defender, Arianna Method)
