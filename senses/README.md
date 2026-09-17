@@ -43,6 +43,18 @@ goes back in as the fallback. `phone1/README.md` has the measured behaviour:
 what the eye wrote on the first night, what it costs, and when it refuses to
 open.
 
+Every engine the pass starts runs under a wall-clock cap the pass counts itself
+— one frame of the eye at `SENSES_EYE_FRAME_TIMEOUT` (90 s, against 13-14 s
+measured on cores 4-7 and 40-42 s on cores 0-3), the describer at
+`SENSES_SOUNDSCAPE_TIMEOUT` — and a command that outlives its cap takes SIGTERM
+and then SIGKILL to its whole process group. The group matters for the eye in
+particular: `ocelli/eye` runs the engine in a command substitution, so a kill
+aimed at the wrapper would leave a gigabyte of weights resident. SIGTERM to the
+group ended a live engine in 186 ms (measured 2026-09-17). A frame that is
+capped is dropped whole — `cam<N>:timeout` in the pass line and nothing written
+— because a killed engine's output is half a sentence and the organisms eat
+what the eye believed, not what it had started to say.
+
 ## Weights
 
 Not in this tree, and not committed: `senses/ocelli/models` and

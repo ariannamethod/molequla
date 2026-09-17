@@ -114,6 +114,22 @@ what it is, a backstop for the case where the daemon itself dies; the cap that
 actually ends a colony session is the daemon's own wall-clock deadline and
 `stop.sh`, which is what ends every session in `schedule.log`.
 
+The pass has its own caps, nine of them, and `senses.sh` counts every one the
+same way through `cap_run`: the camera grab and the housekeeping `ssh` beside it
+(`SENSES_CAM_TIMEOUT`, 60 s), the eye's engine per frame
+(`SENSES_EYE_FRAME_TIMEOUT`, 90 s), starting the recorder and the two calls that
+quench it (`SENSES_REC_TIMEOUT`, 30 s), the sound describer
+(`SENSES_SOUNDSCAPE_TIMEOUT`, 60 s), the network fix and then the satellites
+(`SENSES_LOC_TIMEOUT` 45 s, `SENSES_LOC_GPS_TIMEOUT` 90 s) and the ledger's
+ingest (`SENSES_INGEST_TIMEOUT`, 120 s). `cap_run` is the shape of `run_capped`
+and not a call into it: the daemon caps one command per slot and owns
+`schedule.cap.*`, while these cap short commands inside that pass and four of
+them need the command's stdout back as a value, so one shared function would
+mean an out-parameter and per-call scratch names for a caller that needs
+neither. A command that outlives its cap takes SIGTERM to its process group,
+then SIGKILL after `SENSES_CAP_GRACE` (5 s, against the 186 ms it took SIGTERM
+to empty a group holding a live ocelli engine, measured 2026-09-17).
+
 A pass that overruns anyway no longer swallows the next slot in silence. When a
 slot returns, the daemon asks which slots of either kind opened while it ran: a
 senses slot inside a colony window is not one of them, the newest of the rest is
@@ -198,6 +214,20 @@ apart, and in both runs one of them repeated — the window seeing that the scen
 held still. The memory floor is re-read before every frame, so a window stops
 where MemAvailable falls short instead of failing the slot.
 
+Each frame is capped on its own at `SENSES_EYE_FRAME_TIMEOUT` (90 s), so a frame
+that hangs costs one frame and not the pass — on 2026-09-17 it cost the pass
+6238 s and the 12:00 colony window, because the engine was the one command in
+the script with no cap around it. 90 s is the slowest honest frame this phone
+produces with room over it: the real engine on the live frames of that day's
+15:00 and 17:00 windows took 13, 14, 13, 13, 14, 14, 13 and 14 s on cores 4-7
+and 40 s and 42 s on cores 0-3, which is the class a pass gets while the colony
+is awake. A capped frame is a fact and not a silence: `cam<N>:timeout` in the
+pass line, `eye=rc124`, and nothing written — the return is before the engine's
+output is parsed, so half a sentence cannot become a fragment or a fact. The
+kill goes to the process group, because `eye` runs `ocelli` in a command
+substitution and killing the wrapper alone would leave a gigabyte of weights
+resident.
+
 The eye is `senses/ocelli/eye`, the pure-C SmolVLM2-500M engine, on the q6_k Yent
 decoder with one global frame (`SMOLVLM_NOSPLIT=1`): 14-16 s and a peak of
 1020 MB per frame on this phone, measured with `/usr/bin/time -v`. It lives in
@@ -271,7 +301,7 @@ fragments to the organism's own corpus, and `NewCrossField` takes its sibling
 list from the same `dnaSources()`, so the senses also reach the logit overlay.
 Without the flag the directories exist and are simply never read.
 
-`bash phone1/schedule_test.sh` is the gate: 46 cases through the real
+`bash phone1/schedule_test.sh` is the gate: 71 cases through the real
 `schedule.sh`. Thirty-six are the slot arithmetic, with a fake now. Twenty-one
 drive
 `next --epoch` on colony slots — before, at and after a boundary, across
@@ -292,7 +322,7 @@ exactly once, with `am kill-all`, before `launch.sh` and not after, and write
 and a stub that exits 3, or a command that does not exist, must leave the
 session running and the failure in the console.
 
-`bash phone1/senses_test.sh` is the gate for the pass itself: 20 cases through
+`bash phone1/senses_test.sh` is the gate for the pass itself: 42 cases through
 the real `senses.sh` with the hardware faked and nothing else — an `ssh` that
 copies fixture files where `termux-camera-photo` and `termux-microphone-record`
 would have written them, a scripted `eye`, a scripted recognizer and a scripted
@@ -305,7 +335,19 @@ disjoint, punctuation and case, empty against text, and one noun changed in a
 long sentence, which must stay above the 0.8 that counts as a repeat. Five are
 hearing: silence still leaving an `[ears env …]` fragment, speech leaving both
 `env` and `mic`, a bare `[Motor]` not counting as a transcript, and the tag
-surviving into the environmental line.
+surviving into the environmental line. The other twenty-two are the caps. Four
+drive `cap_run` on its own — a command inside its cap keeping its exit status
+and its stdout, one past it coming back at the cap with `rc=124` instead of
+after the sleep. Eight are the eye: an engine that hangs on the second frame of
+three loses that frame and no more, the window still takes its three and hears
+two, the pass line says `cam1:timeout` and `eye=rc124`, the half sentence the
+killed engine had already written becomes neither a fragment nor a fact, and an
+engine that forks a grandchild before it hangs leaves nothing alive. The rest
+are the other organs at two-second caps: a camera that never answers, a
+describer that hangs costing the environmental line but not the transcript, a
+recorder that will not start, the two location fixes that convicted `timeout`
+costing four seconds instead of forty, and an ingest that hangs coming back as
+`world=rc124`.
 
 `bash phone1/status.sh` prints one screen: per organism the pid and whether it is
 alive, VmRSS and VmHWM in MB, the stage and ingested count from the last

@@ -4565,3 +4565,188 @@ whether SIGTERM alone ends an ocelli engine mid-inference or it takes the
 SIGKILL, is unmeasured.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-17 — the eye's own cap, and every cap in the pass counted in wall seconds
+
+The morning's incident left two things undone, and this is both of them. The
+outer cap counts wall seconds now (`b4a5f45`), but catching an overrun out there
+costs the whole pass; and the command that actually spent the 6238 s — the eye's
+engine — had no cap around it at all, so the only thing that could ever end a
+hung frame was the 600 s slot cap taking the pass with it. On
+`claude/phone1-eye-cap`, not pushed.
+
+### One frame of the eye, measured
+
+The engine on this phone, the same invocation `senses.sh` makes
+(`SMOLVLM_NOSPLIT=1`, the q6_k Yent decoder with the q8_0 projector,
+`/usr/bin/time -v taskset -c …`), over the eight frames the live 15:00 and 17:00
+windows of today left in `molequla-run/senses/frames` (copied out, the live field
+untouched), MemAvailable 2941-2984 MB throughout:
+
+| frame | cores 4-7 | cores 0-3 | peak RSS |
+|---|---|---|---|
+| `20260917T150001Z_cam0` | 13 s | 40 s | 1020 MB |
+| `20260917T150031Z_cam1` | 14 s | 42 s | 1020 MB |
+| `20260917T150101Z_cam0` | 13 s | | 1020 MB |
+| `20260917T150131Z_cam0` | 13 s | | 1019 MB |
+| `20260917T170000Z_cam0` | 14 s | | 1020 MB |
+| `20260917T170030Z_cam1` | 14 s | | 1020 MB |
+| `20260917T170100Z_cam0` | 13 s | | 1020 MB |
+| `20260917T170130Z_cam0` | 14 s | | 1020 MB |
+
+Thirteen or fourteen seconds, eight times out of eight, and 1019-1020 MB
+whatever the frame is — the same peak the window measured on 2026-09-15 at every
+n. The little cores are the other end of it: the same two frames took 40 s and
+42 s on cores 0-3, which is the class a pass gets while the colony is awake
+(`senses.sh`: `CPUS="${SENSES_CPUS:-0-3}"` when `colony_alive`), three times the
+big-core figure.
+
+The live log agrees from a different angle. Over the fourteen windows between
+2026-09-16T03:01Z and 2026-09-17T17:01Z, excluding the incident,
+`senses.log`'s `eye=rc0,<N>s` over four frames runs 46-83 s, which is 11.5-20.75 s
+a frame; the 20.75 s window is 09:02Z, the same pass whose `place` branch went to
+the satellites. The incident's own window is 6238 s over four frames, and its
+four frames landed 517 s, 3049 s and 2421 s apart on a 30 s spacing.
+
+### 90 s, and the two sides it came from
+
+`SENSES_EYE_FRAME_TIMEOUT` defaults to 90 s. From below: the slowest frame this
+phone produces when nothing is wrong is 42 s, on the little cores, and 90 s is
+2.1 times that and 6.4 times the big-core median of 13.5 s. From above: the slot
+cap is 600 s, and a window of four that loses every frame to this cap costs
+4 × 90 = 360 s, which still leaves the ears (21-25 s in every line of the log)
+and the no-fix place branch (135 s of cap) inside the slot — where 120 s a frame
+would put 480 + 160 over it. Nothing between 42 s and 90 s has been measured on
+this phone at all.
+
+What the cap trades away is named honestly: the incident's four frames did come
+back — `said=4`, four fragments — after 517 s, 3049 s and 2421 s. Under this
+default all four would have been dropped. That is the intended trade. A frame
+that answers fifty minutes after its shutter is a description of a world that is
+gone, the window it belonged to reported `spacing=30s` for frames an hour apart,
+and the slot it ran in is 600 s long.
+
+### The cap counts seconds, and the kill reaches the engine
+
+`cap_run` in `senses.sh` is the shape of `run_capped` in `schedule.sh:240`
+rather than a call into it, and the two stay apart because of how they are
+invoked. `run_capped` caps one command per slot — the whole pass — from a daemon
+that owns `$MOLEQULA_RUN` and is the only writer of `$MOLEQULA_RUN/schedule.cap.*`.
+`cap_run` caps nine short commands *inside* that pass, as its grandchild, and
+four of the nine need the command's stdout back as a shell value. One shared
+function would have to grow an out-parameter and per-call scratch names for a
+caller that needs neither, and `senses.sh` would stop being the single file that
+runs from any checkout by path — which is how `schedule.conf`'s `SENSES_CMD`,
+the gate and every hand-run pass reach it. What is shared is the three lessons:
+`setsid` so the command's pid is its own process group, output to a file and
+never through `out="$(…)"`, and the group swept on the clean path as well as the
+capped one.
+
+The open question the previous entry left — whether SIGTERM alone ends an ocelli
+engine mid-inference — is answered. With the engine running under `setsid`, the
+group holds four processes: `/usr/bin/time`, the `eye` wrapper, the subshell of
+its command substitution, and `ocelli` itself. `kill -TERM -- -<pgid>` emptied
+that group in 186 ms, first poll, with no `ocelli` left anywhere on the phone.
+So `SENSES_CAP_GRACE` at 5 s is 27 times what the escalation has ever needed,
+and the SIGKILL behind it has not yet been seen to do anything. It also settles
+why the kill has to be aimed at the group: `senses/ocelli/eye` runs the engine as
+`out=$("$DIR/ocelli" …)`, so a signal to the wrapper alone would leave a
+gigabyte of weights resident with nobody reading it.
+
+### Nine caps, not six
+
+Six `timeout` calls are gone from `senses.sh` — the camera grab (60 s), the
+describer (60 s), the recorder (30 s), the two location fixes (45 s and 90 s) and
+the ledger ingest (120 s) — each replaced by `cap_run` at the same number, each
+number now a variable with its measurement beside it. The seventh cap is the
+eye's new one. The last two came out of the gate going red for a reason it was
+not written for: the ears' case hung for 62 s at a 2 s cap, because
+`$SENSES_SSH "termux-microphone-record -q; rm -f …"` and its twin after the
+recording were plain uncapped `ssh` calls, and so was the eye's `rm -f` of the
+previous frame. Three remote commands whose result is ignored, which could hang
+the pass exactly the way the engine did. They now carry their own organ's
+number.
+
+A capped frame is a logged fact and not a silence: `cam<N>:timeout` in the pass
+line beside the notes that were already there (`cam0:capture`, `cam1:scale`,
+`skip-mem:1180`), `eye=rc124`, and the frame counted in `frames=` but not in
+`said=`, so the `eyewin` line says three frames taken and two described. And the
+frame is dropped whole. The return is before the engine's output is parsed,
+because what a killed engine has written is half a sentence: the gate's stub
+flushes `OURS: "A half-written sen` and then hangs, and neither
+`dna/output/world/` nor `facts.jsonl` gets a line out of it.
+
+### The gate
+
+`phone1/senses_test.sh` is 42 cases, was 20, all green. Four drive `cap_run`
+through the library door `senses_facts_test.sh` opened, and the rest drive the
+real script with the hardware faked: an engine that hangs on the second frame of
+three, an engine that forks a grandchild before it hangs, an `ssh` that hangs on
+whichever remote command `SENSES_TEST_SLOW` names, and a describer and an ingest
+that do nothing but sleep.
+
+Red looks like this, running the new cases against `origin/main`'s `senses.sh`
+(`git show origin/main:phone1/senses.sh` into a scratch `phone1/`):
+
+```
+25 pass, 17 fail
+
+FAIL a hung frame leaves the other two fragments: got '3', want '2'
+FAIL the window took its three frames and heard two: got '… eyewin pattern=0,1,0
+n=3 spacing=0s frames=3 said=3 repeat=1 novel=0.667 wall=61s …'
+FAIL a capped frame writes no fragment: '…/dna/output/world/gen_1789667606_2.txt'
+FAIL and no fact line for it: got '3', want '2'
+FAIL the engine's grandchild is killed with the group: pid 8087 is still alive
+FAIL and the branch costs four seconds, not forty: 106s
+```
+
+Seventeen of the twenty-two go red. The window waits out the whole 60 s hang and
+then counts the hung frame as a description, `said=3`; the half sentence
+`OURS: "A half-written sen` becomes a fragment and a third fact line, which is
+the eye reporting something it never finished seeing; the engine's grandchild is
+still alive after the pass has returned; and the two location fixes cost 106 s
+against the 4 s they cost now, because on `main` the substitution around
+`timeout 45` does not return until the stub's own `sleep 60` closes the pipe —
+the incident's mechanism at a twentieth of the scale. The five new cases that
+pass on `main` are the five that only read the note and not the clock: with the
+phone awake `timeout` does fire, eventually, so `cam0:capture` and `record` and
+`no-fix` do land in the log — after 60 s, 90 s and 106 s.
+
+### One live window, capped
+
+A real pass on a scratch field, `MOLEQULA_RUN` under the scratchpad and
+`molequla-run` untouched, 2026-09-17T18:01:51Z, cores 4-7, MemAvailable 2958 MB:
+
+```
+2026-09-17T18:02:28Z eyewin pattern=0,1 n=2 spacing=0s frames=2 said=2 repeat=0
+novel=1.000 wall=37s rss=1020mb batt=100%->100%,-6->-4mA cpu=4-7
+```
+
+Both frames came back — `wall_s` 14 and 16 in their facts against the 13-14 s
+measured outside the cap, so the quarter-second poll is inside that difference —
+peak RSS 1020 MB, two fragments, two facts, and `pgrep` for `eye|ocelli|termux-camera`
+found nothing afterwards. The two sentences were «A black screen with a small
+white text that reads "the world is not what it seems"» and «A room with a white
+ceiling and a small air conditioning unit on the wall, with a small hole in the
+wall above the unit», which is the room the phone is in. The engine came from the
+phone's main checkout (`SENSES_EYE=…/molequla/senses/ocelli/eye`): a worktree has
+no built `ocelli` in it, and the first attempt at this window recorded
+`eye=rc4,cam0:rc4,cam1:rc4` — `engine not built` — which is the wrapper's own
+exit code arriving through the cap unchanged.
+
+### What is not established
+
+The frame distribution is eight frames on an idle phone and two on the little
+cores, all of one scene at one hour; it is not a distribution over the day's
+lighting or over a phone that is busy with something else. The 90 s default has
+therefore never been approached by a healthy frame, which is the point, and also
+means the number has not been tested from the side that matters — no frame
+between 42 s and 90 s has ever been observed, and if one exists this cap will
+kill it. No cap has ever fired on the real engine inside a pass either: the
+186 ms figure comes from SIGTERM sent to a live engine's group by hand, and the
+window that fires in the gate is a stub. Nothing here measures a suspended
+phone: like the outer cap's gate, these cases pass on `main` wherever
+`CLOCK_MONOTONIC` is the wall clock, and the replaced caps go red there only
+where a cap has to fire at all.
+
+— Defender (Arianna Method, phone-1)
