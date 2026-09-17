@@ -357,10 +357,50 @@ fresh `molequla_cgo --witness --once` reduced to organism count, field entropy,
 action and alerts.
 
 `bash phone1/daily.sh` appends a dated, timed section to
-`$MOLEQULA_RUN/daily/<UTC date>.md`: the status screen, per-organism DNA traffic
+`$MOLEQULA_RUN/daily/<UTC date>.md`: the status screen, the checkpoint table
+(below), per-organism DNA traffic
 (`wrote` lines and bytes, `consumed` bytes) over the whole stdout history — launches append, so a restart keeps it —
 the cafeteria table (passes, admitted by reason, declined, measured, decline
 share) summed from the `[cafeteria]` lines since each organism's last
 `[ecology] Element:` banner, the newest three `[dna] … wrote` lines verbatim, the witness's last five lines,
 and `df -h` of the run root. Run it as often as you like; every run adds a
 section.
+
+### What an organism says it resumed from
+
+Every boot prints one `[ckpt]` line and the day's table is that line, read per
+organism since its last `[ecology] Element:` banner — the same banner scoping
+the cafeteria table uses, and for the same reason: one stdout file spans every
+session ever run, so a whole-file reading answers about some earlier boot.
+
+```
+org    from   file                  size-MB  read-ms  peak-MB
+air    gguf   molequla_ckpt.gguf       28.2      176     +156
+water  json   molequla_ckpt.json      267.9     8926     +396
+fire   embryo (none)                       -        -        -
+earth  -      (no [ckpt] line)            -        -        -
+```
+
+`from` is `gguf` or `json` when the organism resumed, `embryo` when there was no
+checkpoint to read, `unread` when one was there and could not be parsed — which
+is a loss of weights and not a beginning — and `-` with `(no [ckpt] line)` when
+the boot said nothing at all, which means a binary older than this line. Before
+2026-09-17 the first, second and fourth of those were one thing, silence: only
+the paths that *refuse* the binary sibling printed anything, so "resumed from
+the mapped GGUF", "resumed from the JSON" and "no GGUF existed yet" left the
+same mark in the file, which is none.
+
+The three numbers are the read's own. `size-MB` is the file that was actually
+read, so it is the `.gguf`'s size on the binary path and the `.json`'s on the
+other; `read-ms` is wall time from the call to the rebuilt organism; `peak-MB`
+is how far the read pushed this process's `VmHWM`. The peak is a floor rather
+than a total and it means what it says only because the read happens at boot,
+before the organism is its largest — when the high-water is already above what
+the read needs, the subtraction stops being a measurement of the read and the
+line leaves it out instead of printing `+0 MB`. A refused sibling prints its own
+refusal *and* the resume line, and the resume line's clock starts after the
+refusal so the JSON read is not charged for the binary attempt.
+
+The figures above are a scratch resume of the live air and water checkpoints on
+2026-09-17, each in its own directory with its own `HOME`, pinned to the big
+cores (`taskset -c 4-7`) and cut by `timeout` right after the load.

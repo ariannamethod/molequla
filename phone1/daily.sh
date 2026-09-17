@@ -21,6 +21,62 @@ FILE="$RUN/daily/$DAY.md"
     bash "$HERE/status.sh"
     echo '```'
     echo
+    # Which file each organism was rebuilt from on its last start. Scoped to the
+    # organism's last `[ecology] Element:` banner for the same reason the
+    # cafeteria table below is: one stdout file spans every session ever run, so
+    # a whole-file reading answers about some earlier boot. `from` is gguf or
+    # json when the organism resumed, embryo when there was no checkpoint to
+    # read, unread when one was there and could not be parsed — which is a loss
+    # and not a beginning — and `-` with `(no [ckpt] line)` when the start said
+    # nothing at all, which is a binary older than this line. Those four used to
+    # be one thing: silence. The resume line's three numbers are the file's size,
+    # the wall time the read took and how far it pushed VmHWM, and the peak is
+    # absent from the line whenever the high-water was already above it
+    # (molequla.go, sayCheckpointResume).
+    echo "Checkpoint each organism resumed from, this session:"
+    echo
+    echo '```'
+    printf '%-6s %-6s %-20s %8s %8s %8s\n' org from file size-MB read-ms peak-MB
+    for e in $ELEMENTS; do
+        out="$RUN/$e/$e.stdout"
+        if [ ! -f "$out" ]; then
+            printf '%-6s no stdout\n' "$e"
+            continue
+        fi
+        tr -d '\000' < "$out" | awk -v E="$e" '
+            $1 == "[ecology]" && $2 == "Element:" { from=""; file=""; sz="-"; rd="-"; pk="-"; next }
+            # The path is field 4. A bare basename belongs to this organism by
+            # construction: launch.sh cds into its directory and CFG.CkptPath is
+            # relative, so that is the shape the colony prints. A mitosis child
+            # is told an absolute ckpt_path in its birth config and prints that,
+            # and there the element in the path is what says whose line it is —
+            # a line naming a sibling can reach this file.
+            $1 == "[ckpt]" && $2 == "resumed" && $3 == "from" &&
+            (index($4, "/") == 0 || index($4, "/" E "/")) {
+                file = $4
+                from = (file ~ /\.gguf$/) ? "gguf" : "json"
+                n = split(file, seg, "/"); file = seg[n]
+                sz = match($0, /[0-9.]+ MB, read in/) ? substr($0, RSTART, RLENGTH - 12) : "-"
+                rd = match($0, /read in [0-9]+ ms/)   ? substr($0, RSTART + 8, RLENGTH - 11) : "-"
+                pk = match($0, /peak \+[0-9]+ MB/)    ? substr($0, RSTART + 5, RLENGTH - 8) : "-"
+                next
+            }
+            $1 == "[ckpt]" && /starts from an embryo/ {
+                sz="-"; rd="-"; pk="-"
+                if ($3 == "could" && $4 == "not") {
+                    from = "unread"; n = split($2, seg, "/"); file = seg[n]
+                } else {
+                    from = "embryo"; file = "(none)"
+                }
+                next
+            }
+            END {
+                if (from == "") { from = "-"; file = "(no [ckpt] line)" }
+                printf "%-6s %-6s %-20s %8s %8s %8s\n", E, from, file, sz, rd, pk
+            }'
+    done
+    echo '```'
+    echo
     echo "DNA traffic since the stdout files were opened:"
     echo
     echo '```'
