@@ -4928,7 +4928,24 @@ it did not take Termux; there was still cache to reclaim before it reached
 `oom_score_adj=500`. The sum of resident sets is the number to watch from here,
 and the reason the sleep policy of step 5 stopped being an optimisation: air
 and fire are stage 4 and asked to grow 9 and 11 times this session, and four
-adults at these peaks do not fit in this phone.
+and the margin those two would eat into is 498 MB. **What is not established is
+that four adults cannot fit**: the per-organism figures above are VmHWM, and the
+training lock is what stops those peaks from coinciding, so summing them proves
+nothing — the quantity that decides it is the simultaneous resident sum, 3563 MB
+tonight, which this session is the first to measure. Growing an organism from
+stage 4 to stage 5 adds 96 MB to the weights it holds in Go alone (4.88 M
+parameters against 11.15 M, at 16 bytes per weight for the float64 `Data`+`Grad`
+pair), and the rest of the cost is the tape, which only one organism holds at a
+time. So the claim to carry forward is the margin, not an impossibility.
+
+And one thing this session did *not* do, worth saying plainly because step 2
+invites the confusion: the weights do not live in the mapping. The mapped file
+is read once at boot, its tensors copied into the model's Go arrays, and from
+there the organism holds them in RAM as it always did. An organism whose weights
+stay in the mapping — resident only what it touches, evictable by the kernel
+under pressure, 1.16 MB idle against 20 MB speaking in the design's own probe —
+is step 3, and it is not built. Step 2 was its precondition, because a mapping
+needs a binary file and not 260 MB of decimal text.
 
 **The turn's ceiling fired, and only where it should have.** Three times, all
 on `water`, the adult with the longest bursts: `burst complete: 31 steps (cut at
