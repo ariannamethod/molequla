@@ -385,5 +385,130 @@ memline="$(cat "$TMP/run/schedule.log" 2>/dev/null)"
 has "an empty colony reports no sum, not zero" "rss_sum_max_mb=-"
 has "and still reports the memory it saw"      "mem_min_mb=1500"
 
+# ── the cap is counted against the wall clock ───────────────────────────────
+# 2026-09-17: the 11:00 senses slot ran 8176 s under `timeout 600` and came
+# back reason=ok, and the 12:00 colony window was never run
+# (molequla-run/schedule.log, 2026-09-17T13:28:17Z). `timeout` arms alarm(2),
+# an ITIMER_REAL hrtimer on CLOCK_MONOTONIC, and that clock does not count the
+# time the phone spends suspended — 63 800 s of this boot's 288 767 s.
+#
+# A gate cannot suspend a phone. It can reproduce the half that kept the daemon
+# inside run_senses for all 8176 s: the pass leaves grandchildren behind — ssh,
+# the eye — and `out="$(…)"` does not return until the last of them closes the
+# pipe. The stub below is that in miniature: it forks a grandchild holding
+# stdout and exits. Against the old run_senses the slot takes as long as the
+# grandchild, whatever the cap says; against this one the cap is wall-clock
+# seconds, the output is a file, and the group is swept.
+
+# capstub <self-seconds> <grandchild-seconds>
+capstub() {
+    cat > "$TMP/bin/capstub" <<EOF
+#!/bin/bash
+bash -c 'exec -a capstub-grandchild sleep $2' &
+echo "capstub frags=3 total=0s"
+sleep $1
+EOF
+    chmod +x "$TMP/bin/capstub"
+}
+
+# capslot <cap-seconds> [env...]: one senses slot at 09:00, which is outside
+# every colony window in $D. The session line lands in $capline.
+capslot() {
+    local cap="$1"; shift
+    rm -rf "$TMP/run"; mkdir -p "$TMP/run/pids"
+    env PATH="$TMP/bin:$PATH" MOLEQULA_RUN="$TMP/run" SCHEDULE_CONF=/dev/null \
+        SCHEDULE_SLOTS="$D" SCHEDULE_DUR=7200 SCHEDULE_SAMPLE=1 SCHEDULE_GRACE=2 \
+        SENSES_CMD=capstub SENSES_TIMEOUT="$cap" "$@" \
+        bash "$STUB/schedule.sh" __slot senses "$(e 2026-09-13T09:00:00Z)" \
+        > "$TMP/slot.out" 2>&1
+    capline="$(cat "$TMP/run/schedule.log" 2>/dev/null)"
+}
+
+orphans() { pgrep -f capstub-grandchild 2>/dev/null | wc -l | tr -d ' '; }
+
+# capfield <key> -> its value out of the session line
+capfield() { printf '%s' "$capline" | sed -n "s/.* $1=\([^ ]*\).*/\1/p"; }
+
+# The incident in miniature: the pass itself is over in no time, a grandchild
+# holds its stdout for twenty seconds, and the cap is five.
+capstub 0 20
+capslot 5
+el="$(capfield elapsed)"
+if [ -n "$el" ] && [ "$el" -le 5 ]; then
+    ok "a grandchild holding stdout does not hold the slot"
+else
+    bad "a grandchild holding stdout does not hold the slot: elapsed=${el:-none} against a 5s cap, line '$capline'"
+fi
+eq "and the pass is still read for its fragments" "$(capfield frags)" "3"
+eq "and nothing of it is left running"            "$(orphans)" "0"
+
+# A pass that outlives its cap: killed at the cap, logged as such, with the
+# elapsed the wall clock actually saw and no survivors.
+capstub 30 30
+capslot 4
+el="$(capfield elapsed)"
+eq "a pass that outlives the cap is logged as timeout" "$(capfield reason)" "timeout"
+if [ -n "$el" ] && [ "$el" -ge 4 ] && [ "$el" -le 12 ]; then
+    ok "and the session line carries the elapsed the wall clock saw"
+else
+    bad "and the session line carries the elapsed the wall clock saw: got '${el:-none}', want 4..12"
+fi
+eq "and the process group goes with it"  "$(orphans)" "0"
+case "$capline" in
+    *suspend_s=[0-9-]*) ok "and the line says how much of it the phone slept through" ;;
+    *) bad "and the line says how much of it the phone slept through: '$capline'" ;;
+esac
+
+# A pass that cannot finish before the organisms are due does not start: the
+# cap here is longer than a day, so every colony window is nearer than it.
+capstub 30 30
+capslot 86400
+eq "a colony window nearer than the cap refuses the pass" "$(capfield reason)" "skipped-colony-soon"
+eq "and nothing of the pass was started"                  "$(orphans)" "0"
+
+# ── a slot that overran does not swallow the next one silently ──────────────
+# The other half of the same incident: run_senses returned at 13:28Z, the loop
+# asked for the next slot, and the 12:00 colony window was simply not in the
+# answer. after_slot is what the loop asks now — it names every slot the pass
+# ran past, hands back the newest one when it is still inside SCHEDULE_CATCHUP,
+# and logs the rest as lost.
+
+# after <name> <ran-kind> <ran-slot> <now> <catchup> -> stdout in $afterout,
+# the session log in $afterlog
+after() {
+    rm -rf "$TMP/run"; mkdir -p "$TMP/run/pids"
+    afterout="$(env MOLEQULA_RUN="$TMP/run" SCHEDULE_CONF=/dev/null \
+        SCHEDULE_SLOTS="$D" SENSES_SLOTS="$S" SCHEDULE_DUR=7200 \
+        SCHEDULE_CATCHUP="$5" bash "$STUB/schedule.sh" __after "$2" "$(e "$3")" "$(e "$4")" 2>/dev/null)"
+    afterlog="$(cat "$TMP/run/schedule.log" 2>/dev/null)"
+}
+
+# The incident's own numbers: the 11:00 senses slot returned at 13:28:17Z.
+after x senses "2026-09-17T11:00:00Z" "2026-09-17T13:28:17Z" 1800
+case "$afterlog" in
+    *"kind=colony slot=12:00"*"reason=overran-into"*) ok "a swallowed colony window is logged as lost" ;;
+    *) bad "a swallowed colony window is logged as lost: '$afterlog'" ;;
+esac
+case "$afterlog" in
+    *"by=senses@11:00"*) ok "and the line names the slot that ran into it" ;;
+    *) bad "and the line names the slot that ran into it: '$afterlog'" ;;
+esac
+eq "and it is too late to catch up" "$afterout" ""
+
+# The same overrun, inside a two-hour catch-up: the window is handed back.
+after x senses "2026-09-17T11:00:00Z" "2026-09-17T13:28:17Z" 7200
+eq "a swallowed window still inside the catch-up is handed back" \
+   "$afterout" "$(e 2026-09-17T12:00:00Z) colony"
+eq "and nothing is written off"  "$afterlog" ""
+
+# An ordinary pass runs past nothing.
+after x senses "2026-09-17T11:00:00Z" "2026-09-17T11:03:00Z" 1800
+eq "an ordinary senses pass swallows nothing" "$afterout$afterlog" ""
+
+# A colony session covers the 05:00 senses slot, which would have been skipped
+# as inside a colony window: that is not a loss and is not reported as one.
+after x colony "2026-09-17T04:00:00Z" "2026-09-17T06:02:00Z" 1800
+eq "a senses slot inside the colony window is not a loss" "$afterout$afterlog" ""
+
 printf '\n%d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

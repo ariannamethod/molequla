@@ -22,6 +22,8 @@
 #                                              of /proc (tests)
 #        schedule.sh __slot colony|senses [epoch] — run one slot now, without
 #                                              the daemon, for the gate
+#        schedule.sh __after colony|senses <epoch> [now] — what that slot ran
+#                                              past, likewise for the gate
 # Configuration: phone1/schedule.conf, or SCHEDULE_CONF=<file>, or the same
 # names in the environment, which win over the file.
 set -u
@@ -182,6 +184,106 @@ live_names() {
 }
 
 mem_avail_mb() { awk '/^MemAvailable:/{printf "%.0f", $2/1024}' "$PROC/meminfo"; }
+
+# --- the wall-clock cap -----------------------------------------------------
+# `timeout` does not cap anything on this phone. Its cap is armed with alarm(2)
+# — `readelf --dyn-syms /usr/bin/timeout` (coreutils 9.4, aarch64) imports
+# alarm@GLIBC_2.17 and no timer_create — which is ITIMER_REAL, an hrtimer on
+# CLOCK_MONOTONIC, and CLOCK_MONOTONIC stops while the phone is suspended. This
+# boot has 289 341 s of CLOCK_BOOTTIME against 225 488 s of CLOCK_MONOTONIC:
+# 63 853 s that clock never counted, and 53 of them went missing inside a 575 s
+# window measured today with a session awake on the phone.
+#
+# On 2026-09-17 the 11:00 senses slot ran under `timeout 600` for 8176 s of
+# wall clock and returned rc=0 — the 600 s never elapsed — and the 12:00 colony
+# window was lost (molequla-run/schedule.log, 2026-09-17T13:28:17Z). The same
+# pass shows the cap under-firing on a smaller path where nothing else can take
+# the time: senses.sh's no-fix place branch is `timeout 45` and then
+# `timeout 90`, 135 s of cap between them and no other work, and it reported
+# place=rc1,1373s against place=rc1,76s at 09:00 the same morning.
+#
+# So the cap is counted here, against date(1), in short naps, the way loop()
+# already waits for a slot. Three things the incident asked for:
+#   * the kill reaches the whole process group, because senses.sh spawns ssh
+#     and the eye and killing the capped child alone leaves them holding the
+#     phone;
+#   * the output goes to a file and never through `out="$(…)"`, because a
+#     command substitution does not return until every grandchild closes the
+#     pipe — that is why the daemon sat in run_senses for 8176 s;
+#   * nothing survives the pass on either path, capped or clean.
+# Sets CAP_RC, CAP_ELAPSED, CAP_SUSPEND, CAP_STRAYS, CAP_OUT.
+CAP_RC=0; CAP_ELAPSED=0; CAP_SUSPEND="-"; CAP_STRAYS=0; CAP_OUT=""
+
+# CLOCK_MONOTONIC in seconds, the clock `timeout` trusts. /proc/uptime is not
+# it: on this kernel its first field is CLOCK_BOOTTIME (288 767 against
+# 224 967 measured together), so it counts the suspend and would always answer
+# zero here. /proc/timer_list's "now at N nsecs" is the monotonic base.
+mono_now() { awk '/^now at /{printf "%d", $3 / 1000000000; exit}' /proc/timer_list 2>/dev/null; }
+
+# cap_sweep <pgid>: end what is left of a process group and say how many there
+# were. SIGTERM, up to SCHEDULE_GRACE seconds of wall clock, then SIGKILL —
+# the same shape stop.sh uses on the colony.
+cap_sweep() {
+    local pg="$1" k=0 n
+    n="$(pgrep -g "$pg" 2>/dev/null | wc -l)"
+    CAP_STRAYS="$n"
+    [ "$n" -gt 0 ] || return 0
+    kill -TERM -- "-$pg" 2>/dev/null
+    while [ "$k" -lt "$SCHEDULE_GRACE" ] && [ "$(pgrep -g "$pg" 2>/dev/null | wc -l)" -gt 0 ]; do
+        sleep 1; k=$((k + 1))
+    done
+    [ "$(pgrep -g "$pg" 2>/dev/null | wc -l)" -gt 0 ] && kill -KILL -- "-$pg" 2>/dev/null
+    return 0
+}
+
+# run_capped <cap-seconds> <command>
+run_capped() {
+    local cap="$1" cmd="$2" t0 t1 m0 m1 pid="" i=0 deadline
+    local pidf="$RUN/schedule.cap.pid" rcf="$RUN/schedule.cap.rc"
+    CAP_RC=0; CAP_ELAPSED=0; CAP_SUSPEND="-"; CAP_STRAYS=0
+    CAP_OUT="$RUN/schedule.cap.out"
+    rm -f "$pidf" "$rcf"
+    : > "$CAP_OUT" || return 1
+    t0="$(date -u +%s)"; m0="$(mono_now)"
+    # setsid makes the shim a session leader, so its pid is its process group
+    # and one negative kill reaches everything the pass started. The shim does
+    # not exec: it stays the group leader for as long as the pass runs and
+    # writes the real exit status where the cap can read it.
+    setsid bash -c 'echo $$ > "$1"; bash -c "$2"; echo $? > "$3"' \
+        _ "$pidf" "$cmd" "$rcf" >> "$CAP_OUT" 2>&1 < /dev/null &
+    while [ $i -lt 50 ]; do
+        pid="$(cat "$pidf" 2>/dev/null)"
+        [ -n "$pid" ] && break
+        i=$((i + 1)); sleep 0.1
+    done
+    if [ -z "$pid" ]; then
+        CAP_RC=127
+        CAP_ELAPSED=$(( $(date -u +%s) - t0 ))
+        echo "[schedule] cap: the pass never reported a pid — nothing was run"
+        return 0
+    fi
+    deadline=$((t0 + cap))
+    while alive "$pid"; do
+        [ "$(date -u +%s)" -ge "$deadline" ] && { CAP_RC=124; break; }
+        sleep 1
+    done
+    if [ "$CAP_RC" -eq 124 ]; then
+        echo "[schedule] cap: ${cap}s of wall clock spent — SIGTERM to process group $pid"
+    else
+        CAP_RC="$(cat "$rcf" 2>/dev/null)"
+        case "$CAP_RC" in ''|*[!0-9]*) CAP_RC=126 ;; esac
+    fi
+    cap_sweep "$pid"
+    [ "$CAP_STRAYS" -gt 0 ] && echo "[schedule] cap: $CAP_STRAYS process(es) left in the group — ended"
+    t1="$(date -u +%s)"; m1="$(mono_now)"
+    CAP_ELAPSED=$((t1 - t0))
+    if [ -n "$m0" ] && [ -n "$m1" ]; then
+        CAP_SUSPEND=$(( CAP_ELAPSED - (m1 - m0) ))
+        [ "$CAP_SUSPEND" -lt 0 ] && CAP_SUSPEND=0
+    fi
+    rm -f "$pidf" "$rcf"
+    return 0
+}
 
 # --- the daemon -------------------------------------------------------------
 log_session() { printf '%s\n' "$*" >> "$LOGF"; }
@@ -370,11 +472,14 @@ run_session() {
     return 0
 }
 
-# run_senses <slot-epoch>: one pass of the senses under a timeout, or a logged
-# refusal. The colony is checked twice — against the configured windows and
-# against what is actually alive — because a manual launch.sh obeys neither.
+# run_senses <slot-epoch>: one pass of the senses under the wall-clock cap, or
+# a logged refusal. The colony is checked three times — against the configured
+# windows, against what is actually alive, and against the clock, because a
+# manual launch.sh obeys neither of the first two and a pass that is still
+# running when a colony window opens is the pass that cost 2026-09-17 its
+# 12:00 session.
 run_senses() {
-    local slot="$1" t0 t1 out rc reason frags left
+    local slot="$1" t0 t1 rc reason frags left nc gap
     t0="$(date -u +%s)"
 
     if in_colony_window "$slot"; then
@@ -388,10 +493,24 @@ run_senses() {
         echo "[schedule] senses slot $(hhmm "$slot"): colony up ($left) — skipped"
         return 0
     fi
+    # A pass that cannot finish before the organisms are due does not start.
+    # The eye alone holds a gigabyte and the cap is the pass's own worst case,
+    # so anything closer to a colony window than the cap is a pass that may
+    # still be holding the phone when four organisms want it.
+    nc="$(next_slot "$t0" "$SCHEDULE_SLOTS")" || nc=""
+    if [ -n "$nc" ]; then
+        gap=$((nc - t0))
+        if [ "$gap" -lt "$SENSES_TIMEOUT" ]; then
+            log_session "$(iso "$t0") kind=senses slot=$(hhmm "$slot") start=- end=- timeout=${SENSES_TIMEOUT} elapsed=0 reason=skipped-colony-soon opens_in=${gap}s frags=0 mem_mb=$(mem_avail_mb)"
+            echo "[schedule] senses slot $(hhmm "$slot"): the colony window opens in ${gap}s, less than the ${SENSES_TIMEOUT}s cap — skipped"
+            return 0
+        fi
+    fi
 
-    echo "[schedule] senses slot $(hhmm "$slot") at $(iso "$t0"): $SENSES_CMD (cap ${SENSES_TIMEOUT}s)"
-    out="$(timeout "$SENSES_TIMEOUT" bash -c "$SENSES_CMD" 2>&1)"; rc=$?
-    printf '%s\n' "$out" | sed 's/^/[schedule] /'
+    echo "[schedule] senses slot $(hhmm "$slot") at $(iso "$t0"): $SENSES_CMD (cap ${SENSES_TIMEOUT}s of wall clock)"
+    run_capped "$SENSES_TIMEOUT" "$SENSES_CMD"
+    rc="$CAP_RC"
+    sed 's/^/[schedule] /' "$CAP_OUT"
     t1="$(date -u +%s)"
     case "$rc" in
         0) reason=ok ;;
@@ -399,15 +518,53 @@ run_senses() {
         *) reason="failed-rc$rc" ;;
     esac
     # The pass reports its own count on its last line; absent that, nothing.
-    frags="$(printf '%s' "$out" | sed -n 's/.* frags=\([0-9][0-9]*\) .*/\1/p' | tail -1)"
+    frags="$(sed -n 's/.* frags=\([0-9][0-9]*\) .*/\1/p' "$CAP_OUT" | tail -1)"
     [ -n "$frags" ] || frags=0
-    log_session "$(iso "$t1") kind=senses slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") timeout=${SENSES_TIMEOUT} elapsed=$((t1 - t0)) reason=$reason frags=$frags mem_mb=$(mem_avail_mb)"
-    echo "[schedule] senses slot $(hhmm "$slot") done: reason=$reason elapsed=$((t1 - t0))s frags=$frags"
+    log_session "$(iso "$t1") kind=senses slot=$(hhmm "$slot") start=$(iso "$t0") end=$(iso "$t1") timeout=${SENSES_TIMEOUT} elapsed=$CAP_ELAPSED reason=$reason frags=$frags suspend_s=$CAP_SUSPEND strays=$CAP_STRAYS mem_mb=$(mem_avail_mb)"
+    echo "[schedule] senses slot $(hhmm "$slot") done: reason=$reason elapsed=${CAP_ELAPSED}s frags=$frags suspended ${CAP_SUSPEND}s"
+    return 0
+}
+
+# after_slot <kind> <slot-epoch> [now]: the slots that pass ran past.
+# A slot that overruns does not only cost itself. The loop asks for the next
+# slot when the pass returns, so a window that opened while it ran is simply
+# not there any more: on 2026-09-17 the 11:00 senses slot came back at 13:28Z
+# and the 12:00 colony session was never mentioned again in schedule.log. Every
+# slot of either kind between the one that ran and now is named here. The
+# newest is offered back for a catch-up when it is still inside
+# SCHEDULE_CATCHUP — the same promise loop() makes to a slot it reaches late —
+# and logged as lost when it is not. A senses slot inside a colony window is
+# neither: it would have been skipped anyway.
+after_slot() {
+    local kind="$1" target="$2" now="${3:-$(date -u +%s)}"
+    local t=$((target + 1)) line s k i n last
+    local -a ls=() lk=()
+    while :; do
+        line="$(next_any "$t")" || return 1
+        s="${line%% *}"; k="${line##* }"
+        [ "$s" -gt "$now" ] && break
+        t=$((s + 1))
+        [ "$k" = senses ] && in_colony_window "$s" && continue
+        ls+=("$s"); lk+=("$k")
+    done
+    n=${#ls[@]}
+    [ "$n" -gt 0 ] || return 0
+    i=0; last=$((n - 1))
+    while [ $i -lt $n ]; do
+        if [ $i -eq $last ] && [ $((now - ls[i])) -le "$SCHEDULE_CATCHUP" ]; then
+            printf '%d %s\n' "${ls[i]}" "${lk[i]}"
+        else
+            log_session "$(iso "$now") kind=${lk[i]} slot=$(hhmm "${ls[i]}") start=- end=- elapsed=0 reason=overran-into late=$((now - ls[i]))s by=$kind@$(hhmm "$target") mem_mb=$(mem_avail_mb)"
+            # The console, not stdout: stdout is the catch-up answer.
+            echo "[schedule] $(hhmm "${ls[i]}") ${lk[i]} slot lost: the $kind slot $(hhmm "$target") ran into it and ended $((now - ls[i]))s past it" >&2
+        fi
+        i=$((i + 1))
+    done
     return 0
 }
 
 loop() {
-    local now target kind line late
+    local now target kind line late catch ct ck
     mkdir -p "$PIDDIR" || exit 1
     trap 'echo "[schedule] signal — daemon exits, any live session keeps its own timeout cap"; rm -f "$PIDF"; exit 0' TERM INT
     echo "[schedule] daemon pid $$ up at $(iso "$(date -u +%s)"): colony [$SCHEDULE_SLOTS] UTC session ${SCHEDULE_DUR}s, senses [${SENSES_SLOTS:-none}] cap ${SENSES_TIMEOUT}s, grace ${SCHEDULE_GRACE}s, sample ${SCHEDULE_SAMPLE}s, catchup ${SCHEDULE_CATCHUP}s, conf $CONF"
@@ -433,6 +590,13 @@ loop() {
             run_senses "$target"
         else
             run_session "$target"
+        fi
+        # What did that pass run past? Nothing, on any ordinary day.
+        catch="$(after_slot "$kind" "$target")"
+        if [ -n "$catch" ]; then
+            ct="${catch%% *}"; ck="${catch##* }"
+            echo "[schedule] $(hhmm "$ct") $ck slot was passed over $(( $(date -u +%s) - ct ))s ago, inside the ${SCHEDULE_CATCHUP}s catch-up — running it now"
+            if [ "$ck" = senses ]; then run_senses "$ct"; else run_session "$ct"; fi
         fi
         # Never look at the same slot twice.
         while [ "$(date -u +%s)" -le "$target" ]; do sleep 1; done
@@ -558,6 +722,14 @@ case "${1:-}" in
             senses) run_senses  "${3:-$(date -u +%s)}" ;;
             *) die "__slot: want colony or senses, got '${2:-}'" ;;
         esac
+        ;;
+    # The other half of a slot, likewise run without the daemon around it:
+    # what the loop asks after a pass returns. Prints the slot to catch up on,
+    # or nothing, and logs what it gave up on.
+    __after)
+        mkdir -p "$PIDDIR" || exit 1
+        [ -n "${3:-}" ] || die "__after: want a kind and a slot epoch"
+        after_slot "$2" "$3" "${4:-$(now_epoch)}"
         ;;
     *) echo "usage: schedule.sh start|stop|status|next [--epoch|--kind]|in-window <HH:MM|epoch>" >&2; exit 2 ;;
 esac
