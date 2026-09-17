@@ -6,8 +6,9 @@ for 30 minutes, the pod runs carried a 35-minute cap. The one time that rule was
 skipped, on 2026-09-13, all four organisms reached stage 4 within 22 minutes,
 each holding 758-928 MB, and Android's lmkd killed Termux to get the memory
 back. The default since: three sessions a day of two hours each, at 04:00, 12:00
-and 20:00 UTC, started by `phone1/schedule.sh` and capped by `timeout` inside
-`launch.sh` so the cap survives the scheduler's own death.
+and 20:00 UTC, started by `phone1/schedule.sh`, ended by the daemon's own
+wall-clock deadline, with the `timeout` inside `launch.sh` behind it as a
+backstop for the case where the scheduler dies first.
 
 The senses are the exception to that rule, and the reason it survives: camera,
 microphone and place run in their own short slots between the colony windows —
@@ -53,13 +54,16 @@ sampling interval, catch-up window, `oom_score_adj`, and the senses slots with
 their own command and cap — where every name can be overridden from the
 environment and the file itself with `SCHEDULE_CONF`. Two kinds of slot share
 one clock: `SCHEDULE_SLOTS` runs the colony for `SCHEDULE_DUR`, `SENSES_SLOTS`
-runs `SENSES_CMD` (`senses.sh all`) under `timeout SENSES_TIMEOUT`. `next`
+runs `SENSES_CMD` (`senses.sh all`) under a `SENSES_TIMEOUT` cap counted in
+wall-clock seconds. `next`
 names the nearest slot of either kind and which kind it is; `next --kind` and
 `in-window` exist for the gate. A senses slot that falls inside a colony
 window, or finds the colony alive from a manual launch, is skipped and logged
 as `reason=skipped-colony-window` or `skipped-colony-alive` — the eye alone
 holds a gigabyte, and four organisms holding 758-928 MB each is how this phone
-lost Termux to lmkd once already.
+lost Termux to lmkd once already. A pass that could still be running when the
+organisms are due does not start either: a colony window nearer than the cap
+itself gives `reason=skipped-colony-soon`.
 `SENSES_SLOTS` empty turns all of this off and leaves the colony scheduler that
 was here before. It
 sleeps to the next slot in naps of at most a minute, each decided against the
@@ -75,9 +79,13 @@ the reason (`capped`, `early-exit`, `overran`, `skipped-running`,
 per-organism VmHWM peak, and the colony's simultaneous footprint; a senses
 slot writes the same line with
 `kind=senses`, its reason (`ok`, `timeout`, `failed-rc<N>`,
-`skipped-colony-window`, `skipped-colony-alive`) and the fragments the pass
-reported; the
-daemon's own console is `$MOLEQULA_RUN/schedule.out`. It is detached
+`skipped-colony-window`, `skipped-colony-alive`, `skipped-colony-soon`), the
+fragments the pass reported, `suspend_s=` — the seconds of the pass that
+CLOCK_MONOTONIC did not count, which is the difference between an eye that was
+slow and a phone that was asleep — and `strays=`, how many processes the pass
+still had running when it was over; the
+daemon's own console is `$MOLEQULA_RUN/schedule.out`, and the raw output of the
+last capped pass is `$MOLEQULA_RUN/schedule.cap.out`. It is detached
 (`setsid nohup`, pid in `pids/schedule.pid`, which `stop.sh` skips), refuses a
 second instance, and a slot whose colony is already up — a manual `launch.sh` —
 is logged as `skipped-running` and left alone. A slot reached more than
@@ -85,6 +93,33 @@ is logged as `skipped-running` and left alone. A slot reached more than
 reboot, a session that starts hours late is not the session that was scheduled.
 `/usr/local/bin/defender-services.sh` calls `schedule.sh start` so the daemon
 comes back after a reboot.
+
+**A cap on this phone is counted against the wall clock, never by `timeout`.**
+`timeout` arms its cap with `alarm(2)` — `readelf --dyn-syms /usr/bin/timeout`
+on coreutils 9.4 imports `alarm@GLIBC_2.17` and no `timer_create` — and that is
+`ITIMER_REAL`, an hrtimer on `CLOCK_MONOTONIC`, a clock that stops while the
+phone is suspended: this boot carries 289 341 s of `CLOCK_BOOTTIME` against
+225 488 s of `CLOCK_MONOTONIC`. On 2026-09-17 the 11:00 senses slot ran 8176 s
+under `timeout 600` and came back `reason=ok` — the 600 s of that clock never
+elapsed — and the 12:00 colony window was gone. So the senses cap is a watchdog
+that reads `date`, takes one-second naps, and when the wall clock says the cap
+is spent sends SIGTERM and then SIGKILL to the pass's whole process group: the
+pass runs under `setsid`, so its ssh and its eye are in that group and go with
+it. Its output goes to a file and never through `out="$(…)"`, because a command
+substitution does not return until the last grandchild closes the pipe — that,
+not the work, is what kept the daemon inside `run_senses` for all 8176 s.
+The group is swept on the clean path too: nothing outlives a pass. The
+`timeout` inside `launch.sh` has the same monotonic weakness and is kept for
+what it is, a backstop for the case where the daemon itself dies; the cap that
+actually ends a colony session is the daemon's own wall-clock deadline and
+`stop.sh`, which is what ends every session in `schedule.log`.
+
+A pass that overruns anyway no longer swallows the next slot in silence. When a
+slot returns, the daemon asks which slots of either kind opened while it ran: a
+senses slot inside a colony window is not one of them, the newest of the rest is
+run late if it is still inside `SCHEDULE_CATCHUP`, and everything else is
+written into `schedule.log` as `reason=overran-into` with `by=<kind>@<slot>` —
+the slot that took it.
 
 The session line carries two different memory readings and they answer two
 different questions. `hwm_mb=earth:1691,air:1185,…` is each organism's `VmHWM`,

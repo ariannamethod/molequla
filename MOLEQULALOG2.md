@@ -4433,3 +4433,135 @@ but a colony with four adults and no idle tape would give a warmup a quarter of
 the session, and 4 796.3 s does not fit in 1 800 s.
 
 — Defender (Arianna Method, phone-1)
+
+---
+
+## 2026-09-17 — the cap that did not count the hours the phone slept
+
+The 11:00 senses slot took the 12:00 colony session with it. `schedule.log`
+has the whole shape of it in one line:
+
+```
+2026-09-17T13:28:17Z kind=senses slot=11:00 start=2026-09-17T11:12:01Z
+end=2026-09-17T13:28:17Z timeout=600 elapsed=8176 reason=ok frags=5 mem_mb=3494
+```
+
+`reason=ok`, under a cap of 600 s, after 8176 s. The cap did not fire and
+report a timeout; it reported success. The work itself finished — five
+fragments, every organ rc=0 — and the next line in `schedule.out` is
+`next slot 2026-09-17T15:00:00Z`, so the colony window that opened at 12:00Z
+while the pass was still running was never mentioned again. The daemon is one
+process and it sat inside `run_senses` from 11:12Z to 13:28Z; by the time it
+looked at the clock again the 12:00 slot was 5 297 s old, past the 1 800 s
+catch-up, and gone. The phone was unplugged through all of it
+(`senses/senses.log`: `batt=90%->89%,-547->-750mA`).
+
+### Where the hours went, and where they did not
+
+The pass line splits the 8176 s three ways: `eye=rc0,6238s`,
+`place=rc1,1373s`, `ears=rc0,44s`. The same window at 09:00 the same morning
+took 216 s in total, with `eye=rc0,83s` and `place=rc1,76s`.
+
+The eye's 6 238 s is not evidence about caps. `senses.sh:406-408` runs the ocelli
+engine as `/usr/bin/time -v taskset -c "$CPUS" bash "$SENSES_EYE" …` with no
+`timeout` around it at all, so a frame that takes twenty-five minutes is
+outside every cap in the tree by construction. The eye window's own line says
+`n=4 spacing=30s frames=4 … wall=6759s rss=1020mb`, and the four frames landed
+517 s, 3 049 s and 2 421 s apart (`world/gen_1789644293_135.txt` …
+`gen_1789650280_138.txt`) on a 30 s spacing.
+
+`place` is the one that convicts the cap. Its no-fix branch is exactly two
+statements — `timeout 45 $SENSES_SSH 'termux-location -p network -r once'`,
+then `timeout 90 $SENSES_SSH 'termux-location -p gps -r once'`
+(`senses.sh:699` and `:704`) — and then it returns. 135 s of cap, no other
+work, and it reported 1 373 s of wall clock, against 76 s on the same path at
+09:00. A cap that lets 1 373 s pass on a 135 s budget is not counting wall
+seconds.
+
+It is counting `CLOCK_MONOTONIC`. `readelf --dyn-syms /usr/bin/timeout`
+(coreutils 9.4, aarch64) imports `alarm@GLIBC_2.17` and no `timer_create`:
+the cap is `ITIMER_REAL`, an hrtimer on the monotonic base, and that clock
+stops while the phone is suspended. Measured on the A56 today, from one
+process reading all three clocks: `CLOCK_BOOTTIME` 289 341 s against
+`CLOCK_MONOTONIC` 225 488 s — 63 853 s of this boot that the cap's clock never
+counted — and 53.3 s of a 575 s window lost to suspend while a session was
+awake on the phone. `loop()` has known this since it was written: it naps in
+minutes and decides each nap against `date`, "because a long sleep does not
+count the time the phone spends suspended". The cap never got the same
+treatment.
+
+Two things are **not** established. How much of those 8176 s the phone spent
+suspended is not recoverable: Android's battery history offers `-running`, and
+over the same 575 s window it claimed 543.7 s of not-running against the
+kernel's 53.3 s, so it is not a suspend measure and its 4 576 s for the
+incident window means nothing; the kernel ring buffer holds about two and a
+half minutes of `dmesg` and cannot reach back to 11:12Z. And the cap failing
+by a factor of ten on `place` is a demonstration of the mechanism, not a
+reconstruction of the whole pass.
+
+### The repair
+
+`run_capped` in `schedule.sh` replaces `timeout` on the senses path. The pass
+runs under `setsid`, so its pid is its process group; the watchdog polls
+`date -u +%s` in one-second naps, and when the wall clock says the cap is
+spent it sends SIGTERM to the *group* and SIGKILL after `SCHEDULE_GRACE`.
+Group, not child: `senses.sh` spawns ssh and the eye, and the old line was
+`out="$(timeout … )"`, a command substitution that does not return until the
+last grandchild closes the pipe — which is why killing the capped child alone
+would have freed nothing, and why the daemon stayed blocked for the whole
+8 176 s. The output now goes to `$MOLEQULA_RUN/schedule.cap.out` and is read
+from there. The group is swept on the clean path too, and the session line
+carries `strays=` when there was anything to sweep.
+
+The session line also carries `suspend_s=`, the wall seconds of the pass that
+`CLOCK_MONOTONIC` did not count, read from `/proc/timer_list`'s `now at N
+nsecs` — which is the monotonic base. `/proc/uptime` is not: on this kernel
+its first field is `CLOCK_BOOTTIME` (288 397 s against 224 600 s read
+together), so it counts the suspend and would always answer zero.
+
+The colony path needed nothing of this. `run_session` already polls
+`date -u +%s` against `t0 + SCHEDULE_DUR + SCHEDULE_GRACE` and calls `stop.sh`
+when it passes, and that is what has ended every colony session in the log —
+six of six between 2026-09-15 and 2026-09-17 end `reason=overran` at
+7 293-7 318 s of a 7 200 s session, which is the daemon's deadline plus one
+sample tick, not the `timeout 7200` inside `launch.sh`. That inner `timeout`
+has the same monotonic weakness and is kept for what the README says it is, a
+backstop for the case where the daemon dies first. What the log cannot say is
+whether it fails to fire or merely fails to kill: an organism that ignores
+SIGTERM would produce the same `overran` line.
+
+Second half of the incident: `after_slot`. When any slot returns, the loop now
+asks which slots of either kind opened while it ran. A senses slot inside a
+colony window is not one — it would have been skipped anyway. The newest of
+the rest is run late if it is still inside `SCHEDULE_CATCHUP`, which is the
+promise the loop already makes to a slot it reaches late; everything else is
+logged as `reason=overran-into` with `by=<kind>@<slot>`, so a lost colony
+window is a line in `schedule.log` and not an absence. And a senses pass that
+finds a colony window nearer than its own cap does not start at all:
+`reason=skipped-colony-soon`.
+
+### The gate
+
+`phone1/schedule_test.sh` is 71 cases, was 55, all green. The sixteen new ones
+drive the real `run_senses` through the `__slot` verb and the real
+`after_slot` through a new `__after`, against a stub that forks a grandchild
+holding stdout open — ssh and the eye in miniature.
+
+Red looks like this. Running the new gate against `origin/main`'s
+`schedule.sh` (`git show origin/main:phone1/schedule.sh`), the first case
+fails with `elapsed=24 against a 5s cap, line … timeout=5 elapsed=24
+reason=ok`: the same shape as the incident, three orders of magnitude smaller.
+Six of the sixteen go red there — the blocked substitution, `suspend_s`,
+`skipped-colony-soon` and three on the swallowed window. The other ten are
+regression gates and pass on `main` too, because a gate cannot suspend a phone:
+with the machine awake, `CLOCK_MONOTONIC` is the wall clock and `timeout` fires
+on time. That is exactly the failure mode this incident is about — the cap
+works on every machine that never sleeps.
+
+Not run: a live senses pass. The daemon (pid 10110, restarted 14:15Z on the
+pre-fix script) was left alone and `molequla-run` untouched; the branch has not
+been near a 15:00 or 17:00 slot. What a real pass reports in `suspend_s`, and
+whether SIGTERM alone ends an ocelli engine mid-inference or it takes the
+SIGKILL, is unmeasured.
+
+— Defender (Arianna Method, phone-1)
