@@ -4267,10 +4267,39 @@ func decodeDeltaAdapter(dec *json.Decoder) (*DeltaAdapter, error) {
 	return da, expectDelim(dec, '}')
 }
 
+// sayCheckpointResume prints the one line every resume owes the log: which file
+// the organism was rebuilt from, how big it was, how long the read took, and how
+// far the read pushed this process's high-water RSS. It is deliberately in the
+// shape of the refusals beside it, `[ckpt] …`, because the same awk reads both.
+//
+// The peak is VmHWM before and after (ownPeakRSSMB, governor_phone.go), so it is
+// a floor on what the read added and it means what it says only while the
+// process is young enough that the read is its largest allocation so far —
+// which is where the colony calls this from, the boot in main(). A delta of zero
+// or less means the high-water was already above what the read needed, so the
+// subtraction is no longer a measurement of the read: it is left out rather than
+// printed as `+0 MB`. Same for an unknown VmHWM.
+func sayCheckpointResume(path string, elapsed time.Duration, peakBefore, peakAfter int64) {
+	size := "size unknown"
+	if fi, err := os.Stat(path); err == nil {
+		size = fmt.Sprintf("%.1f MB", float64(fi.Size())/(1<<20))
+	}
+	if peakBefore > 0 && peakAfter > peakBefore {
+		fmt.Printf("[ckpt] resumed from %s — %s, read in %d ms, peak +%d MB\n",
+			path, size, elapsed.Milliseconds(), peakAfter-peakBefore)
+		return
+	}
+	fmt.Printf("[ckpt] resumed from %s — %s, read in %d ms\n",
+		path, size, elapsed.Milliseconds())
+}
+
 func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error) {
 	if path == "" {
 		path = CFG.CkptPath
 	}
+
+	started := time.Now()
+	peakBefore := ownPeakRSSMB()
 
 	// The binary sibling first when it is there and agrees with the JSON about
 	// which organism this is. Everything below stays the JSON path exactly as it
@@ -4281,22 +4310,33 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 		if err == nil {
 			model, tok, err := loadCheckpointGGUF(docs, gp, want)
 			if err == nil {
+				sayCheckpointResume(gp, time.Since(started), peakBefore, ownPeakRSSMB())
 				return model, tok, nil
 			}
 			fmt.Printf("[ckpt] %s not used (%v) — loading the JSON checkpoint\n", gp, err)
 		} else {
 			fmt.Printf("[ckpt] %s not used (the JSON's identity is unreadable: %v) — loading the JSON checkpoint\n", gp, err)
 		}
+		// A refused sibling has cost wall time and pages of its own, and the JSON
+		// read that follows must not be charged with either: the clock and the
+		// high-water are re-read here so the line below measures the JSON only.
+		started, peakBefore = time.Now(), ownPeakRSSMB()
 	}
 
 	f, err := os.Open(path)
 	if err != nil {
+		// The organism climbs from an embryo after this, and until it was said
+		// out loud the log could not tell that from a clean resume: both left no
+		// line at all. The wording separates it from the case below, where a
+		// checkpoint was there and could not be used — a beginning against a loss.
+		fmt.Printf("[ckpt] no checkpoint at %s (%v) — the organism starts from an embryo\n", path, err)
 		return nil, nil, err
 	}
 	defer f.Close()
 
 	ckpt, err := readCheckpointStream(f)
 	if err != nil {
+		fmt.Printf("[ckpt] %s could not be read (%v) — the organism starts from an embryo\n", path, err)
 		return nil, nil, err
 	}
 
@@ -4419,6 +4459,7 @@ func LoadCheckpoint(docs []string, path string) (*GPT, *EvolvingTokenizer, error
 		model.ensureRRPRAMFactors(li)
 	}
 
+	sayCheckpointResume(path, time.Since(started), peakBefore, ownPeakRSSMB())
 	return model, tok, nil
 }
 
@@ -7969,6 +8010,10 @@ func main() {
 		model, tok, err = LoadCheckpoint(docs, "")
 	} else {
 		err = fmt.Errorf("zero-warmup mode: skipping checkpoint load")
+		// LoadCheckpoint says its own line on every other path into the embryo;
+		// this branch never calls it, so it says this one itself and no boot
+		// leaves the log without a `[ckpt]` line.
+		fmt.Printf("[ckpt] zero-warmup mode — no checkpoint read, the organism starts from an embryo\n")
 	}
 	memSnapshot("post-load")
 	if err != nil || model == nil || tok == nil {
