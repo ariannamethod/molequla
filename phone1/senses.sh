@@ -110,6 +110,26 @@ SENSES_EYE_SAME="${SENSES_EYE_SAME:-0.8}"
 SENSES_EYE_EDGE="${SENSES_EYE_EDGE:-1024}"
 # The eye peaks near 1 GB. Below this much MemAvailable it does not start.
 SENSES_EYE_MIN_MB="${SENSES_EYE_MIN_MB:-1300}"
+# One frame's cap, and the reason the window survives a frame that hangs. Until
+# 2026-09-17 the engine was the one command in this file with no cap at all, and
+# on that day one frame took what the pass line recorded as 6238 s across four
+# frames — the four landed 517 s, 3049 s and 2421 s apart on a 30 s spacing —
+# and took the 12:00 colony window with it.
+#
+# The number is the frame's own period with room over the slowest honest frame.
+# Measured here 2026-09-17, the real engine on the live frames of that day's
+# 15:00 and 17:00 windows, eight frames on cores 4-7: 13, 14, 13, 13, 14, 14, 13,
+# 14 s, peak RSS 1019-1020 MB. The same engine on cores 0-3, which is what a pass
+# gets while the colony is awake: 40 s and 42 s. So the slowest frame this phone
+# produces when nothing is wrong is 42 s, and 90 s is 2.1 times that and 6.4
+# times the median on the big cores. It is also under the ceiling from above: a
+# window of four that loses every frame to the cap costs 4 × 90 = 360 s of the
+# 600 s slot cap, which still leaves the ears (~25 s) and the no-fix place branch
+# (135 s) inside it, where 120 s a frame would not.
+SENSES_EYE_FRAME_TIMEOUT="${SENSES_EYE_FRAME_TIMEOUT:-90}"
+# The camera itself, a separate cap from the engine's: the grab is 3-4 s of a
+# healthy pass and this is the number it has carried since the organ was written.
+SENSES_CAM_TIMEOUT="${SENSES_CAM_TIMEOUT:-60}"
 
 # --- the ears --------------------------------------------------------------
 # The recognizer is molequla's own organ: senses/ears, whisper on notorch, in C,
@@ -146,6 +166,10 @@ fi
 SENSES_REC_SECONDS="${SENSES_REC_SECONDS:-12}"
 # Shorter than this, after the noise tags are stripped, is not speech.
 SENSES_SPEECH_MIN_CHARS="${SENSES_SPEECH_MIN_CHARS:-8}"
+# Two caps of the ears, both the numbers the organ has carried: starting the
+# recorder, and the sound describer, which takes 0.057 s on a 12 s wav.
+SENSES_REC_TIMEOUT="${SENSES_REC_TIMEOUT:-30}"
+SENSES_SOUNDSCAPE_TIMEOUT="${SENSES_SOUNDSCAPE_TIMEOUT:-60}"
 # The other half of hearing: senses/ears/soundscape, no model, reads the same
 # wav and names what kind of sound it was. It runs on every pass, next to the
 # recognizer and not instead of it — a quiet twelve seconds is evidence too, and
@@ -157,6 +181,11 @@ SENSES_SOUNDSCAPE="${SENSES_SOUNDSCAPE-$REPO/senses/ears/soundscape}"
 SENSES_MOVE_M="${SENSES_MOVE_M:-50}"
 SENSES_UA="${SENSES_UA:-molequla-senses/1.0 (phone-1, Arianna Method)}"
 SENSES_HTTP_TIMEOUT="${SENSES_HTTP_TIMEOUT:-25}"
+# The two fixes, network first and then the satellites, at the numbers this
+# branch has always had: 45 s and 90 s. They are the pair whose 135 s of cap let
+# 1373 s pass on 2026-09-17, which is how the cap was found out.
+SENSES_LOC_TIMEOUT="${SENSES_LOC_TIMEOUT:-45}"
+SENSES_LOC_GPS_TIMEOUT="${SENSES_LOC_GPS_TIMEOUT:-90}"
 
 # --- the world ledger ------------------------------------------------------
 # The structured sidecar: one JSON line per observation, read by
@@ -168,6 +197,7 @@ SENSES_HTTP_TIMEOUT="${SENSES_HTTP_TIMEOUT:-25}"
 # SENSES_INGEST leaves the facts on disk for the scheduler to ingest later.
 SENSES_FACTS="${SENSES_FACTS-$SENSES_DIR/facts.jsonl}"
 SENSES_FACTS_MAX_KB="${SENSES_FACTS_MAX_KB:-4096}"
+SENSES_INGEST_TIMEOUT="${SENSES_INGEST_TIMEOUT:-120}"
 if [ -z "${SENSES_INGEST+x}" ]; then
     if [ -x "$RUN/molequla_cgo" ]; then
         SENSES_INGEST="$RUN/molequla_cgo"
@@ -189,6 +219,108 @@ stamp()   { date -u +%Y%m%dT%H%M%SZ; }
 say()     { echo "[senses] $*"; }
 
 mem_avail_mb() { awk '/^MemAvailable:/{printf "%.0f", $2/1024}' /proc/meminfo; }
+
+# --- the cap ---------------------------------------------------------------
+# `timeout` does not cap anything on this phone. It arms its cap with alarm(2)
+# — `readelf --dyn-syms /usr/bin/timeout` on coreutils 9.4 aarch64 imports
+# alarm@GLIBC_2.17 and no timer_create — which is ITIMER_REAL on
+# CLOCK_MONOTONIC, a clock that stops while the phone is suspended: this boot
+# carries 289 341 s of CLOCK_BOOTTIME against 225 488 s of CLOCK_MONOTONIC. On
+# 2026-09-17 the no-fix place branch, whose whole body was `timeout 45` and then
+# `timeout 90` with no other work between them, reported 1373 s of wall clock on
+# those 135 s of cap (MOLEQULALOG2.md, "the cap that did not count the hours the
+# phone slept"). So every cap in this file is counted here instead, against
+# date(1), in short naps — the way loop() in schedule.sh has always waited for a
+# slot.
+#
+# This is the shape of schedule.sh's run_capped (schedule.sh:240) rather than a
+# call into it, and the two stay separate because they are invoked differently.
+# run_capped caps one command per slot — the whole pass — from a daemon that
+# owns $MOLEQULA_RUN and is the only writer of $MOLEQULA_RUN/schedule.cap.*;
+# cap_run caps nine short commands *inside* that pass, as its grandchild, and
+# four of the nine need the command's stdout back as a shell value. One shared
+# function would have to grow an out-parameter and per-call scratch names for a
+# caller that needs neither, and the pass would stop being the one file that
+# runs from any checkout by path — which is how schedule.conf's SENSES_CMD, the
+# gate and every hand-run pass reach it.
+#
+# Three things carried over from the incident:
+#   * setsid, so the command's pid is its own process group and one negative
+#     kill reaches everything it started — ssh, and the eye's wrapper with the C
+#     engine under it, because senses/ocelli/eye runs ocelli in a command
+#     substitution and killing the wrapper alone would leave a gigabyte of
+#     weights resident;
+#   * the output goes to a file and never through out="$(…)", because a command
+#     substitution does not return until the last grandchild closes the pipe;
+#   * the group is swept on both paths, capped and clean, so nothing outlives
+#     the command that started it.
+SENSES_CAP_GRACE="${SENSES_CAP_GRACE:-5}"
+CAP_RC=0; CAP_FIRED=0; CAP_ELAPSED=0; CAP_STRAYS=0
+CAP_OUT="$SENSES_DIR/.cap.out"   # where the callers that want a value read it
+
+# cap_run <cap-seconds> <stdout-file> <stderr-file> <command> — run the command
+# under a wall-clock cap; the same path given twice merges the two streams the
+# way `2>&1` does. Sets CAP_RC (124 when the cap fired), CAP_FIRED, CAP_ELAPSED
+# and CAP_STRAYS, and returns CAP_RC so that `if ! cap_run …` reads like the
+# `if ! timeout …` it replaced.
+cap_run() {
+    local cap="$1" outf="$2" errf="$3" cmd="$4"
+    local t0 pid="" i=0 deadline k left
+    local pidf="$SENSES_DIR/.cap.$$.pid" rcf="$SENSES_DIR/.cap.$$.rc"
+    CAP_RC=0; CAP_FIRED=0; CAP_ELAPSED=0; CAP_STRAYS=0
+    rm -f "$pidf" "$rcf"
+    t0="$(date -u +%s)"
+    # The shim does not exec: it stays the group leader for as long as the
+    # command runs and writes the real exit status where the cap can read it.
+    if [ "$errf" = "$outf" ]; then
+        setsid bash -c 'echo $$ > "$1"; bash -c "$2"; echo $? > "$3"' \
+            _ "$pidf" "$cmd" "$rcf" > "$outf" 2>&1 < /dev/null &
+    else
+        setsid bash -c 'echo $$ > "$1"; bash -c "$2"; echo $? > "$3"' \
+            _ "$pidf" "$cmd" "$rcf" > "$outf" 2> "$errf" < /dev/null &
+    fi
+    while [ $i -lt 40 ]; do
+        pid="$(cat "$pidf" 2>/dev/null)"
+        [ -n "$pid" ] && break
+        i=$((i + 1)); sleep 0.1
+    done
+    if [ -z "$pid" ]; then
+        say "cap: nothing reported a pid — the command did not start"
+        CAP_RC=127; CAP_ELAPSED=$(( $(date -u +%s) - t0 ))
+        return "$CAP_RC"
+    fi
+    # A quarter-second nap and not the daemon's second: this cap sits around
+    # short commands — thirteen to fourteen seconds for one frame of the eye,
+    # measured 2026-09-17 on cores 4-7 — and the nap is the only latency it adds
+    # to a command that has already finished.
+    deadline=$((t0 + cap))
+    while kill -0 "$pid" 2>/dev/null; do
+        [ "$(date -u +%s)" -ge "$deadline" ] && { CAP_FIRED=1; CAP_RC=124; break; }
+        sleep 0.25
+    done
+    if [ "$CAP_FIRED" -eq 1 ]; then
+        say "cap: ${cap}s of wall clock spent — SIGTERM to process group $pid"
+    else
+        CAP_RC="$(cat "$rcf" 2>/dev/null)"
+        case "$CAP_RC" in ''|*[!0-9]*) CAP_RC=126 ;; esac
+    fi
+    # SIGTERM to the group, SENSES_CAP_GRACE seconds of wall clock, then
+    # SIGKILL — the same escalation stop.sh uses on the colony.
+    left="$(pgrep -g "$pid" 2>/dev/null | wc -l)"
+    CAP_STRAYS="$left"
+    if [ "$left" -gt 0 ]; then
+        kill -TERM -- "-$pid" 2>/dev/null
+        k=0
+        while [ "$k" -lt "$SENSES_CAP_GRACE" ] && [ "$(pgrep -g "$pid" 2>/dev/null | wc -l)" -gt 0 ]; do
+            sleep 1; k=$((k + 1))
+        done
+        [ "$(pgrep -g "$pid" 2>/dev/null | wc -l)" -gt 0 ] && kill -KILL -- "-$pid" 2>/dev/null
+        say "cap: $CAP_STRAYS process(es) left in the group — ended"
+    fi
+    CAP_ELAPSED=$(( $(date -u +%s) - t0 ))
+    rm -f "$pidf" "$rcf"
+    return "$CAP_RC"
+}
 
 # Battery, straight off sysfs — the same two files termux-battery-status reads,
 # without the round trip into Android. Charge in percent, current in mA (the
@@ -379,8 +511,13 @@ eye_one() {
     local_jpg="$FRAMES/${ts}_cam${cam}.jpg"
     out="$SENSES_DIR/.eye.out"; err="$SENSES_DIR/.eye.err"
 
-    $SENSES_SSH "rm -f '$remote'" >/dev/null 2>&1
-    if ! timeout 60 $SENSES_SSH "termux-camera-photo -c $cam '$remote'" >/dev/null 2>&1; then
+    # The housekeeping ssh is capped too, at the grab's own number: it is a
+    # remote command like the others, and an ssh that hangs here hangs the pass
+    # exactly the way the uncapped engine did. Its result is ignored as before.
+    cap_run "$SENSES_CAM_TIMEOUT" /dev/null /dev/null \
+        "$SENSES_SSH $(printf '%q' "rm -f '$remote'")"
+    if ! cap_run "$SENSES_CAM_TIMEOUT" /dev/null /dev/null \
+         "$SENSES_SSH $(printf '%q' "termux-camera-photo -c $cam '$remote'")"; then
         say "eye cam$cam: capture failed"
         EYE_NOTE="${EYE_NOTE:+$EYE_NOTE,}cam$cam:capture"
         return 1
@@ -403,10 +540,18 @@ eye_one() {
     rm -f "$remote"
     EYE_FRAMES=$((EYE_FRAMES + 1))
 
+    # The engine, under the frame's own cap. The group is what is killed, not the
+    # wrapper: `eye` runs ocelli in a command substitution, and SIGTERM to the
+    # group emptied it in 186 ms with no ocelli left anywhere (measured
+    # 2026-09-17, MOLEQULALOG2.md). printf %q because the prompt is a sentence
+    # and the command crosses a `bash -c`.
     t0="$(date -u +%s)"
-    SMOLVLM_NOSPLIT=1 EYE_MODEL="$SENSES_EYE_MODEL" EYE_MMPROJ="$SENSES_EYE_MMPROJ" \
-        /usr/bin/time -v taskset -c "$CPUS" bash "$SENSES_EYE" "$local_jpg" "$SENSES_EYE_PROMPT" \
-        > "$out" 2> "$err"
+    cap_run "$SENSES_EYE_FRAME_TIMEOUT" "$out" "$err" \
+        "SMOLVLM_NOSPLIT=1 EYE_MODEL=$(printf '%q' "$SENSES_EYE_MODEL") \
+         EYE_MMPROJ=$(printf '%q' "$SENSES_EYE_MMPROJ") \
+         /usr/bin/time -v taskset -c $(printf '%q' "$CPUS") bash \
+         $(printf '%q' "$SENSES_EYE") $(printf '%q' "$local_jpg") \
+         $(printf '%q' "$SENSES_EYE_PROMPT")"
     rc=$?
     t1="$(date -u +%s)"
     wall=$((t1 - t0))
@@ -415,6 +560,16 @@ eye_one() {
     case "${rss:-}" in ''|*[!0-9]*) rss=0 ;; esac
     rss=$(( (rss + 512) / 1024 ))
     [ "$rss" -gt "$EYE_RSS" ] && EYE_RSS="$rss"
+
+    # A frame that hung costs one frame. The return is before anything is parsed
+    # on purpose: what the engine had written when it was killed is half a
+    # sentence, and half a sentence must not become a fragment or a fact.
+    if [ "$CAP_FIRED" -eq 1 ]; then
+        say "eye cam$cam: the engine passed ${SENSES_EYE_FRAME_TIMEOUT}s (${wall}s) — the frame is dropped, the window goes on"
+        EYE_RC=124
+        EYE_NOTE="${EYE_NOTE:+$EYE_NOTE,}cam$cam:timeout"
+        return 1
+    fi
 
     if [ "$rc" -ne 0 ]; then
         say "eye cam$cam: engine rc=$rc"
@@ -539,7 +694,9 @@ ears_env() {
     tags="$(printf '%s' "$raw" | grep -oE '\[[^]]+\]|\([^)]+\)|\*[^*]+\*' 2>/dev/null \
             | awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR) printf "\n"}')"
     if [ -n "$SENSES_SOUNDSCAPE" ] && [ -x "$SENSES_SOUNDSCAPE" ]; then
-        label="$(timeout 60 taskset -c "$CPUS" "$SENSES_SOUNDSCAPE" "$wav" 2>/dev/null | head -1)"
+        cap_run "$SENSES_SOUNDSCAPE_TIMEOUT" "$CAP_OUT" /dev/null \
+            "taskset -c $(printf '%q' "$CPUS") $(printf '%q' "$SENSES_SOUNDSCAPE") $(printf '%q' "$wav")"
+        label="$(head -1 "$CAP_OUT" 2>/dev/null)"
     else
         label=""
         [ -n "$SENSES_SOUNDSCAPE" ] && EARS_NOTE="${EARS_NOTE:+$EARS_NOTE,}no-describer"
@@ -583,15 +740,18 @@ do_ears() {
     remote="$HOME_TERMUX/.senses_mic.aac"
     wav="$AUDIO/${ts}.wav"
 
-    $SENSES_SSH "termux-microphone-record -q; rm -f '$remote'" >/dev/null 2>&1
-    if ! timeout 30 $SENSES_SSH \
-         "termux-microphone-record -f '$remote' -l $SENSES_REC_SECONDS -e aac -r 16000 -c 1" \
-         >/dev/null 2>&1; then
+    # Both quench calls carry the recorder's cap for the same reason the eye's
+    # `rm -f` carries the grab's: a hanging ssh here used to hang the pass.
+    cap_run "$SENSES_REC_TIMEOUT" /dev/null /dev/null \
+        "$SENSES_SSH $(printf '%q' "termux-microphone-record -q; rm -f '$remote'")"
+    if ! cap_run "$SENSES_REC_TIMEOUT" /dev/null /dev/null \
+         "$SENSES_SSH $(printf '%q' "termux-microphone-record -f '$remote' -l $SENSES_REC_SECONDS -e aac -r 16000 -c 1")"; then
         say "ears: the recorder refused to start"
         EARS_RC=1; EARS_NOTE="record"; EARS_WALL=$(( $(date -u +%s) - t0 )); return 1
     fi
     sleep $((SENSES_REC_SECONDS + 2))
-    $SENSES_SSH "termux-microphone-record -q" >/dev/null 2>&1
+    cap_run "$SENSES_REC_TIMEOUT" /dev/null /dev/null \
+        "$SENSES_SSH $(printf '%q' "termux-microphone-record -q")"
 
     if [ ! -s "$remote" ]; then
         say "ears: nothing was recorded"
@@ -696,12 +856,16 @@ do_place() {
     t0="$(date -u +%s)"
 
     provider=network
-    loc="$(timeout 45 $SENSES_SSH 'termux-location -p network -r once' 2>/dev/null)"
+    cap_run "$SENSES_LOC_TIMEOUT" "$CAP_OUT" /dev/null \
+        "$SENSES_SSH 'termux-location -p network -r once'"
+    loc="$(cat "$CAP_OUT" 2>/dev/null)"
     lat="$(printf '%s' "$loc" | jq -r '.latitude // empty' 2>/dev/null)"
     if [ -z "$lat" ]; then
         say "place: no network fix, asking the satellites"
         provider=gps
-        loc="$(timeout 90 $SENSES_SSH 'termux-location -p gps -r once' 2>/dev/null)"
+        cap_run "$SENSES_LOC_GPS_TIMEOUT" "$CAP_OUT" /dev/null \
+            "$SENSES_SSH 'termux-location -p gps -r once'"
+        loc="$(cat "$CAP_OUT" 2>/dev/null)"
         lat="$(printf '%s' "$loc" | jq -r '.latitude // empty' 2>/dev/null)"
     fi
     lon="$(printf '%s' "$loc" | jq -r '.longitude // empty' 2>/dev/null)"
@@ -810,9 +974,13 @@ do_ingest() {
     [ -n "$SENSES_FACTS" ] || return 0
     [ -x "$SENSES_INGEST" ] || { say "ingest: no binary at $SENSES_INGEST"; INGEST_RC=127; return 0; }
     [ -s "$SENSES_FACTS" ] || return 0
-    out="$(cd "$SENSES_DIR" && timeout 120 "$SENSES_INGEST" --world-ingest --once \
-           --world-facts "$SENSES_FACTS" 2>&1)"
+    # Both streams into one file, the way the old `2>&1` merged them into one
+    # value: the ingest's own lines and its complaints are read together.
+    cap_run "$SENSES_INGEST_TIMEOUT" "$CAP_OUT" "$CAP_OUT" \
+        "cd $(printf '%q' "$SENSES_DIR") && $(printf '%q' "$SENSES_INGEST") \
+         --world-ingest --once --world-facts $(printf '%q' "$SENSES_FACTS")"
     INGEST_RC=$?
+    out="$(cat "$CAP_OUT" 2>/dev/null)"
     printf '%s\n' "$out" | sed 's/^/[senses]   /'
     INGEST_LINES="$(printf '%s\n' "$out" | grep -c '^\[world\] ' || true)"
     return 0

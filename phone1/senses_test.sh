@@ -80,16 +80,20 @@ chmod +x "$TMP/ssh.sh" "$TMP/eye.sh"
 RUN="$TMP/run"
 mkdir -p "$RUN"
 
-# run_eye <window> <pattern> <spacing> — one eye pass on a clean field.
+# run_eye <window> <pattern> <spacing> [NAME=value …] — one eye pass on a clean
+# field. Anything after the spacing is environment for that pass, which is how
+# the cap cases put a small SENSES_EYE_FRAME_TIMEOUT and a hanging engine under
+# the same script the ten cases above drive.
 run_eye() {
+    local w="$1" pat="$2" sp="$3"; shift 3
     rm -rf "$RUN"; mkdir -p "$RUN"
     rm -f "$TMP/cams.seen" "$TMP/eye.n"
-    MOLEQULA_RUN="$RUN" \
+    env MOLEQULA_RUN="$RUN" \
     SENSES_SSH="bash $TMP/ssh.sh" \
     SENSES_EYE="$TMP/eye.sh" \
-    SENSES_EYE_WINDOW="$1" SENSES_EYE_PATTERN="$2" SENSES_EYE_SPACING="$3" \
+    SENSES_EYE_WINDOW="$w" SENSES_EYE_PATTERN="$pat" SENSES_EYE_SPACING="$sp" \
     SENSES_EYE_MIN_MB=0 SENSES_TERMUX_HOME="$TMP/termux" \
-    bash "$SENSES" eye > "$TMP/eye.out" 2>&1
+    "$@" bash "$SENSES" eye > "$TMP/eye.out" 2>&1
 }
 
 mkdir -p "$TMP/termux"
@@ -148,6 +152,152 @@ else
     bad "spacing holds the second capture back: window took $((t1 - t0))s, want >= 4s"
 fi
 
+# --- the caps ---------------------------------------------------------------
+# Six commands in the pass are capped and none of them is capped by `timeout`
+# any more (MOLEQULALOG2.md, 2026-09-17). The cases below give each cap a
+# command that sleeps well past it and a cap of two or three seconds: what they
+# check is that the cap fires at its own number, that the pass carries on, and
+# that nothing is left behind.
+
+# An engine that hangs on the second frame of the window, after writing half a
+# sentence to stdout — which is the half that must not become a fragment. The
+# subshell is there so the partial line is flushed before the sleep: a killed
+# bash does not flush its own stdio.
+cat > "$TMP/eye_hang.sh" <<EOF
+#!/bin/bash
+n=\$(cat "$TMP/eye.n" 2>/dev/null || echo 0)
+n=\$((n + 1)); printf '%d' "\$n" > "$TMP/eye.n"
+if [ "\$n" = 2 ]; then
+    ( printf 'OURS: "A half-written sen' )
+    sleep 60
+    exit 0
+fi
+sed -n "\${n}p" "$TMP/eye.lines"
+EOF
+
+# The same hang, one process deeper: a grandchild that outlives its parent
+# unless the kill reaches the whole group. The real eye is exactly this shape —
+# senses/ocelli/eye runs the C engine in a command substitution.
+cat > "$TMP/eye_fork.sh" <<EOF
+#!/bin/bash
+sleep 600 &
+printf '%d' "\$!" > "$TMP/fork.pid"
+sleep 60
+EOF
+
+# An ssh that hangs on whatever SENSES_TEST_SLOW names and otherwise answers
+# the way the phone does.
+cat > "$TMP/ssh_slow.sh" <<EOF
+#!/bin/bash
+case "\$*" in
+    *\${SENSES_TEST_SLOW:-__nothing__}*) sleep 60; exit 0 ;;
+esac
+exec bash "$TMP/ssh.sh" "\$@"
+EOF
+
+cat > "$TMP/slow.sh" <<'EOF'
+#!/bin/bash
+sleep 60
+EOF
+
+chmod +x "$TMP/eye_hang.sh" "$TMP/eye_fork.sh" "$TMP/ssh_slow.sh" "$TMP/slow.sh"
+
+# cap_lib <cap> <stdout-file> <command> — cap_run on its own, through the
+# library door senses_facts_test.sh uses, so that the helper's own contract is
+# checked and not only its call sites.
+cap_lib() {
+    MOLEQULA_RUN="$RUN" SENSES_LIB_ONLY=1 bash -c '
+        . "$1"; mkdir -p "$SENSES_DIR"
+        cap_run "$2" "$3" /dev/null "$4"
+        printf "rc=%s fired=%s elapsed=%s strays=%s\n" \
+            "$CAP_RC" "$CAP_FIRED" "$CAP_ELAPSED" "$CAP_STRAYS"
+    ' _ "$SENSES" "$1" "$2" "$3" 2>/dev/null | tail -1
+}
+
+rm -rf "$RUN"; mkdir -p "$RUN"
+got="$(cap_lib 5 "$TMP/cap.out" 'printf hello; exit 3')"
+case "$got" in
+    "rc=3 fired=0 elapsed="[01]" strays=0") ok "a command inside its cap keeps its own exit status" ;;
+    *) bad "a command inside its cap keeps its own exit status: got '$got'" ;;
+esac
+eq "and its stdout is in the file the caller named" "$(cat "$TMP/cap.out")" "hello"
+
+t0="$(date -u +%s)"
+got="$(cap_lib 2 /dev/null 'sleep 60')"
+t1="$(date -u +%s)"
+case "$got" in
+    "rc=124 fired=1 elapsed="[234]" strays="*) ok "a command past its cap is killed at the cap ($got)" ;;
+    *)                                         bad "a command past its cap is killed at the cap: got '$got'" ;;
+esac
+if [ $((t1 - t0)) -lt 10 ]; then
+    ok "and the caller gets it back at once, not after the sleep ($((t1 - t0))s)"
+else
+    bad "and the caller gets it back at once, not after the sleep: $((t1 - t0))s"
+fi
+
+# --- a capped frame costs one frame, not the window -------------------------
+t0="$(date -u +%s)"
+run_eye 3 "0 1 0" 0 SENSES_EYE="$TMP/eye_hang.sh" SENSES_EYE_FRAME_TIMEOUT=3
+t1="$(date -u +%s)"
+line="$(grep 'pass=eye' "$RUN/senses/senses.log" 2>/dev/null | tail -1)"
+win="$(grep 'eyewin' "$RUN/senses/senses.log" 2>/dev/null | tail -1)"
+eq "a hung frame leaves the other two fragments" \
+   "$(ls -1 "$RUN/dna/output/world" 2>/dev/null | wc -l)" "2"
+case "$win" in
+    *"frames=3 said=2"*) ok "the window took its three frames and heard two" ;;
+    *)                   bad "the window took its three frames and heard two: got '$win'" ;;
+esac
+case "$line" in
+    *"cam1:timeout"*) ok "the capped frame is named in the pass line" ;;
+    *)                bad "the capped frame is named in the pass line: got '$line'" ;;
+esac
+case "$line" in
+    *"eye=rc124,"*) ok "and the pass carries the cap's status" ;;
+    *)              bad "and the pass carries the cap's status: got '$line'" ;;
+esac
+if [ $((t1 - t0)) -lt 25 ]; then
+    ok "the window did not wait out the hang ($((t1 - t0))s)"
+else
+    bad "the window did not wait out the hang: $((t1 - t0))s, want < 25s"
+fi
+# Half a sentence is not an observation: no fragment, and no fact either.
+if grep -rq 'half-written' "$RUN/dna/output" 2>/dev/null; then
+    bad "a capped frame writes no fragment: '$(grep -rl 'half-written' "$RUN/dna/output")'"
+else
+    ok "a capped frame writes no fragment"
+fi
+eq "and no fact line for it" \
+   "$(grep -c '"source":"eye"' "$RUN/senses/facts.jsonl" 2>/dev/null || echo 0)" "2"
+
+# --- nothing outlives a capped frame ----------------------------------------
+rm -f "$TMP/fork.pid"
+run_eye 1 "0" 0 SENSES_EYE="$TMP/eye_fork.sh" SENSES_EYE_FRAME_TIMEOUT=3
+kid="$(cat "$TMP/fork.pid" 2>/dev/null)"
+if [ -z "$kid" ]; then
+    bad "the forking engine never reported its grandchild"
+elif kill -0 "$kid" 2>/dev/null; then
+    bad "the engine's grandchild is killed with the group: pid $kid is still alive"
+    kill -KILL "$kid" 2>/dev/null
+else
+    ok "the engine's grandchild is killed with the group"
+fi
+
+# --- the camera's own cap ----------------------------------------------------
+t0="$(date -u +%s)"
+run_eye 1 "0" 0 SENSES_SSH="bash $TMP/ssh_slow.sh" \
+    SENSES_TEST_SLOW=termux-camera-photo SENSES_CAM_TIMEOUT=2
+t1="$(date -u +%s)"
+line="$(grep 'pass=eye' "$RUN/senses/senses.log" 2>/dev/null | tail -1)"
+case "$line" in
+    *"cam0:capture"*) ok "a camera that does not answer is a capture failure, at its own cap" ;;
+    *)                bad "a camera that does not answer is a capture failure: got '$line'" ;;
+esac
+if [ $((t1 - t0)) -lt 20 ]; then
+    ok "the grab's cap fires at two seconds, not sixty ($((t1 - t0))s)"
+else
+    bad "the grab's cap fires at two seconds, not sixty: $((t1 - t0))s"
+fi
+
 # --- the overlap metric -----------------------------------------------------
 # ov <name> <a> <b> <want>
 ov() {
@@ -173,19 +323,21 @@ else
 fi
 
 # --- hearing: the transcript and the environment ----------------------------
-# say <transcript> <label> — one ears pass with a scripted recognizer and a
-# scripted describer.
+# say <transcript> <label> [NAME=value …] — one ears pass with a scripted
+# recognizer and a scripted describer; anything after the label is environment
+# for that pass, the way run_eye takes it.
 say() {
+    local txt="$1" label="$2"; shift 2
     rm -rf "$RUN"; mkdir -p "$RUN"
-    printf '#!/bin/bash\nprintf "%%s\\n" %q\n' "$1" > "$TMP/asr.sh"
-    printf '#!/bin/bash\nprintf "%%s\\n" %q\n' "$2" > "$TMP/snd.sh"
+    printf '#!/bin/bash\nprintf "%%s\\n" %q\n' "$txt" > "$TMP/asr.sh"
+    printf '#!/bin/bash\nprintf "%%s\\n" %q\n' "$label" > "$TMP/snd.sh"
     chmod +x "$TMP/asr.sh" "$TMP/snd.sh"
-    MOLEQULA_RUN="$RUN" \
+    env MOLEQULA_RUN="$RUN" \
     SENSES_SSH="bash $TMP/ssh.sh" \
     SENSES_ASR="$TMP/asr.sh" SENSES_ASR_KIND=ears SENSES_ASR_MODEL="$TMP/model.bin" \
     SENSES_SOUNDSCAPE="$TMP/snd.sh" \
     SENSES_REC_SECONDS=1 SENSES_TERMUX_HOME="$TMP/termux" \
-    bash "$SENSES" ears > "$TMP/ears.out" 2>&1
+    "$@" bash "$SENSES" ears > "$TMP/ears.out" 2>&1
 }
 
 heads() { for f in "$RUN"/dna/output/sound/*.txt; do [ -e "$f" ] || continue; sed -n 's/^\(\[ears [a-z]*\).*/\1]/p' "$f"; done | sort | tr '\n' ' '; }
@@ -206,6 +358,73 @@ eq "a bare non-speech tag is not a transcript" "$(heads)" "[ears env] "
 grep -q '\[Motor\]' "$RUN"/dna/output/sound/*.txt 2>/dev/null \
     && ok "the recognizer's own non-speech tag survives" \
     || bad "the recognizer's own non-speech tag survives: got '$(cat "$RUN"/dna/output/sound/*.txt 2>/dev/null)'"
+
+# --- hearing's two caps ------------------------------------------------------
+# A describer that hangs costs the environmental line and nothing else: the
+# transcript of the same twelve seconds is still written.
+t0="$(date -u +%s)"
+say "And so my fellow Americans, ask not what your country can do for you." "" \
+    SENSES_SOUNDSCAPE="$TMP/slow.sh" SENSES_SOUNDSCAPE_TIMEOUT=2
+t1="$(date -u +%s)"
+eq "a hung describer costs the environment, not the transcript" "$(heads)" "[ears mic] "
+if [ $((t1 - t0)) -lt 25 ]; then
+    ok "the describer's cap fires at two seconds, not sixty ($((t1 - t0))s)"
+else
+    bad "the describer's cap fires at two seconds, not sixty: $((t1 - t0))s"
+fi
+
+# A recorder that never starts is the organ's own `record` failure, at its cap.
+t0="$(date -u +%s)"
+say "" "quiet room" SENSES_SSH="bash $TMP/ssh_slow.sh" \
+    SENSES_TEST_SLOW=termux-microphone-record SENSES_REC_TIMEOUT=2
+t1="$(date -u +%s)"
+line="$(grep 'pass=ears' "$RUN/senses/senses.log" 2>/dev/null | tail -1)"
+case "$line" in
+    *",record"*) ok "a recorder that does not start is logged as such, at its own cap" ;;
+    *)           bad "a recorder that does not start is logged as such: got '$line'" ;;
+esac
+if [ $((t1 - t0)) -lt 20 ]; then
+    ok "the recorder's cap fires at two seconds, not thirty ($((t1 - t0))s)"
+else
+    bad "the recorder's cap fires at two seconds, not thirty: $((t1 - t0))s"
+fi
+
+# --- place: two caps, one after the other ------------------------------------
+# The pair whose 135 s let 1373 s pass on 2026-09-17. Both fixes hang here and
+# both are capped at two seconds, so the branch that convicted `timeout` costs
+# four seconds and not forty.
+rm -rf "$RUN"; mkdir -p "$RUN"
+t0="$(date -u +%s)"
+env MOLEQULA_RUN="$RUN" SENSES_SSH="bash $TMP/ssh_slow.sh" \
+    SENSES_TEST_SLOW=termux-location SENSES_LOC_TIMEOUT=2 SENSES_LOC_GPS_TIMEOUT=2 \
+    SENSES_TERMUX_HOME="$TMP/termux" \
+    bash "$SENSES" place > "$TMP/place.out" 2>&1
+t1="$(date -u +%s)"
+line="$(grep 'pass=place' "$RUN/senses/senses.log" 2>/dev/null | tail -1)"
+case "$line" in
+    *"no-fix"*) ok "two silent providers are no fix, each at its own cap" ;;
+    *)          bad "two silent providers are no fix: got '$line'" ;;
+esac
+if [ $((t1 - t0)) -lt 20 ]; then
+    ok "and the branch costs four seconds, not forty ($((t1 - t0))s)"
+else
+    bad "and the branch costs four seconds, not forty: $((t1 - t0))s"
+fi
+
+# --- the ledger's writer has a cap too ---------------------------------------
+t0="$(date -u +%s)"
+run_eye 1 "0" 0 SENSES_INGEST="$TMP/slow.sh" SENSES_INGEST_TIMEOUT=2
+t1="$(date -u +%s)"
+line="$(grep 'pass=eye' "$RUN/senses/senses.log" 2>/dev/null | tail -1)"
+case "$line" in
+    *"world=rc124"*) ok "an ingest that hangs is capped and says so" ;;
+    *)               bad "an ingest that hangs is capped and says so: got '$line'" ;;
+esac
+if [ $((t1 - t0)) -lt 25 ]; then
+    ok "the ingest's cap fires at two seconds, not sixty ($((t1 - t0))s)"
+else
+    bad "the ingest's cap fires at two seconds, not sixty: $((t1 - t0))s"
+fi
 
 printf '\n%d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
