@@ -4750,3 +4750,151 @@ phone: like the outer cap's gate, these cases pass on `main` wherever
 where a cap has to fire at all.
 
 — Defender (Arianna Method, phone-1)
+
+## 2026-09-17 — an organism says which checkpoint it resumed from
+
+Steps 3 and 4 of `docs/resonator_design.md` both need to know which file an
+organism was rebuilt from, and until today the log could not say. `LoadCheckpoint`
+(`molequla.go`) and `loadCheckpointGGUF` (`checkpoint_gguf.go`) printed only on
+the paths that *refuse* the binary sibling — `not used (%v)`, `not used (the
+JSON's identity is unreadable: %v)`, `is older than the JSON checkpoint`. Success
+was silent, and so was a boot that found no checkpoint at all, so "resumed from
+the mapped GGUF", "resumed from the JSON" and "no GGUF existed yet" all left the
+same mark in `molequla-run/*/*.stdout`: none. The GGUF sibling was first written
+at 2026-09-16T21:49Z, which makes tonight's 20:00Z window the first session that
+can resume from one, and without this it would not have said whether it did.
+
+### One line, whichever file won
+
+```
+[ckpt] resumed from molequla_ckpt.gguf — 28.2 MB, read in 176 ms, peak +156 MB
+[ckpt] resumed from molequla_ckpt.json — 267.9 MB, read in 8926 ms, peak +396 MB
+```
+
+Those two are measured, not illustrative: a scratch resume of the live air and
+water checkpoints copied out of `molequla-run`, each in its own directory with
+its own `HOME` and `MOLEQULA_RUN`, pinned with `taskset -c 4-7` and cut by
+`timeout` just after the load. Air had its binary sibling beside it and read it;
+water's copy had the sibling removed, so it took the JSON path.
+
+The cross-format ratio needs one organism and one pair, so air was resumed a
+second time from a fresh copy of its JSON with no sibling beside it:
+
+```
+[ckpt] resumed from molequla_ckpt.json — 146.9 MB, read in 3258 ms, peak +208 MB
+```
+
+28.2 MB in 176 ms against 146.9 MB in 3 258 ms is **18.5x**, on the same
+organism's own two files. Step 2 recorded 146 ms and 4 136 ms for the same pair
+and called it 28x; both of these are slower and faster respectively on
+checkpoints that have grown since and read from `/root` rather than from the run
+root, and one run per format is not a distribution. The first attempt at this
+measurement was wrong for a reason worth writing down: it compared air's GGUF
+against *water's* JSON, two different organisms and two file sizes, and called
+the quotient a ratio. The second attempt was wrong too — it read air's JSON out
+of the probe directory the earlier probe had run in for ninety seconds, so the
+file was the 310.3 MB checkpoint that probe had itself saved, not the 146.9 MB
+one the colony holds.
+
+The path in the line is a bare basename because `phone1/launch.sh` cds into the
+organism's directory (`cd "$dir"`) and `CFG.CkptPath` is relative. A mitosis
+child is told an absolute `ckpt_path` in its birth config and prints that, so
+both shapes occur and both are in the table's fixture. That was not a guess
+about the format — the first version of the day's table filtered a line by
+finding `/<element>/` in its path, which rejected every line the colony actually
+prints, and the probe above is what found it.
+
+`peak +N MB` is `VmHWM` before and after the read (`ownPeakRSSMB`,
+`governor_phone.go`). It is a floor rather than a total, and it is a measurement
+of the read only because the read happens at boot, before the organism is
+anywhere near its largest. When the high-water is already above what the read
+needs the subtraction stops meaning anything, so the line drops the field
+instead of printing `+0 MB` — which is what happens under `go test`, where the
+binary has loaded larger organisms already, and why the gates below assert the
+size and the millisecond and not the peak.
+
+The three silent boots now say so too, in three wordings rather than one, since
+a checkpoint that was there and could not be parsed is a loss of weights and not
+a beginning:
+
+```
+[ckpt] no checkpoint at molequla_ckpt.json (open molequla_ckpt.json: no such file or directory) — the organism starts from an embryo
+[ckpt] molequla_ckpt.json could not be read (checkpoint field "base": EOF) — the organism starts from an embryo
+[ckpt] zero-warmup mode — no checkpoint read, the organism starts from an embryo
+```
+
+The refusal lines are untouched. A refused sibling prints its refusal *and* the
+resume line naming the JSON, and the resume clock and the high-water are re-read
+after a refusal so the JSON read is not charged for the binary attempt.
+
+### Countable per session
+
+`phone1/daily.sh` gains a table above the DNA traffic, read per organism since
+that organism's last `[ecology] Element:` banner — the same scoping the
+cafeteria table uses, and against the same error. Counting over the whole file
+was mine on 2026-09-16 (the re-count entry above): these stdout files are
+appended across every session ever run, so a whole-file reading answers about
+some earlier boot. On a copy of tonight's real files with the two probe lines
+spliced in as a new session:
+
+```
+org    from   file                  size-MB  read-ms  peak-MB
+earth  -      (no [ckpt] line)            -        -        -
+air    gguf   molequla_ckpt.gguf       28.2      176     +156
+water  json   molequla_ckpt.json      267.9     8926     +396
+fire   -      (no [ckpt] line)            -        -        -
+```
+
+Earth and fire read `(no [ckpt] line)` because there is no `[ckpt]` line in
+their whole history — that is the gap this entry closes, now visible instead of
+silent.
+
+### Gates, and what red looked like
+
+Six in `checkpoint_says_test.go`. On `origin/main` four of them reported
+`stdout was ""` — nothing printed at all — and the fifth,
+`TestRefusedSiblingStillSaysTheResume`, captured only
+`[ckpt] …molequla_ckpt.gguf not used (identity 3227d7d4f5c2 does not match the
+JSON checkpoint's 331b264dc25b) — loading the JSON checkpoint` with no resume
+line after it. The five checkpoint gates the step-2 entry landed —
+`TestGGUFLossParityWithJSON`, `TestGGUFTruncationFallsBackToJSON`,
+`TestGGUFForeignTokenizerRefused`, `TestGGUFOlderThanJSONRefused`,
+`TestGGUFLoadBuildsNoThrowawayModel` — are green beside them, with their
+refusals firing verbatim.
+
+Four more in `phone1/daily_test.sh`, on a fixture where earth has two starts
+that resumed from different files, air's last start printed nothing while the
+one before it resumed, and fire resumed and then, in a further start appended to
+the same file, found no checkpoint. Removing the banner reset from the table's
+awk turns air's row from `air - (no [ckpt] line) - - -` into
+`air gguf molequla_ckpt.gguf 28.2 131 +126` — the previous session's answer
+reported for a session that has none, which is exactly the shape of the
+2026-09-16 error. That was run, not reasoned: the reset was deleted, the gate
+went to `11 pass, 1 fail`, the reset was restored.
+
+`CGO_ENABLED=1 go test -count=1 -buildvcs=false ./...` on `3fd1092` is 254 pass,
+3 skip (not the 246 the brief carried); with these six it is 260 pass, 3 skip.
+`bash phone1/daily_test.sh` is 14 pass, 0 fail, up from 10.
+
+### What is not established
+
+One full-suite run of six on this branch failed
+`TestBeatKeeperRefreshesMeshWithoutTicks` — `a hibernating organism was written
+back as "alive"` — and the other five were clean, as were eight runs of the
+suite on `3fd1092` in a detached worktree. The test asserts a state change
+through `mesh.db` inside an 80 ms sleep against a 20 ms keeper interval, which
+is a window four little cores under a full suite can miss, and it passed three
+times in isolation. Nothing in this change reaches the keeper, the mesh or
+anything that test calls: it never constructs a checkpoint. That is an
+observation about a timing window and not a diagnosis, and one flake in six is
+not a rate.
+
+The resume line has never been printed by a scheduled colony session. The probes
+above are three single-organism runs started by hand, outside a window, and the
+first session to exercise it is 20:00Z tonight. The 18.5x ratio is one
+measurement per format on one organism's own pair of files, not a distribution,
+and no organism has yet been resumed from a GGUF it wrote in a scheduled
+session. Nothing here touches what the sleeper of step 3 or the resonator of
+step 4 will do with the answer; it only makes the answer exist.
+
+— Defender (Arianna Method, phone-1)
