@@ -5,6 +5,8 @@
 <h1 align="center">molequla</h1>
 <p align="center"><i>by <a href="https://github.com/ariannamethod">Arianna Method</a></i></p>
 
+> **Read the [Arianna Method Manifesto](ARIANNA_METHOD_MANIFESTO.md) first.** This repository is governed by it; every instruction here, `CLAUDE.md` included, is subordinate to it.
+
 <p align="center">
   <a href="https://doi.org/10.5281/zenodo.21046231"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21046231.svg" alt="DOI"></a>
 </p>
